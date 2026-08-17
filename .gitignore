@@ -1,0 +1,5 @@
+.deno/
+deno.lock
+node_modules/
+*.heapsnapshot
+.env
