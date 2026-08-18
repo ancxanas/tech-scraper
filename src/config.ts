@@ -1,39 +1,43 @@
 export type Platform = "reliance" | "tatacliq";
+export type ToolType = "scraper";
 
 export interface PlatformConfig {
   name: string;
-  url: string;
+  tool: ToolType;
   collectorId: string;
+  url: string;
   searchPath: string;
-  pageParam: string;
   startIndex: number;
   productsPerPage: number;
+  enabled: boolean;
 }
 
-export const PAGES_TO_SCRAPE = 5;
+export const PAGES_TO_SCRAPE = 3;
 
 export const PLATFORMS: Record<Platform, PlatformConfig> = {
   reliance: {
     name: "Reliance Digital",
-    url: "https://www.reliancedigital.in",
+    tool: "scraper",
     collectorId: "c_msxt4lsv12k5p1328b",
+    url: "https://www.reliancedigital.in",
     searchPath: "/search",
-    pageParam: "page",
     startIndex: 1,
     productsPerPage: 24,
+    enabled: true,
   },
   tatacliq: {
     name: "Tata CLiQ",
-    url: "https://www.tatacliq.com",
+    tool: "scraper",
     collectorId: "c_msxt4nhe2fxyb7bjnw",
+    url: "https://www.tatacliq.com",
     searchPath: "/search/",
-    pageParam: "page",
     startIndex: 0,
     productsPerPage: 40,
+    enabled: false,
   },
 };
 
-export const ALL_PLATFORMS: Platform[] = ["reliance", "tatacliq"];
+export const ALL_PLATFORMS: Platform[] = Object.keys(PLATFORMS) as Platform[];
 
 export const SCORE_WEIGHTS = {
   price: 0.4,

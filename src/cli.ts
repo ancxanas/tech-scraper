@@ -77,7 +77,7 @@ export const cli = new Command()
       .option("--no-dedup", "Skip deduplication")
       .action(async (options, query) => {
         const platforms = parsePlatforms(options.platforms);
-        console.log(`\nSearching for "${query}" (${options.pages} pages)...\n`);
+        console.log(`\nSearching for "${query}"...\n`);
 
         const results = await scrapeProducts(query, platforms, options.pages);
         let allProducts = results.flatMap((r) => r.products);
@@ -104,9 +104,7 @@ export const cli = new Command()
       })
       .action(async (options, query) => {
         const platforms = parsePlatforms(options.platforms);
-        console.log(
-          `\nFinding best deal for "${query}" (${options.pages} pages)...\n`,
-        );
+        console.log(`\nFinding best deal for "${query}"...\n`);
 
         const results = await scrapeProducts(query, platforms, options.pages);
         let allProducts = results.flatMap((r) => r.products);
@@ -158,7 +156,7 @@ export const cli = new Command()
         }
 
         console.log(
-          `\nComparing "${query}" across ${platforms.length} platforms (${options.pages} pages)...\n`,
+          `\nComparing "${query}" across ${platforms.length} platforms...\n`,
         );
 
         const results = await scrapeProducts(query, platforms, options.pages);
@@ -189,17 +187,12 @@ export const cli = new Command()
         console.log("\nConfigured Scrapers:\n");
         for (const [key, config] of Object.entries(PLATFORMS)) {
           console.log(`  + ${config.name} (${key})`);
+          console.log(`    Tool: Scraper Studio (${config.collectorId})`);
           console.log(`    URL: ${config.url}`);
-          console.log(`    Collector: ${config.collectorId}`);
           console.log(`    Products/page: ~${config.productsPerPage}`);
-          console.log(`    Page indexing: ${config.startIndex}-based`);
           console.log();
         }
         console.log(`  Pages per search: ${PAGES_TO_SCRAPE}`);
-        console.log(
-          `  Est. products/platform: ~${PAGES_TO_SCRAPE * 24}-${
-            PAGES_TO_SCRAPE * 40
-          }\n`,
-        );
+        console.log();
       }),
   );
