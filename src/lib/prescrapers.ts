@@ -1,5 +1,4 @@
 import { bdFetch, pollUntil } from "./brightdata.ts";
-import { searchGoogleShopping } from "./serp.ts";
 
 export interface PreScraperResult {
   title: string;
@@ -16,15 +15,15 @@ export interface PreScraperResult {
   asin?: string;
 }
 
+interface TriggerResponse {
+  snapshot_id?: string;
+  collection_id?: string;
+}
+
 interface AmazonSearchInput {
   keyword: string;
   url?: string;
   pages_to_search?: number;
-}
-
-interface TriggerResponse {
-  snapshot_id?: string;
-  collection_id?: string;
 }
 
 const PRE_BUILT_SCRAPERS = {
@@ -89,39 +88,6 @@ export async function searchAmazonPreBuilt(
   );
 
   return items.map(parseAmazonItem);
-}
-
-export async function searchFlipkartViaSerp(
-  keyword: string,
-): Promise<PreScraperResult[]> {
-  const results = await searchGoogleShopping(keyword, "in");
-
-  return results
-    .filter((r) => r.shop.toLowerCase().includes("flipkart"))
-    .map((r) => ({
-      title: r.title,
-      price: parsePrice(r.price),
-      originalPrice: parsePrice(r.oldPrice ?? undefined),
-      discount: 0,
-      currency: "INR",
-      rating: r.rating ?? null,
-      reviewsCount: r.reviews ?? null,
-      brand: extractBrand(r.title),
-      availability: "In Stock",
-      imageUrl: r.image || "",
-      url: r.url,
-    }));
-}
-
-function parsePrice(priceStr: string | undefined): number {
-  if (!priceStr) return 0;
-  const cleaned = priceStr.replace(/[^\d.]/g, "");
-  return parseFloat(cleaned) || 0;
-}
-
-function extractBrand(title: string): string {
-  const words = title.split(" ");
-  return words[0] || "";
 }
 
 function parseAmazonItem(item: Record<string, unknown>): PreScraperResult {

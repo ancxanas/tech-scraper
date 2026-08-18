@@ -2,10 +2,8 @@ import { colors } from "@cliffy/ansi/colors";
 import { type Platform, PLATFORMS } from "./config.ts";
 import { parseCustomProducts, runCollector } from "./tools/scraper.ts";
 import { fetchPageHtml } from "./lib/unlock.ts";
-import {
-  searchAmazonPreBuilt,
-  searchFlipkartViaSerp,
-} from "./lib/prescrapers.ts";
+import { searchAmazonPreBuilt } from "./lib/prescrapers.ts";
+import { runHealFlow } from "./tools/healer.ts";
 import type { Product, SearchResult } from "./types.ts";
 
 const SCRAPER_DELAY_MS = 5000;
@@ -20,19 +18,12 @@ export async function scrapeProducts(
 
   const enabled = platforms.filter((p) => PLATFORMS[p].enabled);
 
-  for (let i = 0; i < enabled.length; i++) {
-    const platform = enabled[i];
-    const config = PLATFORMS[platform];
-
+  const scrapePromises = enabled.map(async (platform, i) => {
     if (i > 0) {
-      console.log(
-        colors.dim(
-          `  Waiting ${SCRAPER_DELAY_MS / 1000}s before next scraper...`,
-        ),
-      );
       await new Promise((r) => setTimeout(r, SCRAPER_DELAY_MS));
     }
 
+    const config = PLATFORMS[platform];
     console.log(`  Scraping ${config.name}...`);
 
     try {
@@ -61,7 +52,9 @@ export async function scrapeProducts(
         timestamp: new Date().toISOString(),
       });
     }
-  }
+  });
+
+  await Promise.allSettled(scrapePromises);
 
   return results;
 }
@@ -89,23 +82,6 @@ async function scrapePreBuilt(
           rating: item.rating ?? undefined,
         }));
     }
-    case "flipkart": {
-      const items = await searchFlipkartViaSerp(query);
-      return items
-        .filter((item) => item.price > 0)
-        .map((item) => ({
-          name: item.title,
-          price: item.price,
-          originalPrice: item.originalPrice,
-          discount: item.discount,
-          brand: item.brand,
-          availability: item.availability,
-          imageUrl: item.imageUrl,
-          productUrl: item.url,
-          platform: "Flipkart",
-          rating: item.rating ?? undefined,
-        }));
-    }
     default:
       throw new Error(`No prebuilt scraper for ${platform}`);
   }
@@ -125,7 +101,8 @@ async function scrapeScraperStudio(
         await new Promise((r) => setTimeout(r, SCRAPER_DELAY_MS));
       }
 
-      const urls = buildPageUrls(platform, query, pages);
+      const flipkartPages = platform === "flipkart" ? 1 : pages;
+      const urls = buildPageUrls(platform, query, flipkartPages);
       const raw = await runCollector(config.collectorId!, urls);
       return parseCustomProducts(raw, platform);
     } catch (err) {
@@ -139,14 +116,35 @@ async function scrapeScraperStudio(
       console.log(colors.dim(`  Falling back to Web Unlocker...`));
 
       try {
-        return await webUnlockerFallback(platform, query, pages);
+        const fallback = await webUnlockerFallback(platform, query, pages);
+        if (fallback.length > 0) return fallback;
       } catch (fallbackErr) {
         const fallbackMsg = fallbackErr instanceof Error
           ? fallbackErr.message
           : String(fallbackErr);
         console.error(colors.red(`  Fallback also failed: ${fallbackMsg}`));
-        return [];
       }
+    }
+  }
+
+  if (config.collectorId) {
+    console.log(colors.yellow(`  Auto-healing ${config.name} scraper...`));
+    try {
+      const healResult = await runHealFlow(
+        config.collectorId,
+        "The scraper returns empty results or missing price/name fields. Fix selectors to capture product title, price, original price, discount, rating, reviews, brand, image URL, and product URL from the page.",
+        true,
+      );
+      if (healResult.success) {
+        console.log(colors.green(`  Heal applied. Re-running scraper...`));
+        const flipkartPages = platform === "flipkart" ? 1 : pages;
+        const urls = buildPageUrls(platform, query, flipkartPages);
+        const raw = await runCollector(config.collectorId, urls);
+        return parseCustomProducts(raw, platform);
+      }
+    } catch (healErr) {
+      const msg = healErr instanceof Error ? healErr.message : String(healErr);
+      console.error(colors.red(`  Auto-heal failed: ${msg}`));
     }
   }
 
@@ -183,13 +181,41 @@ function parseHtmlProducts(html: string, platform: Platform): Product[] {
     const title = titleHtml.replace(/<[^>]+>/g, "").trim();
     if (!title || title.length < 3) continue;
 
+    const cardStart = match.index ?? 0;
+    const cardEnd = html.indexOf("</h2>", cardStart + 100);
+    const cardHtml = html.slice(
+      cardStart,
+      cardEnd > 0 ? cardEnd : cardStart + 2000,
+    );
+
+    const priceMatch = cardHtml.match(/₹[\s]*([0-9,]+)/);
+    const price = priceMatch
+      ? parseInt(priceMatch[1].replace(/,/g, ""), 10)
+      : 0;
+
+    if (price <= 0) continue;
+
+    const oldPriceMatch = cardHtml.match(/₹[\s]*([0-9,]+)/g);
+    let originalPrice = price;
+    if (oldPriceMatch && oldPriceMatch.length >= 2) {
+      const parsed = parseInt(
+        oldPriceMatch[1].replace(/[₹\s,]/g, ""),
+        10,
+      );
+      if (parsed > price) originalPrice = parsed;
+    }
+
+    const discount = originalPrice > price
+      ? Math.round(((originalPrice - price) / originalPrice) * 100)
+      : 0;
+
     products.push({
       name: title,
-      price: 0,
-      originalPrice: 0,
-      discount: 0,
+      price,
+      originalPrice,
+      discount,
       brand: "",
-      availability: "Unknown",
+      availability: "In Stock",
       imageUrl: "",
       productUrl: "",
       platform: config.name,

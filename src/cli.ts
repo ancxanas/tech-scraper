@@ -11,7 +11,12 @@ import {
 import { deduplicate, scoreAndRank } from "./score.ts";
 import { scrapeProducts } from "./scraper.ts";
 import { runHealFlow, verifyHeal } from "./tools/healer.ts";
-import { getPriceHistory, getTrackedProducts, savePrices } from "./kv.ts";
+import {
+  getHistoryByQuery,
+  getPriceHistory,
+  getTrackedProducts,
+  savePrices,
+} from "./kv.ts";
 import { searchGoogleShopping } from "./lib/serp.ts";
 import { getAvailablePreScrapers } from "./lib/prescrapers.ts";
 import { fetchPageMarkdown, takeScreenshot } from "./lib/unlock.ts";
@@ -304,7 +309,7 @@ export const cli = new Command()
       .description("Self-heal a broken scraper using AI")
       .arguments("<collector_id:string> <prompt:string>")
       .option("--auto-approve", "Approve the fix automatically", {
-        default: true,
+        default: false,
       })
       .option("--verify-url <url:string>", "URL to re-run after heal to verify")
       .action(async (options, collectorId, prompt) => {
@@ -347,64 +352,124 @@ export const cli = new Command()
       })
       .action(async (options, query) => {
         if (query) {
-          const history = await getPriceHistory(query);
-          if (history.length === 0) {
+          const queryResults = await getHistoryByQuery(query);
+          if (queryResults.length === 0) {
+            const history = await getPriceHistory(query);
+            if (history.length === 0) {
+              if (jsonMode) {
+                printJson({ query, records: [] });
+              } else {
+                console.log(
+                  colors.dim(`\nNo price history for "${query}".\n`),
+                );
+              }
+              return;
+            }
+
             if (jsonMode) {
-              printJson({ query, records: [] });
+              printJson({ query, records: history });
             } else {
               console.log(
-                colors.dim(`\nNo price history for "${query}".\n`),
+                colors.bold(`\nPrice history for "${query}":\n`),
               );
-            }
-            return;
-          }
+              const table = new Table()
+                .header(["Date", "Price", "Platform"])
+                .border(true);
 
-          if (jsonMode) {
-            printJson({ query, records: history });
+              for (const record of history) {
+                const date = new Date(record.timestamp);
+                table.push([
+                  date.toLocaleDateString("en-IN"),
+                  colors.green(formatPrice(record.price)),
+                  colors.cyan(record.platform),
+                ]);
+              }
+
+              table.render();
+
+              if (history.length >= 2) {
+                const first = history[0].price;
+                const last = history[history.length - 1].price;
+                const change = last - first;
+                const pct = ((change / first) * 100).toFixed(1);
+                const arrow = change > 0
+                  ? "\u2191"
+                  : change < 0
+                  ? "\u2193"
+                  : "\u2192";
+                const trendColor = change > 0
+                  ? colors.red
+                  : change < 0
+                  ? colors.green
+                  : colors.yellow;
+
+                console.log(
+                  trendColor(
+                    `\n  Trend: ${arrow} ${change >= 0 ? "+" : ""}${
+                      formatPrice(
+                        change,
+                      )
+                    } (${change >= 0 ? "+" : ""}${pct}%)\n`,
+                  ),
+                );
+              }
+            }
           } else {
-            console.log(
-              colors.bold(`\nPrice history for "${query}":\n`),
-            );
-            const table = new Table()
-              .header(["Date", "Price", "Platform"])
-              .border(true);
-
-            for (const record of history) {
-              const date = new Date(record.timestamp);
-              table.push([
-                date.toLocaleDateString("en-IN"),
-                colors.green(formatPrice(record.price)),
-                colors.cyan(record.platform),
-              ]);
-            }
-
-            table.render();
-
-            if (history.length >= 2) {
-              const first = history[0].price;
-              const last = history[history.length - 1].price;
-              const change = last - first;
-              const pct = ((change / first) * 100).toFixed(1);
-              const arrow = change > 0
-                ? "\u2191"
-                : change < 0
-                ? "\u2193"
-                : "\u2192";
-              const trendColor = change > 0
-                ? colors.red
-                : change < 0
-                ? colors.green
-                : colors.yellow;
-
+            if (jsonMode) {
+              printJson({ query, results: queryResults });
+            } else {
               console.log(
-                trendColor(
-                  `\n  Trend: ${arrow} ${change >= 0 ? "+" : ""}${
-                    formatPrice(
-                      change,
-                    )
-                  } (${change >= 0 ? "+" : ""}${pct}%)\n`,
+                colors.bold(
+                  `\nSearch history for "${query}":\n`,
                 ),
               );
+              for (const result of queryResults) {
+                const products = result.products;
+                if (products.length === 0) continue;
+
+                const uniqueNames = [...new Set(products.map((p) => p.name))];
+                console.log(
+                  colors.cyan(
+                    `  ${uniqueNames.length} products found`,
+                  ),
+                );
+
+                for (const name of uniqueNames.slice(0, options.limit)) {
+                  const records = products.filter((p) => p.name === name);
+                  const prices = records.map((r) => r.price);
+                  const min = Math.min(...prices);
+                  const max = Math.max(...prices);
+                  const latest = prices[prices.length - 1];
+                  const previous = prices.length >= 2
+                    ? prices[prices.length - 2]
+                    : latest;
+                  const arrow = latest > previous
+                    ? "\u2191"
+                    : latest < previous
+                    ? "\u2193"
+                    : "\u2192";
+                  console.log(
+                    colors.bold(
+                      `    ${name.slice(0, 50)}${
+                        name.length > 50 ? "..." : ""
+                      }`,
+                    ),
+                  );
+                  console.log(
+                    `      ${arrow} Latest: ${
+                      colors.green(
+                        formatPrice(latest),
+                      )
+                    } | Range: ${
+                      colors.dim(
+                        formatPrice(min),
+                      )
+                    } - ${
+                      colors.dim(formatPrice(max))
+                    } | Records: ${records.length}\n`,
+                  );
+                }
+              }
             }
           }
         } else {
@@ -448,9 +513,12 @@ export const cli = new Command()
               const min = Math.min(...prices);
               const max = Math.max(...prices);
               const latest = prices[prices.length - 1];
-              const arrow = latest > min
+              const previous = prices.length >= 2
+                ? prices[prices.length - 2]
+                : latest;
+              const arrow = latest > previous
                 ? "\u2191"
-                : latest < max
+                : latest < previous
                 ? "\u2193"
                 : "\u2192";
               console.log(

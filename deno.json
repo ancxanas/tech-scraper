@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "dev": "deno run --unstable-kv --allow-all main.ts",
+    "dev": "deno run --unstable-kv --allow-net=api.brightdata.com --allow-env --allow-read --allow-write main.ts",
     "fmt": "deno fmt",
     "lint": "deno lint",
     "check": "deno fmt --check && deno lint && deno check main.ts"
@@ -9,6 +9,7 @@
     "@cliffy/command": "jsr:@cliffy/command@^1.2",
     "@cliffy/prompt": "jsr:@cliffy/prompt@^1.2",
     "@cliffy/table": "jsr:@cliffy/table@^1.2",
-    "@cliffy/ansi": "jsr:@cliffy/ansi@^1.2"
+    "@cliffy/ansi": "jsr:@cliffy/ansi@^1.2",
+    "@std/assert": "jsr:@std/assert@^1.0"
   }
 }

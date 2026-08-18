@@ -33,14 +33,15 @@ export function scoreAndRank(
   products: Product[],
   query = "",
 ): ScoredProduct[] {
-  if (products.length === 0) return [];
+  const valid = products.filter((p) => p.price > 0);
+  if (valid.length === 0) return [];
 
   const queryTokens = tokenize(query);
 
-  const inStock = products.filter(
+  const inStock = valid.filter(
     (p) => !p.availability || !p.availability.toLowerCase().includes("out"),
   );
-  const targets = inStock.length > 0 ? inStock : products;
+  const targets = inStock.length > 0 ? inStock : valid;
 
   const prices = targets.map((p) => p.price);
   const discounts = targets.map((p) => p.discount);
@@ -62,7 +63,7 @@ export function scoreAndRank(
 
       const inStockBonus =
         p.availability && !p.availability.toLowerCase().includes("out")
-          ? 0.05
+          ? SCORE_WEIGHTS.availability
           : 0;
 
       const rawScore = priceScore * SCORE_WEIGHTS.price +
@@ -109,7 +110,7 @@ function extractBrandModel(name: string): string {
 
   const words = cleaned.split(" ");
   if (words.length >= 2) {
-    return words.slice(0, 3).join(" ");
+    return words.slice(0, 5).join(" ");
   }
   return cleaned;
 }

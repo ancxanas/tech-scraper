@@ -9,15 +9,20 @@ interface TriggerBatchResponse {
 
 interface ResultItem {
   product_name?: string;
+  product_title?: string;
   price?: { value: number; currency: string } | number;
+  selling_price?: { value: number; currency: string } | number;
   original_price?: { value: number; currency: string } | number;
   discount_percentage?: string;
   brand?: string;
+  seller?: string;
   availability?: string;
   image_url?: string;
   product_url?: string;
   product_page_url?: string;
-  rating?: string;
+  rating?: string | number;
+  review_count?: number;
+  num_ratings?: number;
   error?: string;
 }
 
@@ -62,19 +67,20 @@ export function parseCustomProducts(
   platform: Platform,
 ): Product[] {
   return raw
-    .filter((item) => !item.error && item.product_name)
+    .filter((item) => !item.error && (item.product_name || item.product_title))
     .map((item) => {
-      const price = extractNumber(item.price);
+      const price = extractNumber(item.selling_price || item.price);
       const originalPrice = extractNumber(item.original_price);
       const discount = parseDiscount(item.discount_percentage);
+      const name = item.product_name || item.product_title || "Unknown";
 
       return {
-        name: item.product_name || "Unknown",
+        name: name.replace(/\.\.\. more$/, "").trim(),
         price,
         originalPrice: originalPrice || price,
         discount,
         brand: item.brand || "",
-        availability: item.availability || "Unknown",
+        availability: item.availability || item.seller || "In Stock",
         imageUrl: item.image_url || "",
         productUrl: item.product_url || item.product_page_url || "",
         platform: PLATFORMS[platform].name,
@@ -98,8 +104,10 @@ function parseDiscount(val: string | undefined): number {
   return match ? parseInt(match[1], 10) : 0;
 }
 
-function parseRating(val: string | undefined): number | undefined {
-  if (!val || val === "Share your opinion") return undefined;
+function parseRating(val: string | number | undefined): number | undefined {
+  if (val === undefined || val === null) return undefined;
+  if (typeof val === "number") return val > 0 ? val : undefined;
+  if (val === "Share your opinion") return undefined;
   const match = val.match(/([\d.]+)/);
   return match ? parseFloat(match[1]) : undefined;
 }

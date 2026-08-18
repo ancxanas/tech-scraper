@@ -9,7 +9,8 @@ using Bright Data Scraper Studio.
 
 ## What it does
 
-- Searches across 4 Indian e-commerce platforms: Amazon, Flipkart, Reliance Digital, Tata CLiQ
+- Searches across 4 Indian e-commerce platforms: Amazon, Flipkart, Reliance
+  Digital, Tata CLiQ
 - Discovers deals on Google Shopping via SERP API
 - Fetches any page via Web Unlocker (fallback + screenshots)
 - Scores and ranks results using price, discount, rating, and query relevance
@@ -88,13 +89,13 @@ deno task dev search "laptop" --json
 
 ## Platforms
 
-| Platform | Method | Status |
-|---|---|---|
-| Amazon India | Pre-built scraper (Bright Data dataset) | Active |
-| Flipkart | SERP API (Google Shopping filtered) | Active |
-| Reliance Digital | Scraper Studio (custom collector) | Active |
-| Tata CLiQ | Scraper Studio (custom collector) | Active |
-| Google Shopping | SERP API (deal discovery) | Active |
+| Platform         | Method                                  | Status |
+| ---------------- | --------------------------------------- | ------ |
+| Amazon India     | Pre-built scraper (Bright Data dataset) | Active |
+| Flipkart         | SERP API (Google Shopping filtered)     | Active |
+| Reliance Digital | Scraper Studio (custom collector)       | Active |
+| Tata CLiQ        | Scraper Studio (custom collector)       | Active |
+| Google Shopping  | SERP API (deal discovery)               | Active |
 
 ## Architecture
 
@@ -141,15 +142,15 @@ endpoint. Used for Reliance Digital and Tata CLiQ.
 
 ### Pre-built scrapers (Amazon)
 
-Uses Bright Data's pre-built Amazon India scraper (`gd_lwdb4vjm1ehb499uxs`)
-via `/datasets/v3/trigger`. Returns full product data: name, price, MRP,
-discount, rating, reviews, sales rank, brand, images.
+Uses Bright Data's pre-built Amazon India scraper (`gd_lwdb4vjm1ehb499uxs`) via
+`/datasets/v3/trigger`. Returns full product data: name, price, MRP, discount,
+rating, reviews, sales rank, brand, images.
 
 ### SERP API (Flipkart + deal discovery)
 
-Searches Google Shopping for deals using `POST /request` with `udm=28`.
-Returns structured shopping results with prices, ratings, and merchant info.
-Flipkart results are filtered by shop name.
+Searches Google Shopping for deals using `POST /request` with `udm=28`. Returns
+structured shopping results with prices, ratings, and merchant info. Flipkart
+results are filtered by shop name.
 
 ### Web Unlocker (fallback + screenshots)
 
@@ -174,7 +175,8 @@ Products are scored using a weighted formula with a relevance gate:
 ## Tech stack
 
 - [Deno](https://deno.land) v2 — runtime
-- [Cliffy](https://cliffy.io) — CLI framework (commands, tables, prompts, colors)
+- [Cliffy](https://cliffy.io) — CLI framework (commands, tables, prompts,
+  colors)
 - [Deno KV](https://deno.land/kv) — embedded key-value store for price history
 - [Bright Data](https://www.brightdata.com) — web scraping infrastructure
   - Scraper Studio (custom collectors for Reliance, Tata CLiQ)

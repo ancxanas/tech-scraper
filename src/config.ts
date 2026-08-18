@@ -21,6 +21,8 @@ const relianceId = Deno.env.get("RELIANCE_COLLECTOR_ID") ||
   "c_msxt4lsv12k5p1328b";
 const tatacliqId = Deno.env.get("TATACLIQ_COLLECTOR_ID") ||
   "c_msxt4nhe2fxyb7bjnw";
+const flipkartId = Deno.env.get("FLIPKART_COLLECTOR_ID") ||
+  "c_msyq5fv71wizb98a5s";
 
 export const PLATFORMS: Record<Platform, PlatformConfig> = {
   reliance: {
@@ -55,8 +57,8 @@ export const PLATFORMS: Record<Platform, PlatformConfig> = {
   },
   flipkart: {
     name: "Flipkart",
-    tool: "prebuilt",
-    datasetId: "gd_miclurf22isv1rslin",
+    tool: "scraper",
+    collectorId: flipkartId,
     url: "https://www.flipkart.com",
     searchPath: "/search",
     startIndex: 1,

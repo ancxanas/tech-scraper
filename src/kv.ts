@@ -38,11 +38,13 @@ export async function savePrices(
     await kv.set(key, value);
   }
 
+  const productNames = products.map((p) => p.name);
   const searchKey = ["searches", query, timestamp];
   await kv.set(searchKey, {
     query,
     timestamp,
     productCount: products.length,
+    productNames,
   });
 }
 
@@ -62,6 +64,33 @@ export async function getPriceHistory(
   return records.sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
   );
+}
+
+export async function getHistoryByQuery(
+  query: string,
+): Promise<{ query: string; products: PriceRecord[] }[]> {
+  const kv = await getKv();
+  const results: { query: string; products: PriceRecord[] }[] = [];
+
+  for await (const entry of kv.list({ prefix: ["searches", query] })) {
+    if (entry.value) {
+      const search = entry.value as {
+        query: string;
+        timestamp: string;
+        productNames?: string[];
+      };
+      const products: PriceRecord[] = [];
+      if (search.productNames) {
+        for (const name of search.productNames) {
+          const history = await getPriceHistory(name);
+          products.push(...history);
+        }
+      }
+      results.push({ query: search.query, products });
+    }
+  }
+
+  return results;
 }
 
 export async function getTrackedProducts(): Promise<string[]> {
