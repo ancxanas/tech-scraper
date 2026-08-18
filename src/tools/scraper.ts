@@ -1,5 +1,5 @@
 import { bdFetch, pollUntil } from "../lib/brightdata.ts";
-import { PLATFORMS, type Platform } from "../config.ts";
+import { type Platform, PLATFORMS } from "../config.ts";
 import type { Product } from "../types.ts";
 
 interface TriggerBatchResponse {

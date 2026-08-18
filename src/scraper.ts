@@ -1,5 +1,5 @@
-import { PLATFORMS, type Platform } from "./config.ts";
-import { runCollector, parseCustomProducts } from "./tools/scraper.ts";
+import { type Platform, PLATFORMS } from "./config.ts";
+import { parseCustomProducts, runCollector } from "./tools/scraper.ts";
 import type { SearchResult } from "./types.ts";
 
 const SCRAPER_DELAY_MS = 5000;
@@ -85,10 +85,9 @@ function buildPageUrls(
 
   for (let i = 0; i < pages; i++) {
     const pageNum = config.startIndex + i;
-    const qs =
-      platform === "tatacliq"
-        ? `searchCategory=all&text=${encoded}&page=${pageNum}`
-        : `q=${encoded}&page=${pageNum}`;
+    const qs = platform === "tatacliq"
+      ? `searchCategory=all&text=${encoded}&page=${pageNum}`
+      : `q=${encoded}&page=${pageNum}`;
     urls.push(`${config.url}${config.searchPath}?${qs}`);
   }
 

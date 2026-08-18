@@ -8,6 +8,8 @@ import {
 } from "./config.ts";
 import { deduplicate, scoreAndRank } from "./score.ts";
 import { scrapeProducts } from "./scraper.ts";
+import { runHealFlow } from "./tools/healer.ts";
+import { getPriceHistory, getTrackedProducts, savePrices } from "./kv.ts";
 
 function parsePlatforms(input: string | undefined): Platform[] {
   if (!input) return [...ALL_PLATFORMS];
@@ -88,6 +90,13 @@ export const cli = new Command()
 
         const ranked = scoreAndRank(allProducts);
         printTable(ranked, options.limit);
+
+        if (allProducts.length > 0) {
+          await savePrices(allProducts, query);
+          console.log(
+            `  Price history saved (${allProducts.length} products)\n`,
+          );
+        }
       }),
   )
   .command(
@@ -134,6 +143,10 @@ export const cli = new Command()
           console.log(`  URL:      ${best.productUrl}`);
         }
         console.log();
+
+        if (allProducts.length > 0) {
+          await savePrices(allProducts, query);
+        }
       }),
   )
   .command(
@@ -177,6 +190,106 @@ export const cli = new Command()
         allProducts = deduplicate(allProducts);
         const ranked = scoreAndRank(allProducts);
         printTable(ranked, 15);
+
+        if (allProducts.length > 0) {
+          await savePrices(allProducts, query);
+        }
+      }),
+  )
+  .command(
+    "heal",
+    new Command()
+      .description("Self-heal a broken scraper using AI")
+      .arguments("<collector_id:string> <prompt:string>")
+      .option("--auto-approve", "Approve the fix automatically", {
+        default: true,
+      })
+      .action(async (options, collectorId, prompt) => {
+        console.log(`\nHealing scraper ${collectorId}...\n`);
+        console.log(`  Prompt: "${prompt}"\n`);
+
+        const result = await runHealFlow(
+          collectorId,
+          prompt,
+          options.autoApprove,
+        );
+
+        if (result.success) {
+          console.log("\n  Scraper healed successfully!\n");
+        } else {
+          console.error("\n  Heal failed.\n");
+        }
+      }),
+  )
+  .command(
+    "history",
+    new Command()
+      .description("Show price history for tracked products")
+      .arguments("[query:string]")
+      .option("-n, --limit <n:number>", "Max products to show", {
+        default: 10,
+      })
+      .action(async (options, query) => {
+        if (query) {
+          const history = await getPriceHistory(query);
+          if (history.length === 0) {
+            console.log(`\nNo price history for "${query}".\n`);
+            return;
+          }
+
+          console.log(`\nPrice history for "${query}":\n`);
+          const table = new Table()
+            .header(["Date", "Price", "Platform"])
+            .border(true);
+
+          for (const record of history) {
+            const date = new Date(record.timestamp);
+            table.push([
+              date.toLocaleDateString("en-IN"),
+              formatPrice(record.price),
+              record.platform,
+            ]);
+          }
+
+          table.render();
+
+          if (history.length >= 2) {
+            const first = history[0].price;
+            const last = history[history.length - 1].price;
+            const change = last - first;
+            const pct = ((change / first) * 100).toFixed(1);
+            console.log(
+              `\n  Trend: ${change >= 0 ? "+" : ""}${formatPrice(change)} (${
+                change >= 0 ? "+" : ""
+              }${pct}%)\n`,
+            );
+          }
+        } else {
+          const products = await getTrackedProducts();
+          if (products.length === 0) {
+            console.log("\nNo tracked products yet. Run a search first.\n");
+            return;
+          }
+
+          console.log(`\nTracked products (${products.length}):\n`);
+          for (const name of products.slice(0, options.limit)) {
+            const history = await getPriceHistory(name);
+            const prices = history.map((r) => r.price);
+            const min = Math.min(...prices);
+            const max = Math.max(...prices);
+            const latest = prices[prices.length - 1];
+            console.log(
+              `  ${name.slice(0, 50)}${name.length > 50 ? "..." : ""}`,
+            );
+            console.log(
+              `    Latest: ${formatPrice(latest)} | Range: ${
+                formatPrice(
+                  min,
+                )
+              } - ${formatPrice(max)} | Records: ${history.length}\n`,
+            );
+          }
+        }
       }),
   )
   .command(
@@ -186,7 +299,8 @@ export const cli = new Command()
       .action(() => {
         console.log("\nConfigured Scrapers:\n");
         for (const [key, config] of Object.entries(PLATFORMS)) {
-          console.log(`  + ${config.name} (${key})`);
+          const status = config.enabled ? "active" : "disabled";
+          console.log(`  + ${config.name} (${key}) [${status}]`);
           console.log(`    Tool: Scraper Studio (${config.collectorId})`);
           console.log(`    URL: ${config.url}`);
           console.log(`    Products/page: ~${config.productsPerPage}`);
