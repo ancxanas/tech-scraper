@@ -14,11 +14,16 @@ export interface PlatformConfig {
 
 export const PAGES_TO_SCRAPE = 3;
 
+const relianceId = Deno.env.get("RELIANCE_COLLECTOR_ID") ||
+  "c_msxt4lsv12k5p1328b";
+const tatacliqId = Deno.env.get("TATACLIQ_COLLECTOR_ID") ||
+  "c_msxt4nhe2fxyb7bjnw";
+
 export const PLATFORMS: Record<Platform, PlatformConfig> = {
   reliance: {
     name: "Reliance Digital",
     tool: "scraper",
-    collectorId: "c_msxt4lsv12k5p1328b",
+    collectorId: relianceId,
     url: "https://www.reliancedigital.in",
     searchPath: "/search",
     startIndex: 1,
@@ -28,7 +33,7 @@ export const PLATFORMS: Record<Platform, PlatformConfig> = {
   tatacliq: {
     name: "Tata CLiQ",
     tool: "scraper",
-    collectorId: "c_msxt4nhe2fxyb7bjnw",
+    collectorId: tatacliqId,
     url: "https://www.tatacliq.com",
     searchPath: "/search/",
     startIndex: 0,
@@ -37,11 +42,15 @@ export const PLATFORMS: Record<Platform, PlatformConfig> = {
   },
 };
 
+export const ALL_ENABLED: Platform[] = Object.entries(PLATFORMS)
+  .filter(([, c]) => c.enabled)
+  .map(([k]) => k as Platform);
+
 export const ALL_PLATFORMS: Platform[] = Object.keys(PLATFORMS) as Platform[];
 
 export const SCORE_WEIGHTS = {
-  price: 0.4,
-  discount: 0.3,
+  price: 0.45,
+  discount: 0.25,
   rating: 0.2,
-  reviews: 0.1,
+  availability: 0.1,
 } as const;

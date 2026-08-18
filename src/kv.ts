@@ -9,11 +9,6 @@ interface PriceRecord {
   timestamp: string;
 }
 
-interface PriceHistory {
-  name: string;
-  records: PriceRecord[];
-}
-
 let kvInstance: Deno.Kv | null = null;
 
 async function getKv(): Promise<Deno.Kv> {
@@ -67,43 +62,6 @@ export async function getPriceHistory(
   return records.sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
   );
-}
-
-export async function getSearchHistory(): Promise<
-  { query: string; timestamp: string; productCount: number }[]
-> {
-  const kv = await getKv();
-  const records: { query: string; timestamp: string; productCount: number }[] =
-    [];
-
-  for await (const entry of kv.list({ prefix: ["searches"] })) {
-    if (entry.value) {
-      records.push(
-        entry.value as {
-          query: string;
-          timestamp: string;
-          productCount: number;
-        },
-      );
-    }
-  }
-
-  return records.sort(
-    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-  );
-}
-
-export async function getAllProducts(): Promise<PriceRecord[]> {
-  const kv = await getKv();
-  const records: PriceRecord[] = [];
-
-  for await (const entry of kv.list({ prefix: ["prices"] })) {
-    if (entry.value) {
-      records.push(entry.value as PriceRecord);
-    }
-  }
-
-  return records;
 }
 
 export async function getTrackedProducts(): Promise<string[]> {
