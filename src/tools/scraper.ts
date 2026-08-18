@@ -85,7 +85,7 @@ export function parseCustomProducts(
         originalPrice: originalPrice || price,
         discount,
         brand: item.brand || "",
-        availability: item.availability || item.seller || "In Stock",
+        availability: item.availability || item.seller || "Unknown",
         imageUrl: item.image_url || "",
         productUrl: item.product_url || item.product_page_url || "",
         platform: PLATFORMS[platform].name,

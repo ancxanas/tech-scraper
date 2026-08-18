@@ -21,8 +21,6 @@ import { searchGoogleShopping } from "./lib/serp.ts";
 import { getAvailablePreScrapers } from "./lib/prescrapers.ts";
 import { fetchPageMarkdown, takeScreenshot } from "./lib/unlock.ts";
 
-let jsonMode = false;
-
 function parsePlatforms(input: string | undefined): Platform[] {
   if (!input) return [...ALL_ENABLED];
   const parts = input.split(",").map((p) => p.trim().toLowerCase());
@@ -93,6 +91,10 @@ function printJson(data: unknown) {
   console.log(JSON.stringify(data, null, 2));
 }
 
+function isJson(options: { json?: boolean }): boolean {
+  return options.json === true;
+}
+
 export const cli = new Command()
   .name("tech-scraper")
   .version("0.1.0")
@@ -100,14 +102,12 @@ export const cli = new Command()
   .globalOption("--json", "Output raw JSON instead of formatted tables", {
     default: false,
   })
-  .action((options) => {
-    jsonMode = options.json;
-  })
   .command(
     "search",
     new Command()
       .description("Search for a product across platforms")
       .arguments("<query:string>")
+      .option("--json", "Output raw JSON", { default: false })
       .option(
         "-p, --platforms <platforms:string>",
         "Comma-separated platforms to search",
@@ -118,9 +118,10 @@ export const cli = new Command()
       })
       .option("--no-dedup", "Skip deduplication")
       .action(async (options, query) => {
+        const json = isJson(options);
         const platforms = parsePlatforms(options.platforms);
 
-        if (!jsonMode) {
+        if (!json) {
           console.log(
             colors.bold(`\nSearching for "${query}"...\n`),
           );
@@ -135,10 +136,26 @@ export const cli = new Command()
 
         const ranked = scoreAndRank(allProducts, query);
 
-        if (jsonMode) {
-          printJson({ query, count: ranked.length, products: ranked });
+        const failedPlatforms = results.filter(
+          (r) => r.products.length === 0,
+        ).map((r) => r.platform);
+
+        if (json) {
+          printJson({
+            query,
+            count: ranked.length,
+            products: ranked,
+            errors: failedPlatforms.length > 0 ? failedPlatforms : undefined,
+          });
         } else {
           printTable(ranked, options.limit);
+          if (failedPlatforms.length > 0) {
+            console.log(
+              colors.yellow(
+                `  No results from: ${failedPlatforms.join(", ")}\n`,
+              ),
+            );
+          }
           if (allProducts.length > 0) {
             await savePrices(allProducts, query);
             console.log(
@@ -148,6 +165,10 @@ export const cli = new Command()
             );
           }
         }
+
+        if (ranked.length === 0 && failedPlatforms.length === results.length) {
+          Deno.exit(1);
+        }
       }),
   )
   .command(
@@ -155,6 +176,7 @@ export const cli = new Command()
     new Command()
       .description("Show the single best deal for a product")
       .arguments("<query:string>")
+      .option("--json", "Output raw JSON", { default: false })
       .option(
         "-p, --platforms <platforms:string>",
         "Comma-separated platforms to check",
@@ -163,9 +185,10 @@ export const cli = new Command()
         default: PAGES_TO_SCRAPE,
       })
       .action(async (options, query) => {
+        const json = isJson(options);
         const platforms = parsePlatforms(options.platforms);
 
-        if (!jsonMode) {
+        if (!json) {
           console.log(
             colors.bold(`\nFinding best deal for "${query}"...\n`),
           );
@@ -177,17 +200,17 @@ export const cli = new Command()
         const ranked = scoreAndRank(allProducts, query);
 
         if (ranked.length === 0) {
-          if (jsonMode) {
+          if (json) {
             printJson({ query, best: null });
           } else {
             console.log(colors.dim("No products found.\n"));
           }
-          return;
+          Deno.exit(1);
         }
 
         const best = ranked[0];
 
-        if (jsonMode) {
+        if (json) {
           printJson({ query, best });
         } else {
           console.log(colors.green.bold("  BEST DEAL"));
@@ -226,6 +249,7 @@ export const cli = new Command()
     new Command()
       .description("Compare prices from specific platforms")
       .arguments("<query:string>")
+      .option("--json", "Output raw JSON", { default: false })
       .option(
         "-p, --platforms <platforms:string>",
         "Comma-separated platforms to compare",
@@ -234,6 +258,7 @@ export const cli = new Command()
         default: PAGES_TO_SCRAPE,
       })
       .action(async (options, query) => {
+        const json = isJson(options);
         const platforms = parsePlatforms(options.platforms);
         const enabledCount = getEnabledCount(platforms);
 
@@ -251,7 +276,7 @@ export const cli = new Command()
           Deno.exit(1);
         }
 
-        if (!jsonMode) {
+        if (!json) {
           console.log(
             colors.bold(
               `\nComparing "${query}" across ${enabledCount} platforms...\n`,
@@ -261,7 +286,7 @@ export const cli = new Command()
 
         const results = await scrapeProducts(query, platforms, options.pages);
 
-        if (jsonMode) {
+        if (json) {
           printJson({
             query,
             platforms: results.map((r) => ({
@@ -347,16 +372,18 @@ export const cli = new Command()
     new Command()
       .description("Show price history for tracked products")
       .arguments("[query:string]")
+      .option("--json", "Output raw JSON", { default: false })
       .option("-n, --limit <n:number>", "Max products to show", {
         default: 10,
       })
       .action(async (options, query) => {
+        const json = isJson(options);
         if (query) {
           const queryResults = await getHistoryByQuery(query);
           if (queryResults.length === 0) {
             const history = await getPriceHistory(query);
             if (history.length === 0) {
-              if (jsonMode) {
+              if (json) {
                 printJson({ query, records: [] });
               } else {
                 console.log(
@@ -366,7 +393,7 @@ export const cli = new Command()
               return;
             }
 
-            if (jsonMode) {
+            if (json) {
               printJson({ query, records: history });
             } else {
               console.log(
@@ -415,7 +442,7 @@ export const cli = new Command()
               }
             }
           } else {
-            if (jsonMode) {
+            if (json) {
               printJson({ query, results: queryResults });
             } else {
               console.log(
@@ -475,7 +502,7 @@ export const cli = new Command()
         } else {
           const products = await getTrackedProducts();
           if (products.length === 0) {
-            if (jsonMode) {
+            if (json) {
               printJson({ products: [] });
             } else {
               console.log(
@@ -487,7 +514,7 @@ export const cli = new Command()
             return;
           }
 
-          if (jsonMode) {
+          if (json) {
             const data = [];
             for (const name of products.slice(0, options.limit)) {
               const history = await getPriceHistory(name);
@@ -548,8 +575,10 @@ export const cli = new Command()
     "status",
     new Command()
       .description("Show configured scrapers and their status")
-      .action(() => {
-        if (jsonMode) {
+      .option("--json", "Output raw JSON", { default: false })
+      .action((options) => {
+        const json = isJson(options);
+        if (json) {
           const data = Object.entries(PLATFORMS).map(([key, config]) => ({
             id: key,
             name: config.name,
@@ -600,6 +629,7 @@ export const cli = new Command()
     new Command()
       .description("Discover deals via Google Shopping (SERP API)")
       .arguments("<query:string>")
+      .option("--json", "Output raw JSON", { default: false })
       .option("-n, --limit <n:number>", "Max results to show", { default: 10 })
       .option(
         "--country <country:string>",
@@ -607,7 +637,8 @@ export const cli = new Command()
         { default: "in" },
       )
       .action(async (options, query) => {
-        if (!jsonMode) {
+        const json = isJson(options);
+        if (!json) {
           console.log(
             colors.bold(
               `\nDiscovering deals for "${query}" via Google Shopping...\n`,
@@ -617,7 +648,7 @@ export const cli = new Command()
 
         const results = await searchGoogleShopping(query, options.country);
 
-        if (jsonMode) {
+        if (json) {
           printJson({ query, count: results.length, results });
         } else {
           if (results.length === 0) {
@@ -652,13 +683,15 @@ export const cli = new Command()
     new Command()
       .description("Take a screenshot of a deal page (Web Unlocker)")
       .arguments("<url:string>")
+      .option("--json", "Output raw JSON", { default: false })
       .option(
         "-o, --output <path:string>",
         "Output file path",
         { default: "screenshot.png" },
       )
       .action(async (options, url) => {
-        if (!jsonMode) {
+        const json = isJson(options);
+        if (!json) {
           console.log(
             colors.bold(`\nTaking screenshot of ${url}...\n`),
           );
@@ -666,7 +699,7 @@ export const cli = new Command()
 
         const base64 = await takeScreenshot(url);
 
-        if (jsonMode) {
+        if (json) {
           printJson({ url, output: options.output, size: base64.length });
         } else {
           const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
@@ -684,10 +717,12 @@ export const cli = new Command()
     "scrapers",
     new Command()
       .description("List available pre-built Bright Data scrapers")
-      .action(() => {
+      .option("--json", "Output raw JSON", { default: false })
+      .action((options) => {
+        const json = isJson(options);
         const scrapers = getAvailablePreScrapers();
 
-        if (jsonMode) {
+        if (json) {
           printJson({ scrapers });
         } else {
           console.log(colors.bold("\nAvailable Pre-built Scrapers:\n"));
@@ -708,8 +743,10 @@ export const cli = new Command()
     new Command()
       .description("Fetch any page via Web Unlocker (returns Markdown)")
       .arguments("<url:string>")
-      .action(async (_options, url) => {
-        if (!jsonMode) {
+      .option("--json", "Output raw JSON", { default: false })
+      .action(async (options, url) => {
+        const json = isJson(options);
+        if (!json) {
           console.log(
             colors.bold(`\nFetching ${url} via Web Unlocker...\n`),
           );
@@ -717,7 +754,7 @@ export const cli = new Command()
 
         const markdown = await fetchPageMarkdown(url);
 
-        if (jsonMode) {
+        if (json) {
           printJson({ url, markdown });
         } else {
           console.log(markdown);

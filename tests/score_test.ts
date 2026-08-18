@@ -30,12 +30,12 @@ Deno.test("scoreAndRank filters products with price 0", () => {
 
 Deno.test("scoreAndRank filters products with negative price", () => {
   const products = [
-    makeProduct({ name: "Negative", price: -100 }),
-    makeProduct({ name: "Positive", price: 200 }),
+    makeProduct({ name: "Negative Widget", price: -100 }),
+    makeProduct({ name: "Positive Widget", price: 200 }),
   ];
-  const result = scoreAndRank(products, "test");
+  const result = scoreAndRank(products, "widget");
   assertEquals(result.length, 1);
-  assertEquals(result[0].name, "Positive");
+  assertEquals(result[0].name, "Positive Widget");
 });
 
 Deno.test("scoreAndRank returns empty for all zero prices", () => {
@@ -108,4 +108,25 @@ Deno.test("deduplicate preserves different brands with same model words", () => 
   ];
   const result = deduplicate(products);
   assertEquals(result.length, 2);
+});
+
+Deno.test("scoreAndRank filters unrelated products below relevance threshold", () => {
+  const products = [
+    makeProduct({ name: "Apple iPhone 15 128GB", price: 79900 }),
+    makeProduct({ name: "Samsung Galaxy S24 Ultra", price: 129999 }),
+    makeProduct({ name: "USB Cable Type C 2m", price: 199 }),
+  ];
+  const result = scoreAndRank(products, "iphone 15");
+  assertEquals(result.length, 1);
+  assertEquals(result[0].name, "Apple iPhone 15 128GB");
+});
+
+Deno.test("scoreAndRank filters accessories with short names", () => {
+  const products = [
+    makeProduct({ name: "Sony WH-1000XM5 Headphones", price: 24990 }),
+    makeProduct({ name: "Headphone Case", price: 299 }),
+  ];
+  const result = scoreAndRank(products, "sony headphones");
+  assertEquals(result.length, 1);
+  assertEquals(result[0].name, "Sony WH-1000XM5 Headphones");
 });

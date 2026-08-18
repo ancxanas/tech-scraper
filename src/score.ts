@@ -1,6 +1,31 @@
 import { SCORE_WEIGHTS } from "./config.ts";
 import type { Product } from "./types.ts";
 
+const MIN_RELEVANCE = 0.5;
+
+const ACCESSORY_KEYWORDS = [
+  "case",
+  "cover",
+  "charger",
+  "cable",
+  "adapter",
+  "protector",
+  "guard",
+  "strap",
+  "stand",
+  "holder",
+  "mount",
+  "pouch",
+  "sleeve",
+  "skin",
+  "sticker",
+  "decal",
+  "tempered",
+  "film",
+  "armband",
+  "holster",
+];
+
 export interface ScoredProduct extends Product {
   score: number;
   reason: string;
@@ -53,6 +78,16 @@ export function scoreAndRank(
     .map((p) => {
       const rel = relevanceScore(p, queryTokens);
 
+      if (queryTokens.length > 0 && rel < MIN_RELEVANCE) return null;
+
+      const nameLower = p.name.toLowerCase();
+      const isAccessory = ACCESSORY_KEYWORDS.some((kw) =>
+        nameLower.includes(kw)
+      );
+      const productTokens = tokenize(p.name);
+      const isShortName = productTokens.length <= 3;
+      if (isAccessory && isShortName && rel < 0.8) return null;
+
       const priceScore = maxPrice === minPrice
         ? 1
         : 1 - (p.price - minPrice) / (maxPrice - minPrice);
@@ -93,6 +128,7 @@ export function scoreAndRank(
         reason,
       };
     })
+    .filter((p): p is NonNullable<typeof p> => p !== null)
     .sort((a, b) => b.score - a.score);
 }
 

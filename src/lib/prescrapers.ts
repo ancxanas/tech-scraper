@@ -112,7 +112,11 @@ function parseAmazonItem(item: Record<string, unknown>): PreScraperResult {
       ? item.num_ratings
       : null,
     brand: String(item.brand || ""),
-    availability: "In Stock",
+    availability: item.availability
+      ? String(item.availability)
+      : item.in_stock === false
+      ? "Out of Stock"
+      : "Unknown",
     imageUrl: String(item.image || item.main_image || item.image_url || ""),
     url: String(item.url || ""),
     asin: String(item.asin || ""),

@@ -19,12 +19,27 @@ using Bright Data Scraper Studio.
 
 ## Install
 
+Requires [Deno](https://deno.land) v2.9+ (tested on v2.9.5):
+
+```bash
+# macOS / Linux
+curl -fsSL https://deno.land/install.sh | sh
+
+# Windows (PowerShell)
+irm https://deno.land/install.ps1 | iex
+
+# Or via Homebrew
+brew install deno
+```
+
+Clone and enter the project:
+
 ```bash
 git clone https://github.com/ancxanas/tech-scraper.git
 cd tech-scraper
 ```
 
-Set your Bright Data API key:
+Set your Bright Data API key (required):
 
 ```bash
 export BRIGHTDATA_API_KEY=your_key
@@ -36,15 +51,30 @@ Or copy the example and edit:
 cp .env.example .env
 ```
 
-### Optional: custom zones
+### Required zones
 
 ```bash
+# Required for SERP API (Google Shopping discovery)
 export SERP_ZONE=serp_api1
+
+# Required for Web Unlocker (fallback + screenshots)
 export UNLOCKER_ZONE=cli_unlocker
 ```
 
 Create zones at
 [brightdata.com/cp/web_access/new](https://brightdata.com/cp/web_access/new).
+
+### Optional: custom collector IDs
+
+The project includes default collector IDs for all platforms. To use your own:
+
+```bash
+export FLIPKART_COLLECTOR_ID=c_your_collector_id
+export RELIANCE_COLLECTOR_ID=c_your_collector_id
+export TATACLIQ_COLLECTOR_ID=c_your_collector_id
+```
+
+To recreate the custom collectors, see [Collector Setup](#collector-setup).
 
 ## Usage
 
@@ -182,6 +212,29 @@ Products are scored using a weighted formula with a relevance gate:
   - Pre-built scrapers (Amazon India dataset)
   - SERP API (Google Shopping deal discovery)
   - Web Unlocker (fallback + screenshots)
+
+## Collector Setup
+
+The project uses three custom Scraper Studio collectors:
+
+| Platform         | Collector ID           | Target URL pattern                |
+| ---------------- | ---------------------- | --------------------------------- |
+| Flipkart         | `c_msyq5fv71wizb98a5s` | `flipkart.com/search?q=...`       |
+| Reliance Digital | `c_msxt4lsv12k5p1328b` | `reliancedigital.in/search?q=...` |
+| Tata CLiQ        | `c_msxt4nhe2fxyb7bjnw` | `tatacliq.com/search/?text=...`   |
+
+These collectors are owned by the project creator. To recreate them:
+
+```bash
+# Via Bright Data REST API
+curl -X POST "https://api.brightdata.com/dca/collector" \
+  -H "Authorization: Bearer $BRIGHTDATA_API_KEY" \
+  -d '{"name": "Flipkart Scraper", "url": "https://www.flipkart.com/search?q=iphone"}'
+```
+
+The AI-generated template is then created via `refactor_template`. The
+self-healing flow (`deno task dev heal`) can repair broken collectors
+automatically using the same API.
 
 ## AI tools disclosure
 

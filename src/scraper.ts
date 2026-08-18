@@ -133,7 +133,7 @@ async function scrapeScraperStudio(
       const healResult = await runHealFlow(
         config.collectorId,
         "The scraper returns empty results or missing price/name fields. Fix selectors to capture product title, price, original price, discount, rating, reviews, brand, image URL, and product URL from the page.",
-        true,
+        false,
       );
       if (healResult.success) {
         console.log(colors.green(`  Heal applied. Re-running scraper...`));
@@ -215,7 +215,7 @@ function parseHtmlProducts(html: string, platform: Platform): Product[] {
       originalPrice,
       discount,
       brand: "",
-      availability: "In Stock",
+      availability: "Unknown",
       imageUrl: "",
       productUrl: "",
       platform: config.name,
