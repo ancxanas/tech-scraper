@@ -1,6 +1,11 @@
 import { Command } from "@cliffy/command";
 import { Table } from "@cliffy/table";
-import { ALL_PLATFORMS, type Platform, PLATFORMS } from "./config.ts";
+import {
+  ALL_PLATFORMS,
+  PAGES_TO_SCRAPE,
+  type Platform,
+  PLATFORMS,
+} from "./config.ts";
 import { deduplicate, scoreAndRank } from "./score.ts";
 import { scrapeProducts } from "./scraper.ts";
 
@@ -66,12 +71,15 @@ export const cli = new Command()
         "Comma-separated platforms to search",
       )
       .option("-n, --limit <n:number>", "Max results to show", { default: 20 })
+      .option("--pages <pages:number>", "Pages to scrape per platform", {
+        default: PAGES_TO_SCRAPE,
+      })
       .option("--no-dedup", "Skip deduplication")
       .action(async (options, query) => {
         const platforms = parsePlatforms(options.platforms);
-        console.log(`\nSearching for "${query}"...\n`);
+        console.log(`\nSearching for "${query}" (${options.pages} pages)...\n`);
 
-        const results = await scrapeProducts(query, platforms);
+        const results = await scrapeProducts(query, platforms, options.pages);
         let allProducts = results.flatMap((r) => r.products);
 
         if (options.dedup !== false) {
@@ -91,11 +99,16 @@ export const cli = new Command()
         "-p, --platforms <platforms:string>",
         "Comma-separated platforms to check",
       )
+      .option("--pages <pages:number>", "Pages to scrape per platform", {
+        default: PAGES_TO_SCRAPE,
+      })
       .action(async (options, query) => {
         const platforms = parsePlatforms(options.platforms);
-        console.log(`\nFinding best deal for "${query}"...\n`);
+        console.log(
+          `\nFinding best deal for "${query}" (${options.pages} pages)...\n`,
+        );
 
-        const results = await scrapeProducts(query, platforms);
+        const results = await scrapeProducts(query, platforms, options.pages);
         let allProducts = results.flatMap((r) => r.products);
         allProducts = deduplicate(allProducts);
         const ranked = scoreAndRank(allProducts);
@@ -111,7 +124,11 @@ export const cli = new Command()
         console.log(`  Price:    ${formatPrice(best.price)}`);
         if (best.originalPrice > best.price) {
           console.log(`  Was:      ${formatPrice(best.originalPrice)}`);
-          console.log(`  Savings:  ${formatPrice(best.originalPrice - best.price)} (${best.discount}% off)`);
+          console.log(
+            `  Savings:  ${
+              formatPrice(best.originalPrice - best.price)
+            } (${best.discount}% off)`,
+          );
         }
         console.log(`  Platform: ${best.platform}`);
         console.log(`  Score:    ${best.score.toFixed(2)}`);
@@ -130,6 +147,9 @@ export const cli = new Command()
         "-p, --platforms <platforms:string>",
         "Comma-separated platforms to compare",
       )
+      .option("--pages <pages:number>", "Pages to scrape per platform", {
+        default: PAGES_TO_SCRAPE,
+      })
       .action(async (options, query) => {
         const platforms = parsePlatforms(options.platforms);
         if (platforms.length < 2) {
@@ -137,15 +157,21 @@ export const cli = new Command()
           Deno.exit(1);
         }
 
-        console.log(`\nComparing "${query}" across ${platforms.length} platforms...\n`);
+        console.log(
+          `\nComparing "${query}" across ${platforms.length} platforms (${options.pages} pages)...\n`,
+        );
 
-        const results = await scrapeProducts(query, platforms);
+        const results = await scrapeProducts(query, platforms, options.pages);
 
         for (const result of results) {
           console.log(`${result.platform}: ${result.products.length} products`);
           if (result.products.length > 0) {
             const prices = result.products.map((p) => p.price);
-            console.log(`  Price range: ${formatPrice(Math.min(...prices))} - ${formatPrice(Math.max(...prices))}`);
+            console.log(
+              `  Price range: ${formatPrice(Math.min(...prices))} - ${
+                formatPrice(Math.max(...prices))
+              }`,
+            );
           }
         }
 
@@ -165,7 +191,15 @@ export const cli = new Command()
           console.log(`  + ${config.name} (${key})`);
           console.log(`    URL: ${config.url}`);
           console.log(`    Collector: ${config.collectorId}`);
+          console.log(`    Products/page: ~${config.productsPerPage}`);
+          console.log(`    Page indexing: ${config.startIndex}-based`);
           console.log();
         }
+        console.log(`  Pages per search: ${PAGES_TO_SCRAPE}`);
+        console.log(
+          `  Est. products/platform: ~${PAGES_TO_SCRAPE * 24}-${
+            PAGES_TO_SCRAPE * 40
+          }\n`,
+        );
       }),
   );

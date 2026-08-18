@@ -20,16 +20,13 @@ export function scoreAndRank(products: Product[]): ScoredProduct[] {
         ? 1
         : 1 - (p.price - minPrice) / (maxPrice - minPrice);
 
-      const discountScore = maxDiscount === 0
-        ? 0
-        : p.discount / maxDiscount;
+      const discountScore = maxDiscount === 0 ? 0 : p.discount / maxDiscount;
 
       const ratingScore = p.rating ? p.rating / 5 : 0.5;
 
       const reviewScore = 0.5;
 
-      const score =
-        priceScore * SCORE_WEIGHTS.price +
+      const score = priceScore * SCORE_WEIGHTS.price +
         discountScore * SCORE_WEIGHTS.discount +
         ratingScore * SCORE_WEIGHTS.rating +
         reviewScore * SCORE_WEIGHTS.reviews;
