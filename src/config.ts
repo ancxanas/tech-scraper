@@ -1,50 +1,29 @@
-export type Platform =
-  | "amazon"
-  | "flipkart"
-  | "croma"
-  | "reliance"
-  | "tacliq";
+export type Platform = "reliance" | "tatacliq";
 
 export interface PlatformConfig {
   name: string;
   url: string;
-  collectorId: string | null;
+  collectorId: string;
 }
 
 export const PLATFORMS: Record<Platform, PlatformConfig> = {
-  amazon: {
-    name: "Amazon India",
-    url: "https://www.amazon.in",
-    collectorId: null,
-  },
-  flipkart: {
-    name: "Flipkart",
-    url: "https://www.flipkart.com",
-    collectorId: null,
-  },
-  croma: {
-    name: "Croma",
-    url: "https://www.croma.com",
-    collectorId: null,
-  },
   reliance: {
     name: "Reliance Digital",
     url: "https://www.reliancedigital.in",
-    collectorId: null,
+    collectorId: "c_msxt4lsv12k5p1328b",
   },
-  tacliq: {
+  tatacliq: {
     name: "Tata CLiQ",
     url: "https://www.tatacliq.com",
-    collectorId: null,
+    collectorId: "c_msxt4nhe2fxyb7bjnw",
   },
 };
 
-export const ALL_PLATFORMS: Platform[] = [
-  "amazon",
-  "flipkart",
-  "croma",
-  "reliance",
-  "tacliq",
-];
+export const ALL_PLATFORMS: Platform[] = ["reliance", "tatacliq"];
 
-export const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+export const SCORE_WEIGHTS = {
+  price: 0.4,
+  discount: 0.3,
+  rating: 0.2,
+  reviews: 0.1,
+} as const;
