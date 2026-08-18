@@ -79,29 +79,3 @@ export async function searchGoogleShopping(
     tag: item.tag ?? null,
   }));
 }
-
-export async function searchGoogle(
-  query: string,
-  country = "in",
-): Promise<Array<{ title: string; url: string; description: string }>> {
-  const zone = getSerpZone();
-  const encoded = encodeURIComponent(query);
-  const url =
-    `https://www.google.com/search?q=${encoded}&gl=${country}&hl=en&brd_json=1`;
-
-  const data = await bdFetch<RawSerpResponse>("/request", {
-    method: "POST",
-    body: JSON.stringify({
-      zone,
-      url,
-      format: "raw",
-    }),
-  });
-
-  const items = data.organic || data.search_results || [];
-  return items.map((item) => ({
-    title: item.title || "",
-    url: item.url || "",
-    description: item.description || "",
-  }));
-}

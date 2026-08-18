@@ -8,7 +8,6 @@ export interface PlatformConfig {
   url: string;
   searchPath: string;
   startIndex: number;
-  productsPerPage: number;
   // Scraper Studio (tool === "scraper")
   collectorId?: string;
   // Pre-built dataset (tool === "prebuilt")
@@ -32,7 +31,6 @@ export const PLATFORMS: Record<Platform, PlatformConfig> = {
     url: "https://www.reliancedigital.in",
     searchPath: "/search",
     startIndex: 1,
-    productsPerPage: 24,
     enabled: true,
   },
   tatacliq: {
@@ -42,7 +40,6 @@ export const PLATFORMS: Record<Platform, PlatformConfig> = {
     url: "https://www.tatacliq.com",
     searchPath: "/search/",
     startIndex: 0,
-    productsPerPage: 40,
     enabled: true,
   },
   amazon: {
@@ -52,7 +49,6 @@ export const PLATFORMS: Record<Platform, PlatformConfig> = {
     url: "https://www.amazon.in",
     searchPath: "/s",
     startIndex: 1,
-    productsPerPage: 48,
     enabled: true,
   },
   flipkart: {
@@ -62,7 +58,6 @@ export const PLATFORMS: Record<Platform, PlatformConfig> = {
     url: "https://www.flipkart.com",
     searchPath: "/search",
     startIndex: 1,
-    productsPerPage: 30,
     enabled: true,
   },
 };

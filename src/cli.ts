@@ -586,9 +586,6 @@ export const cli = new Command()
               );
             }
             console.log(colors.dim(`    URL: ${config.url}`));
-            console.log(
-              colors.dim(`    Products/page: ~${config.productsPerPage}`),
-            );
             console.log();
           }
           console.log(

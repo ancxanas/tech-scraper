@@ -72,6 +72,13 @@ export async function getHistoryByQuery(
   const kv = await getKv();
   const results: { query: string; products: PriceRecord[] }[] = [];
 
+  const allPrices: PriceRecord[] = [];
+  for await (const entry of kv.list({ prefix: ["prices"] })) {
+    if (entry.value) {
+      allPrices.push(entry.value as PriceRecord);
+    }
+  }
+
   for await (const entry of kv.list({ prefix: ["searches", query] })) {
     if (entry.value) {
       const search = entry.value as {
@@ -81,9 +88,11 @@ export async function getHistoryByQuery(
       };
       const products: PriceRecord[] = [];
       if (search.productNames) {
-        for (const name of search.productNames) {
-          const history = await getPriceHistory(name);
-          products.push(...history);
+        const nameSet = new Set(search.productNames.map((n) => normalize(n)));
+        for (const record of allPrices) {
+          if (nameSet.has(normalize(record.name))) {
+            products.push(record);
+          }
         }
       }
       results.push({ query: search.query, products });

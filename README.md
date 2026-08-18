@@ -92,7 +92,7 @@ deno task dev search "laptop" --json
 | Platform         | Method                                  | Status |
 | ---------------- | --------------------------------------- | ------ |
 | Amazon India     | Pre-built scraper (Bright Data dataset) | Active |
-| Flipkart         | SERP API (Google Shopping filtered)     | Active |
+| Flipkart         | Scraper Studio (custom collector)       | Active |
 | Reliance Digital | Scraper Studio (custom collector)       | Active |
 | Tata CLiQ        | Scraper Studio (custom collector)       | Active |
 | Google Shopping  | SERP API (deal discovery)               | Active |
@@ -111,7 +111,7 @@ src/
   lib/
     brightdata.ts             Direct REST API client (fetch-based, handles NDJSON)
     serp.ts                   SERP API client (Google Shopping discovery)
-    prescrapers.ts            Pre-built scrapers (Amazon, Flipkart via SERP)
+    prescrapers.ts            Pre-built scrapers (Amazon India dataset)
     unlock.ts                 Web Unlocker client (fallback + screenshots)
   tools/
     scraper.ts                Scraper Studio batch runner (trigger + poll)
@@ -124,7 +124,7 @@ src/
 User query
   → scrapeProducts() checks tool type per platform
     → Scraper Studio: runCollector() → pollUntil() → parseCustomProducts()
-    → Pre-built: searchAmazonPreBuilt() or searchFlipkartViaSerp()
+    → Pre-built: searchAmazonPreBuilt()
     → If Scraper Studio fails → Web Unlocker fallback
   → deduplicate() merges cross-platform matches
   → scoreAndRank() applies weighted scoring + relevance gate
@@ -136,9 +136,9 @@ User query
 
 ### Scraper Studio (custom collectors)
 
-Custom collectors are created via `bdata scraper create` targeting specific
-product listing pages. Products are scraped in batch mode via `/dca/trigger`
-endpoint. Used for Reliance Digital and Tata CLiQ.
+Custom collectors are created via the DCA REST API targeting specific product
+listing pages. Products are scraped in batch mode via `/dca/trigger` endpoint.
+Used for Flipkart, Reliance Digital, and Tata CLiQ.
 
 ### Pre-built scrapers (Amazon)
 
@@ -146,11 +146,10 @@ Uses Bright Data's pre-built Amazon India scraper (`gd_lwdb4vjm1ehb499uxs`) via
 `/datasets/v3/trigger`. Returns full product data: name, price, MRP, discount,
 rating, reviews, sales rank, brand, images.
 
-### SERP API (Flipkart + deal discovery)
+### SERP API (deal discovery)
 
 Searches Google Shopping for deals using `POST /request` with `udm=28`. Returns
-structured shopping results with prices, ratings, and merchant info. Flipkart
-results are filtered by shop name.
+structured shopping results with prices, ratings, and merchant info.
 
 ### Web Unlocker (fallback + screenshots)
 
@@ -179,9 +178,9 @@ Products are scored using a weighted formula with a relevance gate:
   colors)
 - [Deno KV](https://deno.land/kv) — embedded key-value store for price history
 - [Bright Data](https://www.brightdata.com) — web scraping infrastructure
-  - Scraper Studio (custom collectors for Reliance, Tata CLiQ)
+  - Scraper Studio (custom collectors for Flipkart, Reliance, Tata CLiQ)
   - Pre-built scrapers (Amazon India dataset)
-  - SERP API (Google Shopping + Flipkart discovery)
+  - SERP API (Google Shopping deal discovery)
   - Web Unlocker (fallback + screenshots)
 
 ## AI tools disclosure

@@ -16,7 +16,10 @@ function getUnlockerZone(): string {
   return zone;
 }
 
-export async function fetchPageHtml(url: string): Promise<string> {
+export async function fetchPageHtml(
+  url: string,
+  country = "in",
+): Promise<string> {
   const zone = getUnlockerZone();
   const res = await bdFetch<UnlockResponse>("/request", {
     method: "POST",
@@ -24,7 +27,7 @@ export async function fetchPageHtml(url: string): Promise<string> {
       zone,
       url,
       format: "raw",
-      country: "in",
+      country,
     }),
   });
 
@@ -37,7 +40,10 @@ export async function fetchPageHtml(url: string): Promise<string> {
   return res.body || "";
 }
 
-export async function fetchPageMarkdown(url: string): Promise<string> {
+export async function fetchPageMarkdown(
+  url: string,
+  country = "in",
+): Promise<string> {
   const zone = getUnlockerZone();
   const res = await bdFetch<UnlockResponse>("/request", {
     method: "POST",
@@ -45,7 +51,7 @@ export async function fetchPageMarkdown(url: string): Promise<string> {
       zone,
       url,
       format: "raw",
-      country: "in",
+      country,
       data_format: "markdown",
     }),
   });
@@ -53,7 +59,10 @@ export async function fetchPageMarkdown(url: string): Promise<string> {
   return res.body || "";
 }
 
-export async function takeScreenshot(url: string): Promise<string> {
+export async function takeScreenshot(
+  url: string,
+  country = "in",
+): Promise<string> {
   const zone = getUnlockerZone();
   const res = await bdFetch<UnlockResponse>("/request", {
     method: "POST",
@@ -61,32 +70,9 @@ export async function takeScreenshot(url: string): Promise<string> {
       zone,
       url,
       format: "raw",
-      country: "in",
+      country,
       data_format: "screenshot",
     }),
-  });
-
-  return res.body || "";
-}
-
-export async function fetchWithUnlocker(
-  url: string,
-  options: { render?: boolean; markdown?: boolean } = {},
-): Promise<string> {
-  const zone = getUnlockerZone();
-  const body: Record<string, unknown> = {
-    zone,
-    url,
-    format: "raw",
-    country: "in",
-  };
-
-  if (options.render) body.render = "true";
-  if (options.markdown) body.data_format = "markdown";
-
-  const res = await bdFetch<UnlockResponse>("/request", {
-    method: "POST",
-    body: JSON.stringify(body),
   });
 
   return res.body || "";

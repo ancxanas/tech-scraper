@@ -3,7 +3,8 @@ import { type Platform, PLATFORMS } from "../config.ts";
 import type { Product } from "../types.ts";
 
 interface TriggerBatchResponse {
-  collection_id: string;
+  collection_id?: string;
+  snapshot_id?: string;
   start_eta?: string;
 }
 
@@ -40,7 +41,11 @@ export async function runCollector(
     },
   );
 
-  const collectionId = triggerRes.collection_id;
+  const collectionId = triggerRes.collection_id || triggerRes.snapshot_id;
+
+  if (!collectionId) {
+    throw new Error("No collection_id or snapshot_id in trigger response");
+  }
 
   const items = await pollUntil<ResultItem[]>(
     async () => {
