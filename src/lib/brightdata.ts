@@ -32,7 +32,19 @@ export async function bdFetch<T = unknown>(
     throw new Error(`Bright Data API ${res.status}: ${body}`);
   }
 
-  return res.json() as Promise<T>;
+  const text = await res.text();
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    // NDJSON fallback: split by newlines, parse each, return array
+    const lines = text.split("\n").filter((l) => l.trim());
+    if (lines.length > 0) {
+      const parsed = lines.map((l) => JSON.parse(l)) as unknown;
+      return parsed as T;
+    }
+    throw new Error("Empty response from Bright Data API");
+  }
 }
 
 export async function pollUntil<T>(

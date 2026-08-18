@@ -485,7 +485,9 @@ export const cli = new Command()
           const data = Object.entries(PLATFORMS).map(([key, config]) => ({
             id: key,
             name: config.name,
+            tool: config.tool,
             collectorId: config.collectorId,
+            datasetId: config.datasetId,
             enabled: config.enabled,
             url: config.url,
           }));
@@ -499,10 +501,22 @@ export const cli = new Command()
             const status = config.enabled
               ? colors.green("active")
               : colors.red("disabled");
-            console.log(`  ${dot} ${config.name} (${key}) [${status}]`);
+            const toolLabel = config.tool === "prebuilt"
+              ? colors.magenta("pre-built")
+              : colors.cyan("scraper studio");
             console.log(
-              colors.dim(`    Collector: ${config.collectorId}`),
+              `  ${dot} ${config.name} (${key}) [${status}] ${toolLabel}`,
             );
+            if (config.collectorId) {
+              console.log(
+                colors.dim(`    Collector: ${config.collectorId}`),
+              );
+            }
+            if (config.datasetId) {
+              console.log(
+                colors.dim(`    Dataset: ${config.datasetId}`),
+              );
+            }
             console.log(colors.dim(`    URL: ${config.url}`));
             console.log(
               colors.dim(`    Products/page: ~${config.productsPerPage}`),

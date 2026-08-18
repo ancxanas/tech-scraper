@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "dev": "deno run --allow-all main.ts",
+    "dev": "deno run --unstable-kv --allow-all main.ts",
     "fmt": "deno fmt",
     "lint": "deno lint",
     "check": "deno fmt --check && deno lint && deno check main.ts"

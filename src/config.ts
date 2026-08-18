@@ -1,15 +1,18 @@
-export type Platform = "reliance" | "tatacliq";
-export type ToolType = "scraper";
+export type Platform = "reliance" | "tatacliq" | "amazon" | "flipkart";
+export type ToolType = "scraper" | "prebuilt";
 
 export interface PlatformConfig {
   name: string;
   tool: ToolType;
-  collectorId: string;
+  enabled: boolean;
   url: string;
   searchPath: string;
   startIndex: number;
   productsPerPage: number;
-  enabled: boolean;
+  // Scraper Studio (tool === "scraper")
+  collectorId?: string;
+  // Pre-built dataset (tool === "prebuilt")
+  datasetId?: string;
 }
 
 export const PAGES_TO_SCRAPE = 3;
@@ -38,7 +41,27 @@ export const PLATFORMS: Record<Platform, PlatformConfig> = {
     searchPath: "/search/",
     startIndex: 0,
     productsPerPage: 40,
-    enabled: false,
+    enabled: true,
+  },
+  amazon: {
+    name: "Amazon India",
+    tool: "prebuilt",
+    datasetId: "gd_lwdb4vjm1ehb499uxs",
+    url: "https://www.amazon.in",
+    searchPath: "/s",
+    startIndex: 1,
+    productsPerPage: 48,
+    enabled: true,
+  },
+  flipkart: {
+    name: "Flipkart",
+    tool: "prebuilt",
+    datasetId: "gd_miclurf22isv1rslin",
+    url: "https://www.flipkart.com",
+    searchPath: "/search",
+    startIndex: 1,
+    productsPerPage: 30,
+    enabled: true,
   },
 };
 

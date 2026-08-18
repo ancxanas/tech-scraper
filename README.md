@@ -9,10 +9,9 @@ using Bright Data Scraper Studio.
 
 ## What it does
 
-- Searches Reliance Digital for products via custom Bright Data scrapers
+- Searches across 4 Indian e-commerce platforms: Amazon, Flipkart, Reliance Digital, Tata CLiQ
 - Discovers deals on Google Shopping via SERP API
 - Fetches any page via Web Unlocker (fallback + screenshots)
-- Uses pre-built Amazon/Google Shopping scrapers
 - Scores and ranks results using price, discount, rating, and query relevance
 - Tracks price history over time with Deno KV
 - Self-heals broken scrapers when target sites change their layout
@@ -49,14 +48,20 @@ Create zones at
 ## Usage
 
 ```bash
-# Search for products (Scraper Studio)
+# Search across all platforms
 deno task dev search "wireless headphones"
+
+# Search specific platforms
+deno task dev search "laptop" -p amazon,flipkart
 
 # Discover deals on Google Shopping (SERP API)
 deno task dev discover "laptop deals under 50000"
 
 # Find the best deal
 deno task dev best-deal "iphone 15"
+
+# Compare prices across platforms
+deno task dev compare "headphones" -p amazon,flipkart,reliance,tatacliq
 
 # View price history
 deno task dev history
@@ -81,42 +86,15 @@ deno task dev heal <collector_id> "Fix the broken selectors"
 deno task dev search "laptop" --json
 ```
 
-## Example output
+## Platforms
 
-```
-$ deno task dev best-deal "wireless headphones"
-
-Finding best deal for "wireless headphones"...
-
-  Scraping Reliance Digital (3 pages)...
-  Found 15 products
-
-  BEST DEAL
-  Product:  Sony WH-1000XM5 Wireless Noise Cancelling Headphones
-  Price:    ₹19,990
-  Was:      ₹29,990
-  Savings:  ₹10,000 (33% off)
-  Platform: Reliance Digital
-  Score:    0.89
-  Why:      lowest price + 33% off + 4.5★
-  URL:      https://www.reliancedigital.in/sony-wh-1000xm5...
-
-  Price history saved (15 products)
-```
-
-```
-$ deno task dev discover "wireless headphones deals"
-
-Discovering deals for "wireless headphones deals" via Google Shopping...
-
-+---+-----------------------------------------+----------+--------------+--------+
-| # | Product                                 | Price    | Shop         | Rating |
-+---+-----------------------------------------+----------+--------------+--------+
-| 1 | Sony WH-1000XM5 Wireless...             | ₹19,990  | Reliance     | 4.5    |
-| 2 | JBL Tour One M2 Wireless...             | ₹27,999  | Amazon       | 4.3    |
-| 3 | Apple AirPods Max                       | ₹59,900  | Croma        | 4.6    |
-+---+-----------------------------------------+----------+--------------+--------+
-```
+| Platform | Method | Status |
+|---|---|---|
+| Amazon India | Pre-built scraper (Bright Data dataset) | Active |
+| Flipkart | SERP API (Google Shopping filtered) | Active |
+| Reliance Digital | Scraper Studio (custom collector) | Active |
+| Tata CLiQ | Scraper Studio (custom collector) | Active |
+| Google Shopping | SERP API (deal discovery) | Active |
 
 ## Architecture
 
@@ -130,9 +108,9 @@ src/
   types.ts                    Product and SearchResult interfaces
   kv.ts                       Price history with Deno KV
   lib/
-    brightdata.ts             Direct REST API client (fetch-based)
+    brightdata.ts             Direct REST API client (fetch-based, handles NDJSON)
     serp.ts                   SERP API client (Google Shopping discovery)
-    prescrapers.ts            Pre-built scrapers (Amazon, Google Shopping)
+    prescrapers.ts            Pre-built scrapers (Amazon, Flipkart via SERP)
     unlock.ts                 Web Unlocker client (fallback + screenshots)
   tools/
     scraper.ts                Scraper Studio batch runner (trigger + poll)
@@ -143,10 +121,9 @@ src/
 
 ```
 User query
-  → scrapeProducts() builds page URLs
-    → runCollector() triggers Bright Data batch
-    → pollUntil() waits for results
-    → parseCustomProducts() extracts Product objects
+  → scrapeProducts() checks tool type per platform
+    → Scraper Studio: runCollector() → pollUntil() → parseCustomProducts()
+    → Pre-built: searchAmazonPreBuilt() or searchFlipkartViaSerp()
     → If Scraper Studio fails → Web Unlocker fallback
   → deduplicate() merges cross-platform matches
   → scoreAndRank() applies weighted scoring + relevance gate
@@ -160,22 +137,24 @@ User query
 
 Custom collectors are created via `bdata scraper create` targeting specific
 product listing pages. Products are scraped in batch mode via `/dca/trigger`
-endpoint.
+endpoint. Used for Reliance Digital and Tata CLiQ.
 
-### SERP API (deal discovery)
+### Pre-built scrapers (Amazon)
 
-Searches Google Shopping for deals using `POST /request` with `udm=28`. Returns
-structured shopping results with prices, ratings, and merchant info.
+Uses Bright Data's pre-built Amazon India scraper (`gd_lwdb4vjm1ehb499uxs`)
+via `/datasets/v3/trigger`. Returns full product data: name, price, MRP,
+discount, rating, reviews, sales rank, brand, images.
+
+### SERP API (Flipkart + deal discovery)
+
+Searches Google Shopping for deals using `POST /request` with `udm=28`.
+Returns structured shopping results with prices, ratings, and merchant info.
+Flipkart results are filtered by shop name.
 
 ### Web Unlocker (fallback + screenshots)
 
 When Scraper Studio fails or hangs, falls back to Web Unlocker for 98% success
 rate page fetching. Also supports screenshots for demo purposes.
-
-### Pre-built scrapers (instant multi-platform)
-
-Uses Bright Data's pre-built Amazon and Google Shopping scrapers via
-`/datasets/v3/scrape`. No custom collector needed.
 
 ### Self-healing
 
@@ -195,14 +174,13 @@ Products are scored using a weighted formula with a relevance gate:
 ## Tech stack
 
 - [Deno](https://deno.land) v2 — runtime
-- [Cliffy](https://cliffy.io) — CLI framework (commands, tables, prompts,
-  colors)
+- [Cliffy](https://cliffy.io) — CLI framework (commands, tables, prompts, colors)
 - [Deno KV](https://deno.land/kv) — embedded key-value store for price history
 - [Bright Data](https://www.brightdata.com) — web scraping infrastructure
-  - Scraper Studio (custom collectors)
-  - SERP API (Google Shopping discovery)
+  - Scraper Studio (custom collectors for Reliance, Tata CLiQ)
+  - Pre-built scrapers (Amazon India dataset)
+  - SERP API (Google Shopping + Flipkart discovery)
   - Web Unlocker (fallback + screenshots)
-  - Pre-built scrapers (Amazon, Google Shopping)
 
 ## AI tools disclosure
 

@@ -2,6 +2,10 @@ import { colors } from "@cliffy/ansi/colors";
 import { type Platform, PLATFORMS } from "./config.ts";
 import { parseCustomProducts, runCollector } from "./tools/scraper.ts";
 import { fetchPageHtml } from "./lib/unlock.ts";
+import {
+  searchAmazonPreBuilt,
+  searchFlipkartViaSerp,
+} from "./lib/prescrapers.ts";
 import type { Product, SearchResult } from "./types.ts";
 
 const SCRAPER_DELAY_MS = 5000;
@@ -29,83 +33,124 @@ export async function scrapeProducts(
       await new Promise((r) => setTimeout(r, SCRAPER_DELAY_MS));
     }
 
-    console.log(`  Scraping ${config.name} (${pages} pages)...`);
+    console.log(`  Scraping ${config.name}...`);
 
-    let success = false;
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        if (attempt > 0) {
-          console.log(colors.yellow(`  Retrying (attempt ${attempt + 1})...`));
-          await new Promise((r) => setTimeout(r, SCRAPER_DELAY_MS));
-        }
+    try {
+      let products: Product[];
 
-        const urls = buildPageUrls(platform, query, pages);
-        const raw = await runCollector(config.collectorId, urls);
-        const products = parseCustomProducts(raw, platform);
-        results.push({
-          query,
-          platform: config.name,
-          products,
-          timestamp: new Date().toISOString(),
-        });
-        console.log(colors.green(`  Found ${products.length} products`));
-        success = true;
-        break;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes("rate limit") && attempt < MAX_RETRIES) {
-          console.log(colors.yellow(`  Rate limited, waiting before retry...`));
-          continue;
-        }
-
-        console.log(colors.yellow(`  Scraper Studio failed: ${msg}`));
-        console.log(colors.dim(`  Falling back to Web Unlocker...`));
-
-        try {
-          const fallbackProducts = await webUnlockerFallback(
-            platform,
-            query,
-            pages,
-          );
-          results.push({
-            query,
-            platform: config.name,
-            products: fallbackProducts,
-            timestamp: new Date().toISOString(),
-          });
-          console.log(
-            colors.green(
-              `  Found ${fallbackProducts.length} products (via Web Unlocker)`,
-            ),
-          );
-          success = true;
-          break;
-        } catch (fallbackErr) {
-          const fallbackMsg = fallbackErr instanceof Error
-            ? fallbackErr.message
-            : String(fallbackErr);
-          console.error(colors.red(`  Fallback also failed: ${fallbackMsg}`));
-          results.push({
-            query,
-            platform: config.name,
-            products: [],
-            timestamp: new Date().toISOString(),
-          });
-          break;
-        }
+      if (config.tool === "prebuilt") {
+        products = await scrapePreBuilt(platform, query, pages);
+      } else {
+        products = await scrapeScraperStudio(platform, query, pages);
       }
-    }
 
-    if (!success) {
-      console.error(
-        colors.red(
-          `  Skipped ${config.name} after ${MAX_RETRIES + 1} attempts`,
-        ),
-      );
+      results.push({
+        query,
+        platform: config.name,
+        products,
+        timestamp: new Date().toISOString(),
+      });
+      console.log(colors.green(`  Found ${products.length} products`));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(colors.red(`  ${config.name} failed: ${msg}`));
+      results.push({
+        query,
+        platform: config.name,
+        products: [],
+        timestamp: new Date().toISOString(),
+      });
     }
   }
 
   return results;
+}
+
+async function scrapePreBuilt(
+  platform: Platform,
+  query: string,
+  pages: number,
+): Promise<Product[]> {
+  switch (platform) {
+    case "amazon": {
+      const items = await searchAmazonPreBuilt(query, pages);
+      return items
+        .filter((item) => item.price > 0)
+        .map((item) => ({
+          name: item.title,
+          price: item.price,
+          originalPrice: item.originalPrice,
+          discount: item.discount,
+          brand: item.brand,
+          availability: item.availability,
+          imageUrl: item.imageUrl,
+          productUrl: item.url,
+          platform: "Amazon India",
+          rating: item.rating ?? undefined,
+        }));
+    }
+    case "flipkart": {
+      const items = await searchFlipkartViaSerp(query);
+      return items
+        .filter((item) => item.price > 0)
+        .map((item) => ({
+          name: item.title,
+          price: item.price,
+          originalPrice: item.originalPrice,
+          discount: item.discount,
+          brand: item.brand,
+          availability: item.availability,
+          imageUrl: item.imageUrl,
+          productUrl: item.url,
+          platform: "Flipkart",
+          rating: item.rating ?? undefined,
+        }));
+    }
+    default:
+      throw new Error(`No prebuilt scraper for ${platform}`);
+  }
+}
+
+async function scrapeScraperStudio(
+  platform: Platform,
+  query: string,
+  pages: number,
+): Promise<Product[]> {
+  const config = PLATFORMS[platform];
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      if (attempt > 0) {
+        console.log(colors.yellow(`  Retrying (attempt ${attempt + 1})...`));
+        await new Promise((r) => setTimeout(r, SCRAPER_DELAY_MS));
+      }
+
+      const urls = buildPageUrls(platform, query, pages);
+      const raw = await runCollector(config.collectorId!, urls);
+      return parseCustomProducts(raw, platform);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("rate limit") && attempt < MAX_RETRIES) {
+        console.log(colors.yellow(`  Rate limited, waiting before retry...`));
+        continue;
+      }
+
+      console.log(colors.yellow(`  Scraper Studio failed: ${msg}`));
+      console.log(colors.dim(`  Falling back to Web Unlocker...`));
+
+      try {
+        return await webUnlockerFallback(platform, query, pages);
+      } catch (fallbackErr) {
+        const fallbackMsg = fallbackErr instanceof Error
+          ? fallbackErr.message
+          : String(fallbackErr);
+        console.error(colors.red(`  Fallback also failed: ${fallbackMsg}`));
+        return [];
+      }
+    }
+  }
+
+  return [];
 }
 
 async function webUnlockerFallback(
