@@ -20,6 +20,7 @@ import {
 import { searchGoogleShopping } from "./lib/serp.ts";
 import { getAvailablePreScrapers } from "./lib/prescrapers.ts";
 import { fetchPageMarkdown, takeScreenshot } from "./lib/unlock.ts";
+import { checkCollector } from "./lib/brightdata.ts";
 
 function parsePlatforms(input: string | undefined): Platform[] {
   if (!input) return [...ALL_ENABLED];
@@ -95,6 +96,15 @@ function isJson(options: { json?: boolean }): boolean {
   return options.json === true;
 }
 
+function validateUrl(url: string): void {
+  try {
+    new URL(url);
+  } catch {
+    console.error(`Invalid URL: ${url}`);
+    Deno.exit(1);
+  }
+}
+
 export const cli = new Command()
   .name("tech-scraper")
   .version("0.1.0")
@@ -117,6 +127,7 @@ export const cli = new Command()
         default: PAGES_TO_SCRAPE,
       })
       .option("--no-dedup", "Skip deduplication")
+      .option("--no-save", "Skip saving price history")
       .action(async (options, query) => {
         const json = isJson(options);
         const platforms = parsePlatforms(options.platforms);
@@ -145,6 +156,12 @@ export const cli = new Command()
             query,
             count: ranked.length,
             products: ranked,
+            platforms: results.map((r) => ({
+              name: r.platform,
+              status: r.status,
+              count: r.products.length,
+              error: r.error,
+            })),
             errors: failedPlatforms.length > 0 ? failedPlatforms : undefined,
           });
         } else {
@@ -156,8 +173,11 @@ export const cli = new Command()
               ),
             );
           }
-          if (allProducts.length > 0) {
-            await savePrices(allProducts, query);
+        }
+
+        if (options.save !== false && allProducts.length > 0) {
+          await savePrices(allProducts, query);
+          if (!json) {
             console.log(
               colors.dim(
                 `  Price history saved (${allProducts.length} products)\n`,
@@ -184,6 +204,7 @@ export const cli = new Command()
       .option("--pages <pages:number>", "Pages to scrape per platform", {
         default: PAGES_TO_SCRAPE,
       })
+      .option("--no-save", "Skip saving price history")
       .action(async (options, query) => {
         const json = isJson(options);
         const platforms = parsePlatforms(options.platforms);
@@ -237,10 +258,10 @@ export const cli = new Command()
             console.log(colors.dim(`  URL:      ${best.productUrl}`));
           }
           console.log();
+        }
 
-          if (allProducts.length > 0) {
-            await savePrices(allProducts, query);
-          }
+        if (options.save !== false && allProducts.length > 0) {
+          await savePrices(allProducts, query);
         }
       }),
   )
@@ -257,6 +278,7 @@ export const cli = new Command()
       .option("--pages <pages:number>", "Pages to scrape per platform", {
         default: PAGES_TO_SCRAPE,
       })
+      .option("--no-save", "Skip saving price history")
       .action(async (options, query) => {
         const json = isJson(options);
         const platforms = parsePlatforms(options.platforms);
@@ -291,7 +313,9 @@ export const cli = new Command()
             query,
             platforms: results.map((r) => ({
               name: r.platform,
+              status: r.status,
               count: r.products.length,
+              error: r.error,
               priceRange: r.products.length > 0
                 ? {
                   min: Math.min(...r.products.map((p) => p.price)),
@@ -322,7 +346,7 @@ export const cli = new Command()
           const ranked = scoreAndRank(allProducts, query);
           printTable(ranked, 15);
 
-          if (allProducts.length > 0) {
+          if (options.save !== false && allProducts.length > 0) {
             await savePrices(allProducts, query);
           }
         }
@@ -691,6 +715,7 @@ export const cli = new Command()
       )
       .action(async (options, url) => {
         const json = isJson(options);
+        validateUrl(url);
         if (!json) {
           console.log(
             colors.bold(`\nTaking screenshot of ${url}...\n`),
@@ -698,12 +723,17 @@ export const cli = new Command()
         }
 
         const base64 = await takeScreenshot(url);
+        const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+        await Deno.writeFile(options.output, bytes);
 
         if (json) {
-          printJson({ url, output: options.output, size: base64.length });
+          printJson({
+            url,
+            output: options.output,
+            size: bytes.length,
+            saved: true,
+          });
         } else {
-          const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-          await Deno.writeFile(options.output, bytes);
           console.log(
             colors.green(`  Screenshot saved to ${options.output}`),
           );
@@ -739,6 +769,76 @@ export const cli = new Command()
       }),
   )
   .command(
+    "doctor",
+    new Command()
+      .description("Check all configured collectors are reachable")
+      .option("--json", "Output raw JSON", { default: false })
+      .action(async (options) => {
+        const json = isJson(options);
+        if (!json) {
+          console.log(colors.bold("\nChecking collectors...\n"));
+        }
+
+        const checks: {
+          platform: string;
+          collectorId: string;
+          ok: boolean;
+          error?: string;
+        }[] = [];
+
+        for (const [, config] of Object.entries(PLATFORMS)) {
+          if (!config.collectorId) {
+            checks.push({
+              platform: config.name,
+              collectorId: "n/a",
+              ok: config.tool === "prebuilt",
+              error: config.tool === "scraper"
+                ? "No collector ID configured"
+                : undefined,
+            });
+            continue;
+          }
+          const result = await checkCollector(config.collectorId);
+          checks.push({
+            platform: config.name,
+            collectorId: config.collectorId,
+            ok: result.ok,
+            error: result.error,
+          });
+        }
+
+        if (json) {
+          printJson({
+            checks,
+            allOk: checks.every((c) => c.ok),
+          });
+        } else {
+          for (const c of checks) {
+            const icon = c.ok
+              ? colors.green.bold("\u2713")
+              : colors.red.bold("\u2717");
+            console.log(
+              `  ${icon} ${c.platform} (${c.collectorId})`,
+            );
+            if (c.error) {
+              console.log(colors.red(`    ${c.error}`));
+            }
+          }
+          console.log();
+          const allOk = checks.every((c) => c.ok);
+          if (allOk) {
+            console.log(colors.green.bold("  All collectors healthy.\n"));
+          } else {
+            console.log(
+              colors.red.bold(
+                "  Some collectors need attention. Run: tech-scraper heal <id> <prompt>\n",
+              ),
+            );
+          }
+        }
+      }),
+  )
+  .command(
     "fetch",
     new Command()
       .description("Fetch any page via Web Unlocker (returns Markdown)")
@@ -746,6 +846,7 @@ export const cli = new Command()
       .option("--json", "Output raw JSON", { default: false })
       .action(async (options, url) => {
         const json = isJson(options);
+        validateUrl(url);
         if (!json) {
           console.log(
             colors.bold(`\nFetching ${url} via Web Unlocker...\n`),

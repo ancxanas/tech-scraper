@@ -16,4 +16,6 @@ export interface SearchResult {
   platform: string;
   products: Product[];
   timestamp: string;
+  status: "ok" | "error" | "empty";
+  error?: string;
 }

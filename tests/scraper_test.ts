@@ -147,3 +147,47 @@ Deno.test("parseCustomProducts extracts price from number", () => {
   assertEquals(result[0].price, 2500);
   assertEquals(result[0].originalPrice, 2500);
 });
+
+Deno.test("parseCustomProducts handles INR string prices", () => {
+  const raw = [
+    {
+      product_title: "INR String Price",
+      selling_price: "\u20b91,299",
+      original_price: "\u20b92,499",
+    },
+  ];
+
+  const result = parseCustomProducts(raw, "flipkart");
+  assertEquals(result[0].price, 1299);
+  assertEquals(result[0].originalPrice, 2499);
+});
+
+Deno.test("parseCustomProducts handles object with string value", () => {
+  const raw = [
+    {
+      product_title: "Object String Price",
+      selling_price: { value: "\u20b93,499", currency: "INR" },
+    },
+  ];
+
+  const result = parseCustomProducts(raw, "flipkart");
+  assertEquals(result[0].price, 3499);
+});
+
+Deno.test("parseCustomProducts uses availability from source data", () => {
+  const raw = [
+    {
+      product_name: "Available Item",
+      price: 1000,
+      availability: "In Stock",
+    },
+    {
+      product_name: "No Availability Item",
+      price: 1000,
+    },
+  ];
+
+  const result = parseCustomProducts(raw, "flipkart");
+  assertEquals(result[0].availability, "In Stock");
+  assertEquals(result[1].availability, "Unknown");
+});

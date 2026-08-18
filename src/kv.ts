@@ -6,6 +6,7 @@ interface PriceRecord {
   originalPrice: number;
   discount: number;
   platform: string;
+  query: string;
   timestamp: string;
 }
 
@@ -18,6 +19,14 @@ async function getKv(): Promise<Deno.Kv> {
   return kvInstance;
 }
 
+function normalize(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function platformKey(platform: string): string {
+  return normalize(platform).replace(/\s+/g, "-");
+}
+
 export async function savePrices(
   products: Product[],
   query: string,
@@ -26,20 +35,31 @@ export async function savePrices(
   const timestamp = new Date().toISOString();
 
   for (const product of products) {
-    const key = ["prices", normalize(product.name), timestamp];
+    const key = [
+      "prices",
+      platformKey(product.platform),
+      normalize(query),
+      normalize(product.name),
+      timestamp,
+    ];
     const value: PriceRecord = {
       name: product.name,
       price: product.price,
       originalPrice: product.originalPrice,
       discount: product.discount,
       platform: product.platform,
+      query,
       timestamp,
     };
     await kv.set(key, value);
   }
 
   const productNames = products.map((p) => p.name);
-  const searchKey = ["searches", query, timestamp];
+  const searchKey = [
+    "searches",
+    normalize(query),
+    timestamp,
+  ];
   await kv.set(searchKey, {
     query,
     timestamp,
@@ -53,11 +73,14 @@ export async function getPriceHistory(
 ): Promise<PriceRecord[]> {
   const kv = await getKv();
   const records: PriceRecord[] = [];
-  const prefix = ["prices", normalize(productName)];
+  const prefix = ["prices"];
 
   for await (const entry of kv.list({ prefix })) {
     if (entry.value) {
-      records.push(entry.value as PriceRecord);
+      const record = entry.value as PriceRecord;
+      if (normalize(record.name) === normalize(productName)) {
+        records.push(record);
+      }
     }
   }
 
@@ -72,31 +95,20 @@ export async function getHistoryByQuery(
   const kv = await getKv();
   const results: { query: string; products: PriceRecord[] }[] = [];
 
-  const allPrices: PriceRecord[] = [];
-  for await (const entry of kv.list({ prefix: ["prices"] })) {
+  const queryProducts: PriceRecord[] = [];
+  const prefix = ["prices"];
+
+  for await (const entry of kv.list({ prefix })) {
     if (entry.value) {
-      allPrices.push(entry.value as PriceRecord);
+      const record = entry.value as PriceRecord;
+      if (normalize(record.query) === normalize(query)) {
+        queryProducts.push(record);
+      }
     }
   }
 
-  for await (const entry of kv.list({ prefix: ["searches", query] })) {
-    if (entry.value) {
-      const search = entry.value as {
-        query: string;
-        timestamp: string;
-        productNames?: string[];
-      };
-      const products: PriceRecord[] = [];
-      if (search.productNames) {
-        const nameSet = new Set(search.productNames.map((n) => normalize(n)));
-        for (const record of allPrices) {
-          if (nameSet.has(normalize(record.name))) {
-            products.push(record);
-          }
-        }
-      }
-      results.push({ query: search.query, products });
-    }
+  if (queryProducts.length > 0) {
+    results.push({ query, products: queryProducts });
   }
 
   return results;
@@ -114,8 +126,4 @@ export async function getTrackedProducts(): Promise<string[]> {
   }
 
   return Array.from(names).sort();
-}
-
-function normalize(name: string): string {
-  return name.toLowerCase().replace(/\s+/g, " ").trim();
 }

@@ -11,9 +11,9 @@ interface TriggerBatchResponse {
 interface ResultItem {
   product_name?: string;
   product_title?: string;
-  price?: { value: number; currency: string } | number;
-  selling_price?: { value: number; currency: string } | number;
-  original_price?: { value: number; currency: string } | number;
+  price?: { value: number | string; currency: string } | number | string;
+  selling_price?: { value: number | string; currency: string } | number | string;
+  original_price?: { value: number | string; currency: string } | number | string;
   discount_percentage?: string;
   brand?: string;
   seller?: string;
@@ -85,7 +85,7 @@ export function parseCustomProducts(
         originalPrice: originalPrice || price,
         discount,
         brand: item.brand || "",
-        availability: item.availability || item.seller || "Unknown",
+        availability: item.availability || "Unknown",
         imageUrl: item.image_url || "",
         productUrl: item.product_url || item.product_page_url || "",
         platform: PLATFORMS[platform].name,
@@ -97,10 +97,19 @@ export function parseCustomProducts(
 
 function extractNumber(val: unknown): number {
   if (typeof val === "number") return val;
+  if (typeof val === "string") return parseInrString(val);
   if (typeof val === "object" && val !== null && "value" in val) {
-    return Number((val as Record<string, unknown>).value) || 0;
+    const obj = val as Record<string, unknown>;
+    if (typeof obj.value === "string") return parseInrString(obj.value);
+    return Number(obj.value) || 0;
   }
   return 0;
+}
+
+function parseInrString(val: string): number {
+  const cleaned = val.replace(/[₹,\s]/g, "");
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? 0 : num;
 }
 
 function parseDiscount(val: string | undefined): number {

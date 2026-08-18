@@ -57,9 +57,24 @@ export async function pollUntil<T>(
     const result = await checkFn();
     if (result !== null) return result;
     if (i % 10 === 0 && i > 0) {
-      console.log(`    ${label}: waiting... (${i})`);
+      console.error(`    ${label}: waiting... (${i})`);
     }
     await new Promise((r) => setTimeout(r, intervalMs));
   }
   throw new Error(`${label}: timed out after ${maxAttempts} attempts`);
+}
+
+export async function checkCollector(
+  collectorId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await bdFetch<unknown>(
+      `/dca/collectors/${collectorId}`,
+      { method: "GET" },
+    );
+    return { ok: !!res };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg };
+  }
 }

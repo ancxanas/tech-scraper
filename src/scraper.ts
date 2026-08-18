@@ -3,7 +3,6 @@ import { type Platform, PLATFORMS } from "./config.ts";
 import { parseCustomProducts, runCollector } from "./tools/scraper.ts";
 import { fetchPageHtml } from "./lib/unlock.ts";
 import { searchAmazonPreBuilt } from "./lib/prescrapers.ts";
-import { runHealFlow } from "./tools/healer.ts";
 import type { Product, SearchResult } from "./types.ts";
 
 const SCRAPER_DELAY_MS = 5000;
@@ -24,7 +23,7 @@ export async function scrapeProducts(
     }
 
     const config = PLATFORMS[platform];
-    console.log(`  Scraping ${config.name}...`);
+    console.error(`  Scraping ${config.name}...`);
 
     try {
       let products: Product[];
@@ -40,8 +39,9 @@ export async function scrapeProducts(
         platform: config.name,
         products,
         timestamp: new Date().toISOString(),
+        status: products.length > 0 ? "ok" : "empty",
       });
-      console.log(colors.green(`  Found ${products.length} products`));
+      console.error(colors.green(`  Found ${products.length} products`));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(colors.red(`  ${config.name} failed: ${msg}`));
@@ -50,6 +50,8 @@ export async function scrapeProducts(
         platform: config.name,
         products: [],
         timestamp: new Date().toISOString(),
+        status: "error",
+        error: msg,
       });
     }
   });
@@ -97,7 +99,7 @@ async function scrapeScraperStudio(
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       if (attempt > 0) {
-        console.log(colors.yellow(`  Retrying (attempt ${attempt + 1})...`));
+        console.error(colors.yellow(`  Retrying (attempt ${attempt + 1})...`));
         await new Promise((r) => setTimeout(r, SCRAPER_DELAY_MS));
       }
 
@@ -112,8 +114,8 @@ async function scrapeScraperStudio(
         continue;
       }
 
-      console.log(colors.yellow(`  Scraper Studio failed: ${msg}`));
-      console.log(colors.dim(`  Falling back to Web Unlocker...`));
+      console.error(colors.yellow(`  Scraper Studio failed: ${msg}`));
+      console.error(colors.dim(`  Falling back to Web Unlocker...`));
 
       try {
         const fallback = await webUnlockerFallback(platform, query, pages);
@@ -127,27 +129,6 @@ async function scrapeScraperStudio(
     }
   }
 
-  if (config.collectorId) {
-    console.log(colors.yellow(`  Auto-healing ${config.name} scraper...`));
-    try {
-      const healResult = await runHealFlow(
-        config.collectorId,
-        "The scraper returns empty results or missing price/name fields. Fix selectors to capture product title, price, original price, discount, rating, reviews, brand, image URL, and product URL from the page.",
-        false,
-      );
-      if (healResult.success) {
-        console.log(colors.green(`  Heal applied. Re-running scraper...`));
-        const flipkartPages = platform === "flipkart" ? 1 : pages;
-        const urls = buildPageUrls(platform, query, flipkartPages);
-        const raw = await runCollector(config.collectorId, urls);
-        return parseCustomProducts(raw, platform);
-      }
-    } catch (healErr) {
-      const msg = healErr instanceof Error ? healErr.message : String(healErr);
-      console.error(colors.red(`  Auto-heal failed: ${msg}`));
-    }
-  }
-
   return [];
 }
 
@@ -156,6 +137,11 @@ async function webUnlockerFallback(
   query: string,
   pages: number,
 ): Promise<Product[]> {
+  console.error(
+    colors.dim(
+      `  WARNING: HTML fallback parser is experimental for ${platform}`,
+    ),
+  );
   const urls = buildPageUrls(platform, query, Math.min(pages, 1));
   const products: Product[] = [];
 
