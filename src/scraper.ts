@@ -1,232 +1,360 @@
 import { colors } from "@cliffy/ansi/colors";
 import { type Platform, PLATFORMS } from "./config.ts";
-import { parseCustomProducts, runCollector } from "./tools/scraper.ts";
-import { fetchPageHtml } from "./lib/unlock.ts";
+import {
+  type CollectorInput,
+  parseCustomProducts,
+  runCollector,
+} from "./tools/scraper.ts";
 import { searchAmazonPreBuilt } from "./lib/prescrapers.ts";
+import { runHealFlow } from "./tools/healer.ts";
 import type { Product, SearchResult } from "./types.ts";
 
-const SCRAPER_DELAY_MS = 5000;
 const MAX_RETRIES = 2;
 
-export async function scrapeProducts(
+export interface ScrapeOptions {
+  pages: number;
+  noHeal: boolean;
+  enrichCount: number;
+}
+
+export function scrapeProducts(
   query: string,
   platforms: Platform[],
-  pages = 5,
+  options: ScrapeOptions,
 ): Promise<SearchResult[]> {
-  const results: SearchResult[] = [];
-
   const enabled = platforms.filter((p) => PLATFORMS[p].enabled);
 
-  const scrapePromises = enabled.map(async (platform, i) => {
-    if (i > 0) {
-      await new Promise((r) => setTimeout(r, SCRAPER_DELAY_MS));
-    }
+  const scrapePromises = enabled.map((platform) =>
+    scrapePlatform(platform, query, options)
+  );
 
-    const config = PLATFORMS[platform];
-    console.error(`  Scraping ${config.name}...`);
-
-    try {
-      let products: Product[];
-
-      if (config.tool === "prebuilt") {
-        products = await scrapePreBuilt(platform, query, pages);
-      } else {
-        products = await scrapeScraperStudio(platform, query, pages);
-      }
-
-      results.push({
+  return Promise.allSettled(scrapePromises).then((settled) =>
+    settled.map((r, i) =>
+      r.status === "fulfilled" ? r.value : {
         query,
-        platform: config.name,
-        products,
-        timestamp: new Date().toISOString(),
-        status: products.length > 0 ? "ok" : "empty",
-      });
-      console.error(colors.green(`  Found ${products.length} products`));
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(colors.red(`  ${config.name} failed: ${msg}`));
-      results.push({
-        query,
-        platform: config.name,
+        platform: PLATFORMS[enabled[i]].name,
         products: [],
         timestamp: new Date().toISOString(),
-        status: "error",
-        error: msg,
-      });
-    }
-  });
+        status: "error" as const,
+        error: r.reason?.message || "Unknown error",
+        requestedPages: options.pages,
+        rawCount: 0,
+        parsedCount: 0,
+        healAttempted: false,
+        healSuccess: false,
+        coverage: { fieldFillRate: 0 },
+      }
+    )
+  );
+}
 
-  await Promise.allSettled(scrapePromises);
+async function scrapePlatform(
+  platform: Platform,
+  query: string,
+  options: ScrapeOptions,
+): Promise<SearchResult> {
+  const config = PLATFORMS[platform];
+  console.error(`  Scraping ${config.name}...`);
 
-  return results;
+  let products: Product[] = [];
+  let rawCount = 0;
+  let healAttempted = false;
+  let healSuccess = false;
+  let lastError = "";
+
+  if (config.tool === "prebuilt") {
+    const result = await scrapePreBuilt(platform, query, options.pages);
+    products = result.products;
+    rawCount = result.rawCount;
+    lastError = result.error;
+  } else {
+    const result = await scrapeScraperStudio(platform, query, options);
+    products = result.products;
+    rawCount = result.rawCount;
+    healAttempted = result.healAttempted;
+    healSuccess = result.healSuccess;
+    lastError = result.error;
+  }
+
+  const fieldFillRate = calcFieldFillRate(products);
+  const status = products.length > 0 ? "ok" : lastError ? "error" : "empty";
+
+  console.error(
+    colors.green(`  ${config.name}: ${products.length} products (${status})`),
+  );
+
+  return {
+    query,
+    platform: config.name,
+    products,
+    timestamp: new Date().toISOString(),
+    status,
+    error: lastError || undefined,
+    requestedPages: options.pages,
+    rawCount,
+    parsedCount: products.length,
+    healAttempted,
+    healSuccess,
+    coverage: { fieldFillRate },
+  };
 }
 
 async function scrapePreBuilt(
-  platform: Platform,
+  _platform: Platform,
   query: string,
   pages: number,
-): Promise<Product[]> {
-  switch (platform) {
-    case "amazon": {
-      const items = await searchAmazonPreBuilt(query, pages);
-      return items
-        .filter((item) => item.price > 0)
-        .map((item) => ({
-          name: item.title,
-          price: item.price,
-          originalPrice: item.originalPrice,
-          discount: item.discount,
-          brand: item.brand,
-          availability: item.availability,
-          imageUrl: item.imageUrl,
-          productUrl: item.url,
-          platform: "Amazon India",
-          rating: item.rating ?? undefined,
-        }));
-    }
-    default:
-      throw new Error(`No prebuilt scraper for ${platform}`);
+): Promise<{ products: Product[]; rawCount: number; error: string }> {
+  try {
+    const items = await searchAmazonPreBuilt(query, pages);
+    const rawCount = items.length;
+    const now = new Date().toISOString();
+
+    const products = items
+      .filter((item) => item.price > 0)
+      .map((item) => ({
+        id: `amazon:${item.asin || hashCode(item.url)}`,
+        name: item.title,
+        price: item.price,
+        originalPrice: item.originalPrice || item.price,
+        discount: item.discount,
+        currency: item.currency,
+        productUrl: item.url,
+        imageUrl: item.imageUrl,
+        platform: "Amazon India",
+        scrapedAt: now,
+        brand: item.brand || undefined,
+        rating: item.rating ?? undefined,
+        reviewsCount: item.reviewsCount ?? undefined,
+        seller: item.seller || undefined,
+        availability: item.availability || "Unknown",
+      }));
+
+    return { products, rawCount, error: "" };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { products: [], rawCount: 0, error: msg };
   }
+}
+
+interface ScrapeStudioResult {
+  products: Product[];
+  rawCount: number;
+  healAttempted: boolean;
+  healSuccess: boolean;
+  error: string;
 }
 
 async function scrapeScraperStudio(
   platform: Platform,
   query: string,
-  pages: number,
-): Promise<Product[]> {
+  options: ScrapeOptions,
+): Promise<ScrapeStudioResult> {
   const config = PLATFORMS[platform];
+  const collectorId = config.collectorId;
+
+  if (!collectorId) {
+    return {
+      products: [],
+      rawCount: 0,
+      healAttempted: false,
+      healSuccess: false,
+      error: "No collector ID configured",
+    };
+  }
+
+  let lastError = "";
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       if (attempt > 0) {
-        console.error(colors.yellow(`  Retrying (attempt ${attempt + 1})...`));
-        await new Promise((r) => setTimeout(r, SCRAPER_DELAY_MS));
+        console.error(
+          colors.yellow(
+            `  Retrying ${config.name} (attempt ${attempt + 1})...`,
+          ),
+        );
+        await delay(3000);
       }
 
-      const flipkartPages = platform === "flipkart" ? 1 : pages;
-      const urls = buildPageUrls(platform, query, flipkartPages);
-      const raw = await runCollector(config.collectorId!, urls);
-      return parseCustomProducts(raw, platform);
+      const inputs = buildCollectorInputs(platform, query, options.pages);
+      const raw = await runCollector(collectorId, inputs);
+      const rawCount = raw.length;
+      const products = parseCustomProducts(raw, platform);
+
+      if (products.length > 0) {
+        return {
+          products,
+          rawCount,
+          healAttempted: false,
+          healSuccess: false,
+          error: "",
+        };
+      }
+
+      if (options.noHeal) {
+        return {
+          products: [],
+          rawCount,
+          healAttempted: false,
+          healSuccess: false,
+          error: "Empty results",
+        };
+      }
+
+      const healResult = await tryHeal(
+        collectorId,
+        config.name,
+        platform,
+        query,
+        options,
+      );
+      if (healResult.products.length > 0) {
+        return {
+          products: healResult.products,
+          rawCount: healResult.rawCount,
+          healAttempted: true,
+          healSuccess: true,
+          error: "",
+        };
+      }
+
+      return {
+        products: [],
+        rawCount,
+        healAttempted: true,
+        healSuccess: false,
+        error: healResult.error || "Empty after heal",
+      };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("rate limit") && attempt < MAX_RETRIES) {
-        console.log(colors.yellow(`  Rate limited, waiting before retry...`));
+        console.error(
+          colors.yellow(`  Rate limited on ${config.name}, waiting...`),
+        );
+        await delay(5000);
         continue;
       }
+      lastError = msg;
+    }
+  }
 
-      console.error(colors.yellow(`  Scraper Studio failed: ${msg}`));
-      console.error(colors.dim(`  Falling back to Web Unlocker...`));
+  return {
+    products: [],
+    rawCount: 0,
+    healAttempted: false,
+    healSuccess: false,
+    error: lastError || "All retries failed",
+  };
+}
 
-      try {
-        const fallback = await webUnlockerFallback(platform, query, pages);
-        if (fallback.length > 0) return fallback;
-      } catch (fallbackErr) {
-        const fallbackMsg = fallbackErr instanceof Error
-          ? fallbackErr.message
-          : String(fallbackErr);
-        console.error(colors.red(`  Fallback also failed: ${fallbackMsg}`));
+async function tryHeal(
+  collectorId: string,
+  platformName: string,
+  platform: Platform,
+  query: string,
+  options: ScrapeOptions,
+): Promise<{ products: Product[]; rawCount: number; error: string }> {
+  console.error(colors.yellow(`  Auto-healing ${platformName} scraper...`));
+
+  try {
+    const healResult = await runHealFlow(
+      collectorId,
+      "The scraper returns empty results or missing price/name fields. Fix selectors to capture product title, price, original price, discount, rating, reviews, brand, image URL, and product URL from the page.",
+      false,
+    );
+
+    if (!healResult.success) {
+      return {
+        products: [],
+        rawCount: 0,
+        error: "Heal was rejected or failed",
+      };
+    }
+
+    console.error(
+      colors.green(`  Heal applied. Re-running ${platformName}...`),
+    );
+    const inputs = buildCollectorInputs(platform, query, options.pages);
+    const raw = await runCollector(collectorId, inputs);
+    const products = parseCustomProducts(raw, platform);
+    return { products, rawCount: raw.length, error: "" };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(colors.red(`  Auto-heal failed: ${msg}`));
+    return { products: [], rawCount: 0, error: msg };
+  }
+}
+
+function buildCollectorInputs(
+  platform: Platform,
+  query: string,
+  pages: number,
+): CollectorInput[] {
+  const config = PLATFORMS[platform];
+  const encoded = encodeURIComponent(query);
+  const inputs: CollectorInput[] = [];
+
+  if (config.pagination === "page") {
+    for (let i = 0; i < pages; i++) {
+      const pageNum = config.startIndex + i;
+      const url = config.searchUrlTemplate
+        .replace("{q}", encoded)
+        .replace("{page}", String(pageNum));
+      inputs.push({ url });
+    }
+  } else {
+    const url = config.searchUrlTemplate.replace("{q}", encoded);
+    inputs.push({ url });
+  }
+
+  return inputs;
+}
+
+function calcFieldFillRate(products: Product[]): number {
+  if (products.length === 0) return 0;
+
+  const requiredFields = [
+    "name",
+    "price",
+    "productUrl",
+    "imageUrl",
+    "currency",
+  ];
+  const optionalFields = [
+    "brand",
+    "rating",
+    "reviewsCount",
+    "seller",
+    "availability",
+  ];
+  const allFields = [...requiredFields, ...optionalFields];
+
+  let totalFill = 0;
+  const totalCells = products.length * allFields.length;
+
+  for (const product of products) {
+    for (const field of allFields) {
+      const val = product[field as keyof Product];
+      if (
+        val !== undefined && val !== null && val !== "" && val !== "Unknown"
+      ) {
+        totalFill++;
       }
     }
   }
 
-  return [];
+  return totalCells > 0 ? Math.round((totalFill / totalCells) * 100) / 100 : 0;
 }
 
-async function webUnlockerFallback(
-  platform: Platform,
-  query: string,
-  pages: number,
-): Promise<Product[]> {
-  console.error(
-    colors.dim(
-      `  WARNING: HTML fallback parser is experimental for ${platform}`,
-    ),
-  );
-  const urls = buildPageUrls(platform, query, Math.min(pages, 1));
-  const products: Product[] = [];
-
-  for (const url of urls) {
-    const html = await fetchPageHtml(url);
-    const parsed = parseHtmlProducts(html, platform);
-    products.push(...parsed);
+function hashCode(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash |= 0;
   }
-
-  return products;
+  return Math.abs(hash).toString(36);
 }
 
-function parseHtmlProducts(html: string, platform: Platform): Product[] {
-  const products: Product[] = [];
-  const config = PLATFORMS[platform];
-
-  const titleMatches = html.matchAll(
-    /<h2[^>]*class="[^"]*product[^"]*"[^>]*>([\s\S]*?)<\/h2>/gi,
-  );
-
-  for (const match of titleMatches) {
-    const titleHtml = match[1];
-    const title = titleHtml.replace(/<[^>]+>/g, "").trim();
-    if (!title || title.length < 3) continue;
-
-    const cardStart = match.index ?? 0;
-    const cardEnd = html.indexOf("</h2>", cardStart + 100);
-    const cardHtml = html.slice(
-      cardStart,
-      cardEnd > 0 ? cardEnd : cardStart + 2000,
-    );
-
-    const priceMatch = cardHtml.match(/₹[\s]*([0-9,]+)/);
-    const price = priceMatch
-      ? parseInt(priceMatch[1].replace(/,/g, ""), 10)
-      : 0;
-
-    if (price <= 0) continue;
-
-    const oldPriceMatch = cardHtml.match(/₹[\s]*([0-9,]+)/g);
-    let originalPrice = price;
-    if (oldPriceMatch && oldPriceMatch.length >= 2) {
-      const parsed = parseInt(
-        oldPriceMatch[1].replace(/[₹\s,]/g, ""),
-        10,
-      );
-      if (parsed > price) originalPrice = parsed;
-    }
-
-    const discount = originalPrice > price
-      ? Math.round(((originalPrice - price) / originalPrice) * 100)
-      : 0;
-
-    products.push({
-      name: title,
-      price,
-      originalPrice,
-      discount,
-      brand: "",
-      availability: "Unknown",
-      imageUrl: "",
-      productUrl: "",
-      platform: config.name,
-    });
-  }
-
-  return products;
-}
-
-function buildPageUrls(
-  platform: Platform,
-  query: string,
-  pages: number,
-): string[] {
-  const config = PLATFORMS[platform];
-  const encoded = encodeURIComponent(query);
-  const urls: string[] = [];
-
-  for (let i = 0; i < pages; i++) {
-    const pageNum = config.startIndex + i;
-    const qs = platform === "tatacliq"
-      ? `searchCategory=all&text=${encoded}&page=${pageNum}`
-      : `q=${encoded}&page=${pageNum}`;
-    urls.push(`${config.url}${config.searchPath}?${qs}`);
-  }
-
-  return urls;
+function delay(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
 }

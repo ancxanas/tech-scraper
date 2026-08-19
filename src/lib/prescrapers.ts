@@ -13,11 +13,17 @@ export interface PreScraperResult {
   imageUrl: string;
   url: string;
   asin?: string;
+  seller?: string;
 }
 
 interface TriggerResponse {
   snapshot_id?: string;
   collection_id?: string;
+}
+
+interface ProgressResponse {
+  status: string;
+  data?: unknown[];
 }
 
 interface AmazonSearchInput {
@@ -70,13 +76,16 @@ export async function searchAmazonPreBuilt(
     throw new Error("No snapshot_id returned from Amazon scraper");
   }
 
-  const items = await pollUntil<Record<string, unknown>[]>(
+  const progress = await pollUntil<ProgressResponse>(
     async () => {
       try {
-        const data = await bdFetch<Record<string, unknown>[]>(
-          `/datasets/v3/snapshot/${snapshotId}`,
+        const data = await bdFetch<ProgressResponse>(
+          `/datasets/v3/progress/${snapshotId}`,
         );
-        if (Array.isArray(data) && data.length > 0) return data;
+        if (data.status === "ready" || data.status === "done") return data;
+        if (data.status === "failed") {
+          throw new Error("Amazon scraper failed");
+        }
         return null;
       } catch {
         return null;
@@ -87,14 +96,20 @@ export async function searchAmazonPreBuilt(
     "Amazon scraper",
   );
 
-  return items.map(parseAmazonItem);
+  if (!progress.data || !Array.isArray(progress.data)) {
+    return [];
+  }
+
+  return progress.data.map((item) =>
+    parseAmazonItem(item as Record<string, unknown>)
+  );
 }
 
 function parseAmazonItem(item: Record<string, unknown>): PreScraperResult {
   const price = Number(
     item.final_price || item.price || item.current_price || 0,
   );
-  const originalPrice = Number(item.initial_price || 0);
+  const originalPrice = Number(item.initial_price || item.mrp || 0);
   const discount = originalPrice > 0 && price > 0
     ? Math.round(((originalPrice - price) / originalPrice) * 100)
     : 0;
@@ -108,9 +123,12 @@ function parseAmazonItem(item: Record<string, unknown>): PreScraperResult {
     rating: typeof item.rating === "number" && item.rating > 0
       ? item.rating
       : null,
-    reviewsCount: typeof item.num_ratings === "number"
-      ? item.num_ratings
-      : null,
+    reviewsCount:
+      (typeof item.reviews_count === "number" && item.reviews_count > 0)
+        ? item.reviews_count
+        : (typeof item.num_ratings === "number" && item.num_ratings > 0)
+        ? item.num_ratings
+        : null,
     brand: String(item.brand || ""),
     availability: item.availability
       ? String(item.availability)
@@ -120,5 +138,6 @@ function parseAmazonItem(item: Record<string, unknown>): PreScraperResult {
     imageUrl: String(item.image || item.main_image || item.image_url || ""),
     url: String(item.url || ""),
     asin: String(item.asin || ""),
+    seller: String(item.seller_name || item.seller || ""),
   };
 }

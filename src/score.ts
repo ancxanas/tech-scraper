@@ -54,27 +54,43 @@ function relevanceScore(product: Product, queryTokens: string[]): number {
   return matched / queryTokens.length;
 }
 
+export interface RankOptions {
+  dedupCheapest?: boolean;
+  inStockOnly?: boolean;
+  query?: string;
+}
+
 export function scoreAndRank(
   products: Product[],
   query = "",
+  options: RankOptions = {},
 ): ScoredProduct[] {
-  const valid = products.filter((p) => p.price > 0);
+  let valid = products.filter((p) => p.price > 0);
+
+  if (options.inStockOnly) {
+    valid = valid.filter(
+      (p) => !p.availability || !p.availability.toLowerCase().includes("out"),
+    );
+  }
+
   if (valid.length === 0) return [];
 
+  if (options.dedupCheapest) {
+    valid = deduplicateCheapest(valid);
+  }
+
   const queryTokens = tokenize(query);
-
-  const inStock = valid.filter(
-    (p) => !p.availability || !p.availability.toLowerCase().includes("out"),
+  const queryHasAccessory = ACCESSORY_KEYWORDS.some((kw) =>
+    query.toLowerCase().includes(kw)
   );
-  const targets = inStock.length > 0 ? inStock : valid;
 
-  const prices = targets.map((p) => p.price);
-  const discounts = targets.map((p) => p.discount);
+  const prices = valid.map((p) => p.price);
+  const discounts = valid.map((p) => p.discount);
   const minPrice = Math.min(...prices);
   const maxPrice = Math.max(...prices);
   const maxDiscount = Math.max(...discounts);
 
-  return targets
+  return valid
     .map((p) => {
       const rel = relevanceScore(p, queryTokens);
 
@@ -86,7 +102,9 @@ export function scoreAndRank(
       );
       const productTokens = tokenize(p.name);
       const isShortName = productTokens.length <= 3;
-      if (isAccessory && isShortName && rel < 0.8) return null;
+      if (isAccessory && isShortName && rel < 0.8 && !queryHasAccessory) {
+        return null;
+      }
 
       const priceScore = maxPrice === minPrice
         ? 1
@@ -132,33 +150,36 @@ export function scoreAndRank(
     .sort((a, b) => b.score - a.score);
 }
 
-function extractBrandModel(name: string): string {
-  const lower = name.toLowerCase();
-  const cleaned = lower
-    .replace(/\([^)]*\)/g, "")
-    .replace(/\[[^\]]*\]/g, "")
-    .replace(
-      /\b(black|white|blue|red|green|silver|grey|gray|gold|pink|purple|navy|midnight|starlight|natural|matte|glossy|wireless|wired|bluetooth|with|and|the|for|in|on|of)\b/g,
-      "",
-    )
-    .replace(/\s+/g, " ")
-    .trim();
-
-  const words = cleaned.split(" ");
-  if (words.length >= 2) {
-    return words.slice(0, 5).join(" ");
-  }
-  return cleaned;
-}
-
-export function deduplicate(products: Product[]): Product[] {
+function deduplicateCheapest(products: Product[]): Product[] {
   const seen = new Map<string, Product>();
   for (const p of products) {
-    const key = extractBrandModel(p.name);
+    const key = normalize(p.name);
     const existing = seen.get(key);
     if (!existing || p.price < existing.price) {
       seen.set(key, p);
     }
   }
   return Array.from(seen.values());
+}
+
+function canonicalKey(p: Product): string {
+  if (p.id) return p.id;
+  if (p.productUrl) return normalize(p.productUrl);
+  return normalize(p.name);
+}
+
+export function deduplicate(products: Product[]): Product[] {
+  const seen = new Map<string, Product>();
+  for (const p of products) {
+    const key = canonicalKey(p);
+    const existing = seen.get(key);
+    if (!existing || p.price < existing.price) {
+      seen.set(key, p);
+    }
+  }
+  return Array.from(seen.values());
+}
+
+function normalize(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, " ").trim();
 }

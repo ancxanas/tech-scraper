@@ -4,12 +4,14 @@ import { Table } from "@cliffy/table";
 import {
   ALL_ENABLED,
   ALL_PLATFORMS,
+  MAX_ENRICH,
+  MAX_PRODUCTS_HARD_CAP,
   PAGES_TO_SCRAPE,
   type Platform,
   PLATFORMS,
 } from "./config.ts";
-import { deduplicate, scoreAndRank } from "./score.ts";
-import { scrapeProducts } from "./scraper.ts";
+import { deduplicate, scoreAndRank, type ScoredProduct } from "./score.ts";
+import { type ScrapeOptions, scrapeProducts } from "./scraper.ts";
 import { runHealFlow, verifyHeal } from "./tools/healer.ts";
 import {
   getHistoryByQuery,
@@ -21,6 +23,7 @@ import { searchGoogleShopping } from "./lib/serp.ts";
 import { getAvailablePreScrapers } from "./lib/prescrapers.ts";
 import { fetchPageMarkdown, takeScreenshot } from "./lib/unlock.ts";
 import { checkCollector } from "./lib/brightdata.ts";
+import type { SearchResult } from "./types.ts";
 
 function parsePlatforms(input: string | undefined): Platform[] {
   if (!input) return [...ALL_ENABLED];
@@ -38,15 +41,20 @@ function parsePlatforms(input: string | undefined): Platform[] {
   return valid;
 }
 
-function getEnabledCount(platforms: Platform[]): number {
-  return platforms.filter((p) => PLATFORMS[p].enabled).length;
-}
-
 function formatPrice(val: number): string {
   return `\u20b9${val.toLocaleString("en-IN")}`;
 }
 
-function printTable(products: ReturnType<typeof scoreAndRank>, limit = 20) {
+function validateUrl(url: string): void {
+  try {
+    new URL(url);
+  } catch {
+    console.error(`Invalid URL: ${url}`);
+    Deno.exit(1);
+  }
+}
+
+function printTable(products: ScoredProduct[], limit = 20) {
   const rows = products.slice(0, limit);
   if (rows.length === 0) {
     console.log(colors.dim("\nNo products found.\n"));
@@ -54,15 +62,7 @@ function printTable(products: ReturnType<typeof scoreAndRank>, limit = 20) {
   }
 
   const table = new Table()
-    .header([
-      "#",
-      "Product",
-      "Price",
-      "Was",
-      "Off",
-      "Score",
-      "Platform",
-    ])
+    .header(["#", "Product", "Price", "Was", "Off", "Score", "Platform"])
     .border(true);
 
   rows.forEach((p, i) => {
@@ -88,6 +88,28 @@ function printTable(products: ReturnType<typeof scoreAndRank>, limit = 20) {
   console.log("");
 }
 
+function printCoverage(results: SearchResult[]) {
+  console.log(colors.bold("  Coverage:"));
+  for (const r of results) {
+    const statusIcon = r.status === "ok"
+      ? colors.green.bold("\u2713")
+      : r.status === "empty"
+      ? colors.yellow("\u25cb")
+      : colors.red.bold("\u2717");
+    const healTag = r.healAttempted
+      ? r.healSuccess ? colors.green(" (healed)") : colors.red(" (heal failed)")
+      : "";
+    console.log(
+      `    ${statusIcon} ${
+        r.platform.padEnd(20)
+      } ${r.parsedCount}/${r.rawCount} cards  fields ${
+        Math.round(r.coverage.fieldFillRate * 100)
+      }%${healTag}`,
+    );
+  }
+  console.log("");
+}
+
 function printJson(data: unknown) {
   console.log(JSON.stringify(data, null, 2));
 }
@@ -96,13 +118,17 @@ function isJson(options: { json?: boolean }): boolean {
   return options.json === true;
 }
 
-function validateUrl(url: string): void {
-  try {
-    new URL(url);
-  } catch {
-    console.error(`Invalid URL: ${url}`);
-    Deno.exit(1);
-  }
+function buildScrapeOptions(options: {
+  pages?: number;
+  noHeal?: boolean;
+  enrich?: number;
+  max?: number;
+}): ScrapeOptions {
+  return {
+    pages: options.pages ?? PAGES_TO_SCRAPE,
+    noHeal: options.noHeal ?? false,
+    enrichCount: options.enrich ?? MAX_ENRICH,
+  };
 }
 
 export const cli = new Command()
@@ -118,38 +144,50 @@ export const cli = new Command()
       .description("Search for a product across platforms")
       .arguments("<query:string>")
       .option("--json", "Output raw JSON", { default: false })
-      .option(
-        "-p, --platforms <platforms:string>",
-        "Comma-separated platforms to search",
-      )
+      .option("-p, --platforms <platforms:string>", "Comma-separated platforms")
       .option("-n, --limit <n:number>", "Max results to show", { default: 20 })
-      .option("--pages <pages:number>", "Pages to scrape per platform", {
+      .option("--pages <pages:number>", "Pages per platform", {
         default: PAGES_TO_SCRAPE,
       })
+      .option("--enrich <n:number>", "PDP enrich top N products", {
+        default: MAX_ENRICH,
+      })
+      .option("--max <n:number>", "Hard cap on total products", {
+        default: MAX_PRODUCTS_HARD_CAP,
+      })
       .option("--no-dedup", "Skip deduplication")
+      .option("--no-heal", "Skip auto-heal on empty results")
+      .option("--dedup-cheapest", "Keep only cheapest cross-platform")
+      .option("--in-stock-only", "Filter out-of-stock products")
       .option("--no-save", "Skip saving price history")
       .action(async (options, query) => {
         const json = isJson(options);
         const platforms = parsePlatforms(options.platforms);
+        const scrapeOpts = buildScrapeOptions(options);
 
         if (!json) {
-          console.log(
-            colors.bold(`\nSearching for "${query}"...\n`),
-          );
+          console.log(colors.bold(`\nSearching for "${query}"...\n`));
         }
 
-        const results = await scrapeProducts(query, platforms, options.pages);
+        const results = await scrapeProducts(query, platforms, scrapeOpts);
+
         let allProducts = results.flatMap((r) => r.products);
+
+        await savePrices(allProducts, query);
 
         if (options.dedup !== false) {
           allProducts = deduplicate(allProducts);
         }
 
-        const ranked = scoreAndRank(allProducts, query);
+        allProducts = allProducts.slice(
+          0,
+          options.max ?? MAX_PRODUCTS_HARD_CAP,
+        );
 
-        const failedPlatforms = results.filter(
-          (r) => r.products.length === 0,
-        ).map((r) => r.platform);
+        const ranked = scoreAndRank(allProducts, query, {
+          dedupCheapest: options.dedupCheapest,
+          inStockOnly: options.inStockOnly,
+        });
 
         if (json) {
           printJson({
@@ -160,32 +198,19 @@ export const cli = new Command()
               name: r.platform,
               status: r.status,
               count: r.products.length,
+              rawCount: r.rawCount,
+              parsedCount: r.parsedCount,
+              fieldFillRate: Math.round(r.coverage.fieldFillRate * 100),
+              heal: { attempted: r.healAttempted, success: r.healSuccess },
               error: r.error,
             })),
-            errors: failedPlatforms.length > 0 ? failedPlatforms : undefined,
           });
         } else {
           printTable(ranked, options.limit);
-          if (failedPlatforms.length > 0) {
-            console.log(
-              colors.yellow(
-                `  No results from: ${failedPlatforms.join(", ")}\n`,
-              ),
-            );
-          }
+          printCoverage(results);
         }
 
-        if (options.save !== false && allProducts.length > 0) {
-          await savePrices(allProducts, query);
-          if (!json) {
-            console.log(
-              colors.dim(
-                `  Price history saved (${allProducts.length} products)\n`,
-              ),
-            );
-          }
-        }
-
+        const failedPlatforms = results.filter((r) => r.status !== "ok");
         if (ranked.length === 0 && failedPlatforms.length === results.length) {
           Deno.exit(1);
         }
@@ -197,28 +222,33 @@ export const cli = new Command()
       .description("Show the single best deal for a product")
       .arguments("<query:string>")
       .option("--json", "Output raw JSON", { default: false })
-      .option(
-        "-p, --platforms <platforms:string>",
-        "Comma-separated platforms to check",
-      )
-      .option("--pages <pages:number>", "Pages to scrape per platform", {
+      .option("-p, --platforms <platforms:string>", "Comma-separated platforms")
+      .option("--pages <pages:number>", "Pages per platform", {
         default: PAGES_TO_SCRAPE,
       })
+      .option("--no-heal", "Skip auto-heal on empty results")
+      .option("--dedup-cheapest", "Keep only cheapest cross-platform")
+      .option("--in-stock-only", "Filter out-of-stock products")
       .option("--no-save", "Skip saving price history")
       .action(async (options, query) => {
         const json = isJson(options);
         const platforms = parsePlatforms(options.platforms);
+        const scrapeOpts = buildScrapeOptions(options);
 
         if (!json) {
-          console.log(
-            colors.bold(`\nFinding best deal for "${query}"...\n`),
-          );
+          console.log(colors.bold(`\nFinding best deal for "${query}"...\n`));
         }
 
-        const results = await scrapeProducts(query, platforms, options.pages);
+        const results = await scrapeProducts(query, platforms, scrapeOpts);
         let allProducts = results.flatMap((r) => r.products);
+
+        await savePrices(allProducts, query);
+
         allProducts = deduplicate(allProducts);
-        const ranked = scoreAndRank(allProducts, query);
+        const ranked = scoreAndRank(allProducts, query, {
+          dedupCheapest: options.dedupCheapest,
+          inStockOnly: options.inStockOnly,
+        });
 
         if (ranked.length === 0) {
           if (json) {
@@ -258,10 +288,7 @@ export const cli = new Command()
             console.log(colors.dim(`  URL:      ${best.productUrl}`));
           }
           console.log();
-        }
-
-        if (options.save !== false && allProducts.length > 0) {
-          await savePrices(allProducts, query);
+          printCoverage(results);
         }
       }),
   )
@@ -271,18 +298,18 @@ export const cli = new Command()
       .description("Compare prices from specific platforms")
       .arguments("<query:string>")
       .option("--json", "Output raw JSON", { default: false })
-      .option(
-        "-p, --platforms <platforms:string>",
-        "Comma-separated platforms to compare",
-      )
-      .option("--pages <pages:number>", "Pages to scrape per platform", {
+      .option("-p, --platforms <platforms:string>", "Comma-separated platforms")
+      .option("--pages <pages:number>", "Pages per platform", {
         default: PAGES_TO_SCRAPE,
       })
+      .option("--no-heal", "Skip auto-heal on empty results")
       .option("--no-save", "Skip saving price history")
       .action(async (options, query) => {
         const json = isJson(options);
         const platforms = parsePlatforms(options.platforms);
-        const enabledCount = getEnabledCount(platforms);
+        const enabledCount = platforms.filter((p) =>
+          PLATFORMS[p].enabled
+        ).length;
 
         if (enabledCount < 2) {
           console.error(
@@ -290,13 +317,10 @@ export const cli = new Command()
               `Compare needs 2+ enabled platforms. Only ${enabledCount} enabled.`,
             ),
           );
-          console.error(
-            colors.dim(
-              "Enable platforms in src/config.ts or check scraper status.",
-            ),
-          );
           Deno.exit(1);
         }
+
+        const scrapeOpts = buildScrapeOptions(options);
 
         if (!json) {
           console.log(
@@ -306,7 +330,13 @@ export const cli = new Command()
           );
         }
 
-        const results = await scrapeProducts(query, platforms, options.pages);
+        const results = await scrapeProducts(query, platforms, scrapeOpts);
+        let allProducts = results.flatMap((r) => r.products);
+
+        await savePrices(allProducts, query);
+
+        allProducts = deduplicate(allProducts);
+        const ranked = scoreAndRank(allProducts, query);
 
         if (json) {
           printJson({
@@ -315,6 +345,10 @@ export const cli = new Command()
               name: r.platform,
               status: r.status,
               count: r.products.length,
+              rawCount: r.rawCount,
+              parsedCount: r.parsedCount,
+              fieldFillRate: Math.round(r.coverage.fieldFillRate * 100),
+              heal: { attempted: r.healAttempted, success: r.healSuccess },
               error: r.error,
               priceRange: r.products.length > 0
                 ? {
@@ -323,7 +357,7 @@ export const cli = new Command()
                 }
                 : null,
             })),
-            all: results.flatMap((r) => r.products),
+            all: allProducts,
           });
         } else {
           for (const result of results) {
@@ -333,22 +367,13 @@ export const cli = new Command()
               const prices = result.products.map((p) => p.price);
               console.log(
                 `  Price range: ${
-                  colors.green(
-                    formatPrice(Math.min(...prices)),
-                  )
+                  colors.green(formatPrice(Math.min(...prices)))
                 } - ${colors.green(formatPrice(Math.max(...prices)))}`,
               );
             }
           }
-
-          let allProducts = results.flatMap((r) => r.products);
-          allProducts = deduplicate(allProducts);
-          const ranked = scoreAndRank(allProducts, query);
           printTable(ranked, 15);
-
-          if (options.save !== false && allProducts.length > 0) {
-            await savePrices(allProducts, query);
-          }
+          printCoverage(results);
         }
       }),
   )
@@ -361,11 +386,13 @@ export const cli = new Command()
         default: false,
       })
       .option("--verify-url <url:string>", "URL to re-run after heal to verify")
+      .option("--json", "Output raw JSON", { default: false })
       .action(async (options, collectorId, prompt) => {
-        console.log(
-          colors.bold(`\nHealing scraper ${collectorId}...\n`),
-        );
-        console.log(colors.dim(`  Prompt: "${prompt}"\n`));
+        const json = isJson(options);
+        if (!json) {
+          console.log(colors.bold(`\nHealing scraper ${collectorId}...\n`));
+          console.log(colors.dim(`  Prompt: "${prompt}"\n`));
+        }
 
         const result = await runHealFlow(
           collectorId,
@@ -373,9 +400,10 @@ export const cli = new Command()
           options.autoApprove,
         );
 
-        if (result.success) {
+        if (json) {
+          printJson({ collectorId, success: result.success });
+        } else if (result.success) {
           console.log(colors.green.bold("\n  Scraper healed successfully!\n"));
-
           if (options.verifyUrl) {
             const verify = await verifyHeal(collectorId, options.verifyUrl);
             if (!verify.success) {
@@ -397,129 +425,56 @@ export const cli = new Command()
       .description("Show price history for tracked products")
       .arguments("[query:string]")
       .option("--json", "Output raw JSON", { default: false })
-      .option("-n, --limit <n:number>", "Max products to show", {
-        default: 10,
-      })
+      .option("-n, --limit <n:number>", "Max products to show", { default: 10 })
       .action(async (options, query) => {
         const json = isJson(options);
         if (query) {
           const queryResults = await getHistoryByQuery(query);
           if (queryResults.length === 0) {
-            const history = await getPriceHistory(query);
-            if (history.length === 0) {
-              if (json) {
-                printJson({ query, records: [] });
-              } else {
-                console.log(
-                  colors.dim(`\nNo price history for "${query}".\n`),
-                );
-              }
-              return;
-            }
-
             if (json) {
-              printJson({ query, records: history });
+              printJson({ query, records: [] });
             } else {
+              console.log(colors.dim(`\nNo price history for "${query}".\n`));
+            }
+            return;
+          }
+          if (json) {
+            printJson({ query, results: queryResults });
+          } else {
+            console.log(colors.bold(`\nSearch history for "${query}":\n`));
+            for (const result of queryResults) {
+              const products = result.products;
+              if (products.length === 0) continue;
+              const uniqueNames = [...new Set(products.map((p) => p.name))];
               console.log(
-                colors.bold(`\nPrice history for "${query}":\n`),
+                colors.cyan(`  ${uniqueNames.length} products found`),
               );
-              const table = new Table()
-                .header(["Date", "Price", "Platform"])
-                .border(true);
-
-              for (const record of history) {
-                const date = new Date(record.timestamp);
-                table.push([
-                  date.toLocaleDateString("en-IN"),
-                  colors.green(formatPrice(record.price)),
-                  colors.cyan(record.platform),
-                ]);
-              }
-
-              table.render();
-
-              if (history.length >= 2) {
-                const first = history[0].price;
-                const last = history[history.length - 1].price;
-                const change = last - first;
-                const pct = ((change / first) * 100).toFixed(1);
-                const arrow = change > 0
+              for (const name of uniqueNames.slice(0, options.limit)) {
+                const records = products.filter((p) => p.name === name);
+                const prices = records.map((r) => r.price);
+                const min = Math.min(...prices);
+                const max = Math.max(...prices);
+                const latest = prices[prices.length - 1];
+                const previous = prices.length >= 2
+                  ? prices[prices.length - 2]
+                  : latest;
+                const arrow = latest > previous
                   ? "\u2191"
-                  : change < 0
+                  : latest < previous
                   ? "\u2193"
                   : "\u2192";
-                const trendColor = change > 0
-                  ? colors.red
-                  : change < 0
-                  ? colors.green
-                  : colors.yellow;
-
                 console.log(
-                  trendColor(
-                    `\n  Trend: ${arrow} ${change >= 0 ? "+" : ""}${
-                      formatPrice(
-                        change,
-                      )
-                    } (${change >= 0 ? "+" : ""}${pct}%)\n`,
+                  colors.bold(
+                    `    ${name.slice(0, 50)}${name.length > 50 ? "..." : ""}`,
                   ),
                 );
-              }
-            }
-          } else {
-            if (json) {
-              printJson({ query, results: queryResults });
-            } else {
-              console.log(
-                colors.bold(
-                  `\nSearch history for "${query}":\n`,
-                ),
-              );
-              for (const result of queryResults) {
-                const products = result.products;
-                if (products.length === 0) continue;
-
-                const uniqueNames = [...new Set(products.map((p) => p.name))];
                 console.log(
-                  colors.cyan(
-                    `  ${uniqueNames.length} products found`,
-                  ),
+                  `      ${arrow} Latest: ${
+                    colors.green(formatPrice(latest))
+                  } | Range: ${colors.dim(formatPrice(min))} - ${
+                    colors.dim(formatPrice(max))
+                  } | Records: ${records.length}\n`,
                 );
-
-                for (const name of uniqueNames.slice(0, options.limit)) {
-                  const records = products.filter((p) => p.name === name);
-                  const prices = records.map((r) => r.price);
-                  const min = Math.min(...prices);
-                  const max = Math.max(...prices);
-                  const latest = prices[prices.length - 1];
-                  const previous = prices.length >= 2
-                    ? prices[prices.length - 2]
-                    : latest;
-                  const arrow = latest > previous
-                    ? "\u2191"
-                    : latest < previous
-                    ? "\u2193"
-                    : "\u2192";
-                  console.log(
-                    colors.bold(
-                      `    ${name.slice(0, 50)}${
-                        name.length > 50 ? "..." : ""
-                      }`,
-                    ),
-                  );
-                  console.log(
-                    `      ${arrow} Latest: ${
-                      colors.green(
-                        formatPrice(latest),
-                      )
-                    } | Range: ${
-                      colors.dim(
-                        formatPrice(min),
-                      )
-                    } - ${
-                      colors.dim(formatPrice(max))
-                    } | Records: ${records.length}\n`,
-                  );
-                }
               }
             }
           }
@@ -530,14 +485,11 @@ export const cli = new Command()
               printJson({ products: [] });
             } else {
               console.log(
-                colors.dim(
-                  "\nNo tracked products yet. Run a search first.\n",
-                ),
+                colors.dim("\nNo tracked products yet. Run a search first.\n"),
               );
             }
             return;
           }
-
           if (json) {
             const data = [];
             for (const name of products.slice(0, options.limit)) {
@@ -554,9 +506,7 @@ export const cli = new Command()
             printJson({ products: data });
           } else {
             console.log(
-              colors.bold(
-                `\nTracked products (${products.length}):\n`,
-              ),
+              colors.bold(`\nTracked products (${products.length}):\n`),
             );
             for (const name of products.slice(0, options.limit)) {
               const history = await getPriceHistory(name);
@@ -579,14 +529,8 @@ export const cli = new Command()
               );
               console.log(
                 `    ${arrow} Latest: ${
-                  colors.green(
-                    formatPrice(latest),
-                  )
-                } | Range: ${
-                  colors.dim(
-                    formatPrice(min),
-                  )
-                } - ${
+                  colors.green(formatPrice(latest))
+                } | Range: ${colors.dim(formatPrice(min))} - ${
                   colors.dim(formatPrice(max))
                 } | Records: ${history.length}\n`,
               );
@@ -610,7 +554,8 @@ export const cli = new Command()
             collectorId: config.collectorId,
             datasetId: config.datasetId,
             enabled: config.enabled,
-            url: config.url,
+            pagination: config.pagination,
+            searchUrlTemplate: config.searchUrlTemplate,
           }));
           printJson({ platforms: data, pagesPerSearch: PAGES_TO_SCRAPE });
         } else {
@@ -626,24 +571,18 @@ export const cli = new Command()
               ? colors.magenta("pre-built")
               : colors.cyan("scraper studio");
             console.log(
-              `  ${dot} ${config.name} (${key}) [${status}] ${toolLabel}`,
+              `  ${dot} ${config.name} (${key}) [${status}] ${toolLabel} [${config.pagination}]`,
             );
             if (config.collectorId) {
-              console.log(
-                colors.dim(`    Collector: ${config.collectorId}`),
-              );
+              console.log(colors.dim(`    Collector: ${config.collectorId}`));
             }
             if (config.datasetId) {
-              console.log(
-                colors.dim(`    Dataset: ${config.datasetId}`),
-              );
+              console.log(colors.dim(`    Dataset: ${config.datasetId}`));
             }
-            console.log(colors.dim(`    URL: ${config.url}`));
+            console.log(colors.dim(`    URL: ${config.searchUrlTemplate}`));
             console.log();
           }
-          console.log(
-            colors.dim(`  Pages per search: ${PAGES_TO_SCRAPE}`),
-          );
+          console.log(colors.dim(`  Pages per search: ${PAGES_TO_SCRAPE}`));
           console.log();
         }
       }),
@@ -655,11 +594,9 @@ export const cli = new Command()
       .arguments("<query:string>")
       .option("--json", "Output raw JSON", { default: false })
       .option("-n, --limit <n:number>", "Max results to show", { default: 10 })
-      .option(
-        "--country <country:string>",
-        "Country code for geo-targeting",
-        { default: "in" },
-      )
+      .option("--country <country:string>", "Country code for geo-targeting", {
+        default: "in",
+      })
       .action(async (options, query) => {
         const json = isJson(options);
         if (!json) {
@@ -679,11 +616,9 @@ export const cli = new Command()
             console.log(colors.dim("No shopping results found.\n"));
             return;
           }
-
           const table = new Table()
             .header(["#", "Product", "Price", "Shop", "Rating"])
             .border(true);
-
           for (const [i, item] of results.slice(0, options.limit).entries()) {
             table.push([
               String(i + 1),
@@ -695,7 +630,6 @@ export const cli = new Command()
               item.rating ? colors.yellow(`${item.rating}`) : colors.dim("-"),
             ]);
           }
-
           console.log("");
           table.render();
           console.log("");
@@ -708,18 +642,14 @@ export const cli = new Command()
       .description("Take a screenshot of a deal page (Web Unlocker)")
       .arguments("<url:string>")
       .option("--json", "Output raw JSON", { default: false })
-      .option(
-        "-o, --output <path:string>",
-        "Output file path",
-        { default: "screenshot.png" },
-      )
+      .option("-o, --output <path:string>", "Output file path", {
+        default: "screenshot.png",
+      })
       .action(async (options, url) => {
         const json = isJson(options);
         validateUrl(url);
         if (!json) {
-          console.log(
-            colors.bold(`\nTaking screenshot of ${url}...\n`),
-          );
+          console.log(colors.bold(`\nTaking screenshot of ${url}...\n`));
         }
 
         const base64 = await takeScreenshot(url);
@@ -734,9 +664,7 @@ export const cli = new Command()
             saved: true,
           });
         } else {
-          console.log(
-            colors.green(`  Screenshot saved to ${options.output}`),
-          );
+          console.log(colors.green(`  Screenshot saved to ${options.output}`));
           console.log(
             colors.dim(`  Size: ${(bytes.length / 1024).toFixed(1)}KB\n`),
           );
@@ -751,7 +679,6 @@ export const cli = new Command()
       .action((options) => {
         const json = isJson(options);
         const scrapers = getAvailablePreScrapers();
-
         if (json) {
           printJson({ scrapers });
         } else {
@@ -762,7 +689,9 @@ export const cli = new Command()
           }
           console.log();
           console.log(
-            colors.dim('  Use with: tech-scraper search "query" -p amazon'),
+            colors.dim(
+              '  Use with: tech-scraper search "query" --amazon-library',
+            ),
           );
           console.log();
         }
@@ -779,12 +708,12 @@ export const cli = new Command()
           console.log(colors.bold("\nChecking collectors...\n"));
         }
 
-        const checks: {
+        const checks: Array<{
           platform: string;
           collectorId: string;
           ok: boolean;
           error?: string;
-        }[] = [];
+        }> = [];
 
         for (const [, config] of Object.entries(PLATFORMS)) {
           if (!config.collectorId) {
@@ -808,21 +737,14 @@ export const cli = new Command()
         }
 
         if (json) {
-          printJson({
-            checks,
-            allOk: checks.every((c) => c.ok),
-          });
+          printJson({ checks, allOk: checks.every((c) => c.ok) });
         } else {
           for (const c of checks) {
             const icon = c.ok
               ? colors.green.bold("\u2713")
               : colors.red.bold("\u2717");
-            console.log(
-              `  ${icon} ${c.platform} (${c.collectorId})`,
-            );
-            if (c.error) {
-              console.log(colors.red(`    ${c.error}`));
-            }
+            console.log(`  ${icon} ${c.platform} (${c.collectorId})`);
+            if (c.error) console.log(colors.red(`    ${c.error}`));
           }
           console.log();
           const allOk = checks.every((c) => c.ok);
@@ -848,13 +770,9 @@ export const cli = new Command()
         const json = isJson(options);
         validateUrl(url);
         if (!json) {
-          console.log(
-            colors.bold(`\nFetching ${url} via Web Unlocker...\n`),
-          );
+          console.log(colors.bold(`\nFetching ${url} via Web Unlocker...\n`));
         }
-
         const markdown = await fetchPageMarkdown(url);
-
         if (json) {
           printJson({ url, markdown });
         } else {

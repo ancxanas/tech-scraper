@@ -1,20 +1,22 @@
 export type Platform = "reliance" | "tatacliq" | "amazon" | "flipkart";
 export type ToolType = "scraper" | "prebuilt";
+export type PaginationType = "page" | "scroll";
 
 export interface PlatformConfig {
   name: string;
   tool: ToolType;
   enabled: boolean;
-  url: string;
-  searchPath: string;
+  searchUrlTemplate: string;
+  pagination: PaginationType;
   startIndex: number;
-  // Scraper Studio (tool === "scraper")
+  pageSize: number;
   collectorId?: string;
-  // Pre-built dataset (tool === "prebuilt")
   datasetId?: string;
 }
 
 export const PAGES_TO_SCRAPE = 3;
+export const MAX_PRODUCTS_HARD_CAP = 500;
+export const MAX_ENRICH = 20;
 
 const relianceId = Deno.env.get("RELIANCE_COLLECTOR_ID") ||
   "c_msxt4lsv12k5p1328b";
@@ -22,43 +24,50 @@ const tatacliqId = Deno.env.get("TATACLIQ_COLLECTOR_ID") ||
   "c_msxt4nhe2fxyb7bjnw";
 const flipkartId = Deno.env.get("FLIPKART_COLLECTOR_ID") ||
   "c_msyq5fv71wizb98a5s";
+const amazonId = Deno.env.get("AMAZON_COLLECTOR_ID") || "";
 
 export const PLATFORMS: Record<Platform, PlatformConfig> = {
+  flipkart: {
+    name: "Flipkart",
+    tool: "scraper",
+    enabled: true,
+    searchUrlTemplate: "https://www.flipkart.com/search?q={q}&page={page}",
+    pagination: "page",
+    startIndex: 1,
+    pageSize: 40,
+    collectorId: flipkartId,
+  },
   reliance: {
     name: "Reliance Digital",
     tool: "scraper",
-    collectorId: relianceId,
-    url: "https://www.reliancedigital.in",
-    searchPath: "/search",
-    startIndex: 1,
     enabled: true,
+    searchUrlTemplate: "https://www.reliancedigital.in/products?q={q}",
+    pagination: "scroll",
+    startIndex: 1,
+    pageSize: 40,
+    collectorId: relianceId,
   },
   tatacliq: {
     name: "Tata CLiQ",
     tool: "scraper",
-    collectorId: tatacliqId,
-    url: "https://www.tatacliq.com",
-    searchPath: "/search/",
-    startIndex: 0,
     enabled: true,
+    searchUrlTemplate:
+      "https://www.tatacliq.com/search/?searchCategory=all&text={q}",
+    pagination: "scroll",
+    startIndex: 0,
+    pageSize: 40,
+    collectorId: tatacliqId,
   },
   amazon: {
     name: "Amazon India",
-    tool: "prebuilt",
+    tool: amazonId ? "scraper" : "prebuilt",
+    enabled: true,
+    searchUrlTemplate: "https://www.amazon.in/s?k={q}&page={page}",
+    pagination: "page",
+    startIndex: 1,
+    pageSize: 60,
+    collectorId: amazonId || undefined,
     datasetId: "gd_lwdb4vjm1ehb499uxs",
-    url: "https://www.amazon.in",
-    searchPath: "/s",
-    startIndex: 1,
-    enabled: true,
-  },
-  flipkart: {
-    name: "Flipkart",
-    tool: "scraper",
-    collectorId: flipkartId,
-    url: "https://www.flipkart.com",
-    searchPath: "/search",
-    startIndex: 1,
-    enabled: true,
   },
 };
 
