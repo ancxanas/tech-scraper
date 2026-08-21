@@ -121,3 +121,19 @@ deno task specs "best phones under 15000" \
 deno task rank "best phones under 15000" --replay runs/<that-dir>
 #   -> instant, repeatable, costs nothing
 ```
+
+## Credentials
+
+Every task runs with `--env-file`, so `.env` in the repo root is loaded
+automatically. Deno does not read `.env` on its own — before this the file was
+present and ignored, and `UNLOCKER_ZONE not set` was reported for a zone that
+was sitting in it.
+
+```
+BRIGHTDATA_API_KEY=...
+UNLOCKER_ZONE=cli_unlocker
+SERP_ZONE=serp_api1
+```
+
+Shell exports still win over the file, so `UNLOCKER_ZONE=other deno task find ...`
+overrides it for one run. A missing `.env` prints a warning and carries on.
