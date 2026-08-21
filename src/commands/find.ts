@@ -72,7 +72,11 @@ export const findCommand = new Command()
     "-p, --platforms <list:string>",
     "Comma-separated: flipkart,amazon,reliance,tatacliq",
   )
-  .option("--pages <n:number>", "Pages per platform", { default: 1 })
+  .option(
+    "--pages <n:number>",
+    "Search depth per platform. 1 is usually enough: one Flipkart collector run already returns ~120 cards. Each extra page costs another collector request.",
+    { default: 1 },
+  )
   .option("-n, --top <n:number>", "Rows to show in the ranking table", {
     default: 15,
   })

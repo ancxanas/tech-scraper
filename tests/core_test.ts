@@ -37,6 +37,7 @@ import { lookupModel, PHONE_MODELS } from "../src/knowledge/models.ts";
 import { hasCheckoutInfo, parseCheckout } from "../src/core/offers.ts";
 import { SpecStore } from "../src/core/specstore.ts";
 import { reviewsUrlFor, summariseReviews } from "../src/core/reviews.ts";
+import { buildUrls } from "../src/core/collect.ts";
 import { htmlToText, jsonStateText, pageToText } from "../src/lib/unlock.ts";
 import {
   fetchSpecs as fetchGsmSpecs,
@@ -1532,4 +1533,27 @@ Deno.test("reviews URL keeps the pid, without which Flipkart serves nothing", ()
   );
   // Other marketplaces block their review pages entirely.
   assertEquals(reviewsUrlFor("https://www.amazon.in/x/dp/B0TEST"), null);
+});
+
+// ------------------------------------------------------------ search depth
+
+Deno.test("search depth is scaled per platform, because a 'page' differs", () => {
+  const intent = parseIntentRules("best phones under 15000");
+  // Collector platforms: one seed URL per page. The collector paginates
+  // internally, so one is usually plenty (~120 cards on the reference run).
+  assertEquals(buildUrls("flipkart", intent, 1).length, 1);
+  assertEquals(buildUrls("flipkart", intent, 3).length, 3);
+  // Each URL must actually target a distinct result page.
+  const urls = buildUrls("flipkart", intent, 3);
+  assert(urls[0].includes("page=1"));
+  assert(urls[2].includes("page=3"));
+  assertEquals(new Set(urls).size, 3);
+});
+
+Deno.test("the budget filter is applied at the source, not just in ranking", () => {
+  const intent = parseIntentRules("best phones under 15000");
+  for (const p of ["flipkart", "tatacliq"] as const) {
+    const url = buildUrls(p, intent, 1)[0];
+    assert(/15000/.test(url), `${p} did not carry the budget: ${url}`);
+  }
 });

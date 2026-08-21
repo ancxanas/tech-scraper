@@ -886,6 +886,29 @@ silently reported "0 reviews" for half the catalogue.
 
 ---
 
+## An aside: `--pages` was measuring two different things
+
+Asked what `--pages 1` does, the honest answer required reading the captured run
+rather than the help text.
+
+```
+Flipkart  --pages 1  ->  1 seed URL  ->  120 cards, spanning result pages 1-5
+Amazon    --pages 1  ->  pages_to_search: 1  ->  16 products, page 1 only
+```
+
+The collector platforms paginate internally, so one seed URL already walks
+several result pages; the prebuilt Amazon dataset takes the number literally.
+One flag, two meanings, and the asymmetry was invisible: Amazon quietly
+contributed 8 in-budget products to a 48-product ranking while Flipkart
+contributed 65.
+
+Depth is now scaled per platform so a single `--pages` value means comparable
+breadth rather than an equal number of requests, and the help text says what it
+costs. The guidance is to leave it at 1 — extra pages mostly buy duplicates,
+because the collector has already covered them.
+
+---
+
 ## What is still worth doing
 
 1. **Amazon PDPs need a transport.** Direct fetch gets a bot page, so Amazon

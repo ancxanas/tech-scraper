@@ -19,6 +19,25 @@ import { searchAmazonPreBuilt } from "../lib/prescrapers.ts";
 import type { PlatformId, RankIntent } from "./types.ts";
 import type { RawBatch } from "./pipeline.ts";
 
+/**
+ * How deep to go on each platform for a given `--pages` value.
+ *
+ * Measured on the reference run, "one page" is not one thing:
+ *
+ *   Flipkart collector, 1 seed URL  -> 120 cards spanning 5 result pages.
+ *     The collector paginates internally, so extra seed URLs mostly buy
+ *     duplicates at multiplied cost.
+ *   Amazon prebuilt dataset, pages_to_search: 1 -> 16 products, one page.
+ *     That is thin enough that Amazon contributed only 8 in-budget products
+ *     to a 48-product ranking.
+ *
+ * So the user's `--pages` is scaled per platform to mean roughly the same
+ * amount of catalogue, rather than the same number of requests.
+ */
+function depthFor(platform: Platform, pages: number): number {
+  return platform === "amazon" ? pages * 3 : pages;
+}
+
 export interface CollectOptions {
   pages: number;
   /** Hard ceiling on collector invocations for this run — credit guard. */
@@ -174,7 +193,10 @@ export async function collectRaw(
 
       if (config.tool === "prebuilt") {
         const results = await withTimeout(
-          searchAmazonPreBuilt(searchTerm(intent), options.pages),
+          searchAmazonPreBuilt(
+            searchTerm(intent),
+            depthFor("amazon", options.pages),
+          ),
           timeoutMs,
           platformName,
         );
@@ -196,7 +218,11 @@ export async function collectRaw(
         }));
       } else {
         if (!config.collectorId) throw new Error("No collector ID configured");
-        const urls = buildUrls(platform, intent, options.pages);
+        const urls = buildUrls(
+          platform,
+          intent,
+          depthFor(platform, options.pages),
+        );
         items = await withTimeout(
           runCollector(config.collectorId, urls.map((url) => ({ url }))),
           timeoutMs,

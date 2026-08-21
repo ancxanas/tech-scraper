@@ -48,6 +48,26 @@ Display flags on `find` and `rank`:
 | `--budget-tolerance <pct>` | Allow results this far over the stated budget. |
 | `--json`                   | Machine-readable output instead of the report. |
 
+## What `--pages` actually means
+
+`--pages` is search depth per platform on `find`. It is the only flag that
+multiplies **collector credit**, so it is worth understanding before raising it.
+
+It does not mean the same thing everywhere, which is why the code scales it:
+
+| platform                      | one page is                    | measured on the reference run                                                                   |
+| ----------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------- |
+| Flipkart, Reliance, Tata CLiQ | one seed URL for the collector | `--pages 1` returned **120 cards spanning 5 result pages** — the collector paginates internally |
+| Amazon (prebuilt dataset)     | one literal page of results    | `pages_to_search: 1` returned **16 products**, of which 8 were in budget                        |
+
+So a naive `--pages 1` gathers a deep Flipkart catalogue and a thin Amazon one.
+Amazon's depth is therefore tripled internally, so one `--pages` value means
+roughly comparable breadth rather than an equal number of requests.
+
+Practical guidance: **leave it at 1.** Because the collector already walks
+several result pages from a single seed, `--pages 3` largely buys duplicates
+while costing three times as many collector requests.
+
 ## Naming decisions
 
 `--top` rather than `--limit`, because `--limit` meant table rows on one command
