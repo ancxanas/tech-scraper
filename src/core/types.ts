@@ -1,13 +1,3 @@
-/** Core data model for the ranking pipeline. */
-
-/**
- * This tool ranks phones. Everything else exists in this union only so the
- * classifier can name what it rejected — "11 earbuds filtered out" is far more
- * useful than "11 items filtered out", and it is how we caught the Reliance
- * collector returning audio for a phone query.
- *
- * `phone` is the only rankable value. See RANKABLE below.
- */
 export type Category =
   | "phone"
   | "featurephone"
@@ -21,7 +11,6 @@ export type Category =
   | "accessory"
   | "unknown";
 
-/** The single category this tool is willing to rank. */
 export const RANKABLE: Category = "phone";
 
 export type PlatformId =
@@ -31,13 +20,11 @@ export type PlatformId =
   | "tatacliq"
   | "unknown";
 
-/** A single raw marketplace card after normalisation. */
 export interface Listing {
   id: string;
   platform: PlatformId;
   platformName: string;
   title: string;
-  /** Where the title came from — "slug" means we recovered it from the URL. */
   titleSource: "field" | "slug" | "unknown";
   url: string;
   imageUrl: string | null;
@@ -49,10 +36,8 @@ export interface Listing {
   availability: string | null;
   inStock: boolean | null;
   sponsored: boolean;
-  /** Position in the platform's own result list (1-based) if known. */
   sourceRank: number | null;
   scrapedAt: string;
-  /** Fields the source simply did not provide. */
   missing: string[];
   raw: Record<string, unknown>;
 }
@@ -79,7 +64,6 @@ export interface Specs {
   colour: string | null;
 }
 
-/** Where a spec value came from, best evidence first. */
 export type SpecSource =
   | "gsmarena"
   | "enrich"
@@ -92,18 +76,13 @@ export interface AnalyzedListing extends Listing {
   category: Category;
   categoryConfidence: number;
   brand: string | null;
-  /** Normalised model identity, e.g. "poco m7 5g". */
   modelKey: string | null;
-  /** Human-readable model name, e.g. "POCO M7 5G". */
   modelName: string;
-  /** Config identity within a model: "8gb-128gb". */
   configKey: string;
   specs: Specs;
   specSources: Partial<Record<keyof Specs, SpecSource>>;
-  /** 0..1 — how much of the spec sheet we actually know. */
   specCompleteness: number;
   kbConfidence: "high" | "medium" | "low" | "none";
-  /** Reasons this listing was rejected, if any. */
   rejected: string[];
 }
 
@@ -119,7 +98,6 @@ export interface Offer {
   ratingCount: number | null;
 }
 
-/** One ranked entity = one model+config, with every offer we found for it. */
 export interface Candidate {
   key: string;
   modelName: string;
@@ -129,17 +107,13 @@ export interface Candidate {
   specSources: Partial<Record<keyof Specs, SpecSource>>;
   specCompleteness: number;
   kbConfidence: "high" | "medium" | "low" | "none";
-  /** Cheapest in-stock offer. */
   best: Offer;
   offers: Offer[];
-  /** Other RAM/storage configs of the same model that we also saw. */
   siblingConfigs: Array<{ configKey: string; price: number }>;
   rating: number | null;
   ratingCount: number | null;
   imageUrl: string | null;
-  /** Checkout details from the product page, when enrichment ran. */
   checkout?: import("./checkout.ts").CheckoutInfo;
-  /** What buyers say, mined from the reviews page. Display-only. */
   reviews?: import("./reviews.ts").ReviewSummary;
   listings: AnalyzedListing[];
 }
@@ -151,23 +125,16 @@ export interface ScoreBreakdown {
   camera: number;
   memory: number;
   extras: number;
-  /** Weighted spec quality 0..100. */
   specScore: number;
-  /** Spec points per rupee, percentile-normalised 0..100. */
   valueScore: number;
-  /** Bayesian-adjusted user rating 0..100. */
   trustScore: number;
-  /** Deal quality vs. peers + MRP credibility 0..100. */
   dealScore: number;
-  /** Final blended 0..100. */
   total: number;
-  /** 0..1 confidence in the above, driven by data completeness. */
   confidence: number;
 }
 
 export interface RankedCandidate extends Candidate {
   rank: number;
-  /** True when the query named a specific model and this is that model. */
   matchesRequestedModel: boolean;
   score: ScoreBreakdown;
   pros: string[];
@@ -206,21 +173,14 @@ export interface PipelineResult {
   };
 }
 
-/** What the user actually asked for, after intent parsing. */
 export interface RankIntent {
   raw: string;
-  /**
-   * What the user appears to be shopping for. Anything other than "phone"
-   * means we decline the query rather than rank it badly — see the laptop
-   * experiment in docs/RANKING-V2.md.
-   */
   category: Category;
   brands: string[];
   excludeBrands: string[];
   budgetMax: number | null;
   budgetMin: number | null;
   budgetOperator: "under" | "around" | "over" | "between" | "none";
-  /** Priorities detected in the query: gaming, camera, battery, display... */
   priorities: string[];
   mustHave: string[];
   modelHint: string | null;

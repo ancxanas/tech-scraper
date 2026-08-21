@@ -1,55 +1,25 @@
-/**
- * Beebom Gadgets as an external spec source.
- *
- * Why a second source at all: GSMArena has the better data but rate-limits
- * hard. In the 2026-08-21 live run it answered 4 models and then returned 429
- * for the rest of the run, which left 44 of 64 ranked phones showing "SoC ?".
- * Probing this host with ten back-to-back requests and no delay returned ten
- * 200s, and it covers the Indian budget shelf that GSMArena indexes late —
- * itel Zeno 200, Lava Bold N2, Redmi A7 Pro all resolved.
- *
- * Its pages carry a per-phone AnTuTu figure inside the chipset string
- * ("MediaTek Dimensity 6300 (6 nm), 560000 Antutu Score"), so this is a real
- * benchmark for that handset rather than our own per-chip approximation.
- *
- * Still a courtesy guest: the caller paces requests, and results are cached
- * permanently because a phone's spec sheet does not change.
- */
-
 import { fetchDirect } from "../lib/fetch-page.ts";
 import type { ExternalSpecs } from "./spec-source.ts";
 
 const BASE = "https://gadgets.beebom.com/mobile";
 
-/**
- * Brand words as this host slugs them. Marketplaces write "MOTOROLA g45 5G";
- * the host wants "moto-g45-5g", and "motorola-g45-5g" is a 404 — measured,
- * not assumed.
- */
 const BRAND_SLUG: Record<string, string> = {
   motorola: "moto",
   xiaomi: "redmi",
   "mi": "redmi",
 };
 
-/** Words that are marketing, not part of the model name. */
 const NOISE =
   /\b(dual sim|india|smartphone|mobile phone|with|free|offer|new|latest)\b/g;
 
-/**
- * Candidate slugs in the order worth trying. The first that returns a page
- * with a chipset wins; a 404 is cheap and there are at most three of them.
- */
 export function beebomSlugs(model: string, brand?: string): string[] {
   const clean = (s: string) =>
     s
       .toLowerCase()
-      // "Note 13 Pro+" and "Note 13 Pro" are different phones with different
-      // chips. Stripping the plus silently resolved the Pro+ to the Pro page
-      // and attached a Snapdragon 7s Gen 2 to a Dimensity 7200 handset.
+      // "Pro+" and "Pro" are different phones; stripping the plus once
+      // attached a Snapdragon 7s Gen 2 to a Dimensity 7200 handset.
       .replace(/\+/g, " plus ")
       .replace(NOISE, " ")
-      // Drop the trailing config the marketplace appended: "(8GB/128GB)".
       .replace(/\((?:[^)]*)\)/g, " ")
       .replace(/\b\d+\s*gb\b/g, " ")
       .replace(/[^a-z0-9]+/g, "-")
@@ -63,15 +33,12 @@ export function beebomSlugs(model: string, brand?: string): string[] {
   const brandWord = BRAND_SLUG[head] ?? BRAND_SLUG[(brand ?? "").toLowerCase()];
 
   const out = new Set<string>();
-  // As written, with the brand word swapped for the one this host uses.
   out.add(brandWord ? base.replace(head, brandWord) : base);
   out.add(base);
-  // Prefixed with the brand when the model name omits it ("narzo 90x").
   if (brand) {
     const b = BRAND_SLUG[brand.toLowerCase()] ?? clean(brand);
     if (b && !base.startsWith(b)) out.add(`${b}-${base}`);
   }
-  // Without the trailing radio suffix — some entries are keyed without it.
   const noRadio = base.replace(/-(5g|4g|lte)$/, "");
   if (noRadio !== base) {
     out.add(brandWord ? noRadio.replace(head, brandWord) : noRadio);
@@ -80,12 +47,6 @@ export function beebomSlugs(model: string, brand?: string): string[] {
   return [...out].filter(Boolean).slice(0, 4);
 }
 
-/**
- * Every `name`/`value` pair on the page, from both encodings it uses: the
- * island props (`"name":[0,"Chipset"],"value":[0,"..."]`) and the JSON-LD
- * product block (`{"name":"Processor","value":"..."}`). Reading both means a
- * change to either one degrades rather than breaks.
- */
 export function beebomFields(html: string): Map<string, string> {
   const text = html
     .replace(/&quot;/g, '"')
@@ -98,10 +59,6 @@ export function beebomFields(html: string): Map<string, string> {
     if (key && val && !out.has(key)) out.set(key, val);
   };
 
-  // Top-level rows are `"name":[0,"Chipset"],"value":[0,"..."]`; nested rows
-  // slip a `displayName` in between and key themselves in kebab-case
-  // (`"name":[0,"display-type"],"displayName":[0,"Display Type"]`). Register
-  // both spellings so callers can ask for either.
   for (
     const m of text.matchAll(
       /"name":\s*\[0,\s*"([^"]{2,40})"\]\s*(?:,\s*"displayName":\s*\[0,\s*"([^"]{0,40})"\]\s*)?,\s*"value":\s*\[0,\s*"([^"]{1,200})"\]/g,
@@ -123,7 +80,6 @@ export function beebomFields(html: string): Map<string, string> {
 const num = (m: RegExpMatchArray | null): number | null =>
   m ? Number(m[1].replace(/,/g, "")) : null;
 
-/** Fold the host's panel wording into the vocabulary the ranker scores on. */
 function panelOf(displayType: string | undefined): string | null {
   if (!displayType) return null;
   const t = displayType.toLowerCase();
@@ -136,7 +92,6 @@ function panelOf(displayType: string | undefined): string | null {
   return null;
 }
 
-/** Comparable form for confirming the page is the phone we asked for. */
 function identity(s: string): string {
   return s
     .toLowerCase()
@@ -148,11 +103,6 @@ function identity(s: string): string {
     .replace(/[^a-z0-9]+/g, "");
 }
 
-/**
- * Confirm the page's own title names the model we requested. Guards against
- * the near-miss match: "Redmi Note 13 Pro+ 5G" served the Note 13 Pro page,
- * which parses perfectly and is simply the wrong phone.
- */
 export function nameMatches(
   model: string,
   html: string,
@@ -180,7 +130,6 @@ export function parseBeebomPage(
     return undefined;
   };
 
-  // "MediaTek Dimensity 6300 (6 nm), 560000 Antutu Score"
   const chipRaw = get("chipset", "processor");
   if (!chipRaw) return null;
 
@@ -201,7 +150,6 @@ export function parseBeebomPage(
     matchedName,
     socName,
     nm: num(chipRaw.match(/(\d+)\s*nm/i)),
-    // A per-phone measurement published by the source, not our per-chip table.
     antutu: num(chipRaw.match(/([\d,]{5,9})\s*antutu/i)),
     geekbench: null,
     batteryMah: num(battery?.match(/([\d,]{4,5})\s*mah/i) ?? null),
@@ -233,11 +181,6 @@ export function parseBeebomPage(
   };
 }
 
-/**
- * Try the candidate slugs until one yields a chipset. Returns null rather
- * than throwing on a miss: a phone this host has never heard of is a normal
- * outcome, not an error, and the caller falls back to the knowledge base.
- */
 export async function fetchBeebomSpecs(
   model: string,
   brand?: string,
@@ -249,13 +192,10 @@ export async function fetchBeebomSpecs(
     try {
       html = await fetcher(url);
     } catch {
-      continue; // 404s are expected while probing slugs
+      continue;
     }
     const parsed = parseBeebomPage(html, url, slug);
     if (!parsed?.socName) continue;
-    // A 200 is not a match. This host answers near-miss slugs with a
-    // neighbouring phone, and attaching the wrong handset's chipset is worse
-    // than returning nothing at all.
     if (!nameMatches(model, html, slug)) continue;
     return parsed;
   }

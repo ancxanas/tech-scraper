@@ -1,18 +1,3 @@
-/**
- * `heal` — repair a broken collector, driven by v2 diagnostics.
- *
- * v1 made you supply a collector id and hand-write the prompt, which meant you
- * had to already know what was broken. This version takes a platform name,
- * works out the failure mode from an actual run (live or replayed), writes the
- * prompt from that evidence, and verifies the fix by re-running the pipeline.
- *
- * The failure modes it distinguishes, all of which appeared in real runs:
- *   - crawler error        (Tata CLiQ: "wait_element_timeout")
- *   - empty payload        (collector returns nothing)
- *   - fields missing       (Flipkart: 54/120 cards had no title or price)
- *   - wrong products       (Reliance: a phone query returned earphones)
- */
-
 import { Command } from "@cliffy/command";
 import { colors } from "@cliffy/ansi/colors";
 import { type Platform, PLATFORMS } from "../config.ts";
@@ -34,7 +19,6 @@ export function classifyFailure(d: PipelineDiagnostics): Failure {
   if (d.status === "error" || d.error) return "crawler_error";
   if (d.rawCards === 0) return "empty";
   if (d.categoryMatched === 0) return "wrong_products";
-  // Under half the cards yielding a usable price means the selectors slipped.
   if (d.priced / Math.max(d.rawCards, 1) < 0.5) return "fields_missing";
   if (d.fieldFill < 0.6) return "fields_missing";
   return "healthy";

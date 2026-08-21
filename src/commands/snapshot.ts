@@ -1,23 +1,8 @@
-/**
- * `snapshot` — download an EXISTING BrightData snapshot by id.
- *
- * This is a download of data that was already collected (and already paid
- * for), not a new crawl. When a run's ranking looked wrong, this pulls the
- * exact payload back so it can be replayed offline:
- *
- *   deno task snapshot sd_mt2gj3m12b2l7r2jy9 --platform amazon --out runs/phones
- *   deno task rank "best phones under 15000" --replay runs/phones
- *
- * Snapshot ids are printed by every live run and are also listed in the
- * BrightData dashboard under Datasets → Snapshots.
- */
-
 import { Command } from "@cliffy/command";
 import { colors } from "@cliffy/ansi/colors";
 import { bdFetch } from "../lib/brightdata.ts";
 import { inferPlatform } from "../core/replay.ts";
 
-/** DCA collections and Dataset-API snapshots use different download paths. */
 async function download(id: string): Promise<unknown[]> {
   const paths = id.startsWith("sd_")
     ? [
@@ -39,7 +24,6 @@ async function download(id: string): Promise<unknown[]> {
         for (const key of ["data", "results", "products", "items"]) {
           if (Array.isArray(o[key])) return o[key] as unknown[];
         }
-        // A status envelope means the job is still running.
         if (o.status && o.status !== "ready") {
           throw new Error(`snapshot status: ${String(o.status)}`);
         }

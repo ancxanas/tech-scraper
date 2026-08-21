@@ -1,24 +1,9 @@
-/**
- * Persistent spec cache.
- *
- * Specs do not change for a given product, so a page fetched once should never
- * be fetched again. This is what makes "resolve every candidate before ranking"
- * affordable: the first run pays for the fetches, every subsequent run on the
- * same catalogue is free and instant.
- *
- * Stored as one JSON file rather than KV so it survives without --unstable-kv
- * and can be inspected, diffed and deleted by hand.
- */
-
 const DEFAULT_PATH = ".cache/specs.json";
-/** Specs are immutable in practice; a month is a conservative refresh window. */
 const TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 interface CacheEntry {
-  /** Trimmed spec-section text from the product page. */
   text: string;
   fetchedAt: string;
-  /** Which transport produced it, for reporting. */
   via: "direct" | "unlocker";
 }
 
@@ -40,7 +25,6 @@ export class SpecStore {
     this.#path = path;
   }
 
-  /** Cache key: the product URL without tracking noise. */
   static key(url: string): string {
     try {
       const u = new URL(url);
@@ -64,7 +48,7 @@ export class SpecStore {
         if (now - Date.parse(v.fetchedAt) < TTL_MS) this.#data.set(k, v);
       }
     } catch {
-      // No cache yet, or it is corrupt. Either way, start clean.
+      // ignored
     }
     this.stats.entries = this.#data.size;
   }
@@ -100,8 +84,7 @@ export class SpecStore {
       this.#dirty = false;
       this.stats.entries = this.#data.size;
     } catch {
-      // A cache that cannot be written is a performance problem, not a
-      // correctness one. Never fail a run over it.
+      // ignored
     }
   }
 }

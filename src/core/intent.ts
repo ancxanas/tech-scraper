@@ -1,21 +1,6 @@
-/**
- * Deterministic intent parsing.
- *
- * Runs with zero network calls and zero API keys. If GEMINI_API_KEY is present
- * the pipeline can layer LLM intent on top (see pipeline.ts), but the rules
- * below must stand alone — every test in the suite depends on them.
- */
-
 import type { Category, RankIntent } from "./types.ts";
 import { BRANDS } from "./extract.ts";
 
-/**
- * This tool ranks phones only. These patterns exist so we can recognise a
- * non-phone query and decline it, rather than imputing a spec sheet and
- * presenting a confident-looking ranking built on nothing. (Ask it for laptops
- * with the generic machinery and you get every dimension scored 45 at 20%
- * confidence, including "camera" — see docs/RANKING-V2.md.)
- */
 const CATEGORY_WORDS: Array<[RegExp, Category]> = [
   [/\b(phones?|smartphones?|mobiles?|handsets?)\b/i, "phone"],
   [/\b(earbuds?|tws|airdopes|neckbands?)\b/i, "earbuds"],
@@ -50,7 +35,6 @@ const MUST_HAVE_WORDS: Array<[RegExp, string]> = [
   [/\bstereo\b/i, "stereo"],
 ];
 
-/** "15000", "15k", "15,000", "1.5 lakh", "₹15000" */
 function parseAmount(s: string): number | null {
   const cleaned = s.toLowerCase().replace(/[₹,\s]/g, "");
   const m = cleaned.match(/^([\d.]+)(k|l|lakh|lac|cr)?$/);
@@ -125,7 +109,6 @@ export function parseIntentRules(query: string): RankIntent {
     budgetMin = parseAmount(over[1]);
     budgetOperator = "over";
   } else {
-    // Bare trailing number in a shopping query is almost always a budget.
     const bare = lower.match(new RegExp(String.raw`(?:^|\s)(${AMOUNT})\s*$`));
     const n = bare ? parseAmount(bare[1]) : null;
     if (n && n >= 500) {
@@ -156,11 +139,6 @@ export function parseIntentRules(query: string): RankIntent {
     if (re.test(lower)) mustHave.push(m);
   }
 
-  // A specific model mention ("redmi note 14", "wh-1000xm5") tightens matching.
-  // A model code is a token mixing letters and digits ("m7", "z10", "m06",
-  // "wh-1000xm5"), or a word followed by a number ("note 14"). Marketing
-  // suffixes are not model codes, which the previous pattern got wrong:
-  // "poco m7 pro 5g" resolved to "pro 5g" and would match any Pro 5G phone.
   const GENERIC_TOKENS = new Set([
     "5g",
     "4g",
@@ -182,14 +160,12 @@ export function parseIntentRules(query: string): RankIntent {
   for (const tok of tokens) {
     if (!tok || GENERIC_TOKENS.has(tok)) continue;
     if (/[a-z]/.test(tok) && /\d/.test(tok) && tok.length >= 2) {
-      // A bare budget like "15000" has no letters, so it cannot land here.
       modelHint = tok;
       break;
     }
   }
   if (!modelHint) {
     const worded = lower.match(/\b([a-z]{3,}\s+\d{1,4})\b/);
-    // Reject "under 15000" and friends.
     if (
       worded &&
       !/^(under|below|above|over|around|about|within|upto|max|min)\b/.test(
@@ -228,7 +204,6 @@ const CATEGORY_LABEL: Partial<Record<Category, string>> = {
   accessory: "accessories",
 };
 
-/** null when the query is rankable; otherwise a human-readable refusal. */
 export function unsupportedReason(i: RankIntent): string | null {
   if (i.category === "phone" || i.category === "unknown") return null;
   const label = CATEGORY_LABEL[i.category] ?? i.category;

@@ -50,7 +50,7 @@ export async function bdFetch<T = unknown>(
         try {
           parsed.push(JSON.parse(line));
         } catch {
-          // skip unparseable lines
+          // ignored
         }
       }
       if (parsed.length > 0) return parsed as T;

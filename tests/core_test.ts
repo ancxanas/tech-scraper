@@ -1,13 +1,3 @@
-/**
- * Tests for the v2 ranking core.
- *
- * The fixture in tests/fixtures/run-phones-15000 is a REAL captured run
- * ("best phones under 15000", Flipkart + Reliance + a failed Tata CLiQ crawl).
- * It contains every pathology we care about: 54 cards with no title or price,
- * a Reliance payload full of earphones, a carrier-locked SKU, four colour
- * variants of the same phone, and an upstream crawler error object.
- */
-
 import {
   assert,
   assertAlmostEquals,
@@ -67,8 +57,6 @@ import { buildPrompt, classifyFailure } from "../src/commands/heal.ts";
 
 const FIXTURE = "tests/fixtures/run-phones-15000";
 
-// ---------------------------------------------------------------- money
-
 Deno.test("parseMoney handles numbers, strings and BrightData price objects", () => {
   assertEquals(parseMoney(13999), 13999);
   assertEquals(parseMoney("₹13,999"), 13999);
@@ -81,8 +69,6 @@ Deno.test("parseMoney handles numbers, strings and BrightData price objects", ()
   assertEquals(parseMoney(0), null);
   assertEquals(parseMoney("out of stock"), null);
 });
-
-// ------------------------------------------------------- title recovery
 
 Deno.test("titleFromUrl recovers a product name from a Flipkart slug", () => {
   const url =
@@ -100,8 +86,6 @@ Deno.test("normalizeBatch recovers the cards the old parser silently dropped", a
   const raw = JSON.parse(await Deno.readTextFile(`${FIXTURE}/flipkart.json`));
   const { listings, stats } = normalizeBatch(raw, "flipkart");
 
-  // The old pipeline kept 66 of 120; every card has a usable URL, so all 120
-  // must survive normalisation.
   assertEquals(stats.rawCards, 120);
   assertEquals(listings.length, 120);
   assert(
@@ -130,8 +114,6 @@ Deno.test("an MRP below the selling price is discarded, not shown as a discount"
   assertEquals(listings[0].mrp, null);
   assertEquals(listings[0].discountPct, null);
 });
-
-// -------------------------------------------------------- classification
 
 Deno.test("earphones are never classified as phones", () => {
   const cases = [
@@ -165,13 +147,11 @@ Deno.test("phone accessories are rejected even when they name a phone", () => {
   assert(c.category !== "phone", `got ${c.category}`);
 });
 
-// ------------------------------------------------------------- extraction
-
 Deno.test("deriveModelKey collapses colour and config variants", () => {
   const variants = [
     "POCO M7 5G (Ocean Blue, 128 GB) (8 GB RAM)",
     "POCO M7 5G (Mint Green, 128 GB) (6 GB RAM)",
-    "POCO M7 5G Satin Black 128 GB", // recovered from a URL slug
+    "POCO M7 5G Satin Black 128 GB",
   ];
   const keys = new Set(variants.map(deriveModelKey));
   assertEquals(keys.size, 1, [...keys].join(" | "));
@@ -223,12 +203,10 @@ Deno.test("knowledge base fills specs the listing never mentions", () => {
   assertEquals(a.specSources.panel, "kb");
 });
 
-// -------------------------------------------------------------- grouping
-
 Deno.test("colour variants collapse into one candidate with one offer list", () => {
   const raws = ["Ocean Blue", "Mint Green", "Satin Black"].map((colour, i) => ({
     product_name: `POCO M7 5G (${colour}, 128 GB) (6 GB RAM)`,
-    selling_price: 12499 + i, // slight price noise between colours
+    selling_price: 12499 + i,
     product_url: `https://www.flipkart.com/poco-m7-5g-${
       colour.toLowerCase().replace(" ", "-")
     }-128-gb/p/itm${i}`,
@@ -289,8 +267,6 @@ Deno.test("review counts are not summed across colour variants", () => {
   assertEquals(c.ratingCount, 78000);
 });
 
-// ---------------------------------------------------------------- intent
-
 Deno.test("intent parsing extracts category, budget and priorities", () => {
   const i = parseIntentRules("best gaming phones under 15000");
   assertEquals(i.category, "phone");
@@ -314,8 +290,6 @@ Deno.test("intent parsing picks up brands and 5G requirements", () => {
   assertEquals(i.brands, ["Samsung"]);
   assert(i.mustHave.includes("5g"));
 });
-
-// --------------------------------------------------------------- ranking
 
 Deno.test("budget is a hard gate, not a penalty", () => {
   const { listings } = normalizeBatch([
@@ -367,7 +341,7 @@ Deno.test("an inflated MRP is flagged rather than rewarded", () => {
     {
       product_name: "Nomame Ultra (Black, 128 GB) (6 GB RAM)",
       selling_price: 9999,
-      original_price: 29999, // 67% "off"
+      original_price: 29999,
       product_url: "https://www.flipkart.com/nomame-ultra/p/itm1",
     },
     {
@@ -390,8 +364,6 @@ Deno.test("an inflated MRP is flagged rather than rewarded", () => {
     fake.cons.join(" / "),
   );
 });
-
-// -------------------------------------------------- end-to-end regression
 
 Deno.test("REGRESSION: a phone query never returns earphones", async () => {
   const batches = await loadRun([FIXTURE]);
@@ -424,8 +396,6 @@ Deno.test("REGRESSION: the same phone does not occupy several top slots", async 
   const top10 = ranked.slice(0, 10);
   const models = top10.map((r) => r.key.split("|")[0]);
   const unique = new Set(models);
-  // POCO M7 5G legitimately appears twice (6/128 and 8/128) — but no model may
-  // take more than two of the top ten.
   for (const m of unique) {
     const n = models.filter((x) => x === m).length;
     assert(n <= 2, `${m} occupies ${n} of the top 10`);
@@ -444,8 +414,6 @@ Deno.test("REGRESSION: the winner is spec-justified, not just cheap", async () =
     `winner confidence ${winner.score.confidence}`,
   );
   assertExists(winner.specs.socName);
-  // The old ranker was ~90% price; the new one should be willing to pay more
-  // for a materially better phone.
   assert(
     winner.best.price >= cheapest.best.price,
     "winner should not simply be the cheapest item",
@@ -496,18 +464,10 @@ Deno.test("diagnostics account for every scraped card", async () => {
   assertEquals(flipkart.normalized, 120);
   assert(flipkart.titleRecovered >= 50);
 
-  // Reliance returned a smartphones "collection" that is actually accessories.
   const reliance = diagnostics.find((d) => d.platform === "Reliance Digital")!;
   assertEquals(reliance.categoryMatched, 0);
   assertAlmostEquals(reliance.fieldFill, 0.6, 0.15);
 });
-
-// ------------------------------------------------- Amazon payload regressions
-//
-// Added after replaying a real BrightData Amazon snapshot
-// (sd_mt2gj3m12b2l7r2jy9) for "phones under 15000". Amazon titles are long
-// marketing strings — "<product> | <feature> | <feature>" — and they broke
-// several assumptions that held fine for Flipkart's terse cards.
 
 Deno.test('Amazon: booleans arrive as the strings "true"/"false"', () => {
   const { listings } = normalizeBatch([
@@ -533,7 +493,7 @@ Deno.test("Amazon: an absurd MRP is treated as bad data, not a 94% discount", ()
     {
       name: "Peace I-Ultra 6GB/64GB Smartphone (Orange)",
       final_price: 8899,
-      initial_price: 159994, // real value from the snapshot
+      initial_price: 159994,
       url: "https://www.amazon.in/peace-i-ultra/dp/B0X",
     },
   ], "amazon");
@@ -542,7 +502,6 @@ Deno.test("Amazon: an absurd MRP is treated as bad data, not a 94% discount", ()
 });
 
 Deno.test("Amazon: feature text in the title tail must not veto the category", () => {
-  // Every one of these was silently dropped as an "accessory" or "unknown".
   const titles = [
     'Itel Zeno 200 (Nightly Blue, 4 GB RAM, 128 GB Storage) | 6.75" HD+ Display | 120 Hz Refresh Rate | IP65 Dust & Water Resistance | 13 MP Camera | 5000 mAh Battery | Charger in Box',
     "Samsung Galaxy M06 5G Mobile (Sage Green, 4GB RAM, 128GB Storage) | MediaTek Dimensity 6300 | AnTuTu 623K+ | 25W Fast Charging | 4 Gen OS Upgrades | 50MP Camera | Without Charger",
@@ -584,8 +543,6 @@ Deno.test("REGRESSION: every phone in the real Amazon snapshot is kept", async (
   assertEquals(phones.length, 16, "all 16 Amazon cards are phones");
 });
 
-// ----------------------------------------------------- model-specific queries
-
 Deno.test("model hints parse for alphanumeric part numbers", () => {
   assertEquals(parseIntentRules("sony wh-1000xm5").modelHint, "wh-1000xm5");
   assertEquals(parseIntentRules("best phones under 15000").modelHint, null);
@@ -598,7 +555,6 @@ Deno.test("recorded history sharpens the deal score", async () => {
   const base = runPipeline("q", intent, batches);
   const top = base.ranked[0];
 
-  // Same product, previously seen ~18% more expensive.
   const history = new Map([[top.key, {
     min: top.best.price,
     max: Math.round(top.best.price * 1.18),
@@ -674,9 +630,6 @@ Deno.test("a single observation is not treated as history", async () => {
 });
 
 Deno.test("one run's breadth is not price history", async () => {
-  // Three marketplaces sampled once each in a single run write three
-  // observations at one timestamp. That is coverage, not a trend, and it must
-  // not earn LOWEST YET or the 20-point deal bonus.
   const batches = await loadRun([FIXTURE]);
   const intent = parseIntentRules("best phones under 15000");
   const base = runPipeline("q", intent, batches);
@@ -687,8 +640,8 @@ Deno.test("one run's breadth is not price history", async () => {
     max: Math.round(top.best.price * 1.2),
     position: 0,
     trend: "stable" as const,
-    observations: 3, // three offers…
-    runs: 1, // …all from one run
+    observations: 3,
+    runs: 1,
     daysTracked: 0,
   }]]);
 
@@ -701,8 +654,6 @@ Deno.test("one run's breadth is not price history", async () => {
 });
 
 Deno.test("superlative badges require a clear win, not a tie", async () => {
-  // Two phones on the same chipset score identically; `reduce` would hand the
-  // badge to whichever came first, which reads as a measured distinction.
   const batches = await loadRun([FIXTURE]);
   const intent = parseIntentRules("best phones under 15000");
   const result = runPipeline("q", intent, batches);
@@ -748,25 +699,14 @@ Deno.test("the set's fastest phone is never told it compromises on speed", async
 });
 
 Deno.test("a chip name from a structured field needs no context word", () => {
-  // Free-text matching requires context so that "Aulumu A17" is not read as
-  // an Apple A17. A spec source returning Processor = "T7250" has no such
-  // ambiguity, and running it through the text matcher produced the nonsense
-  // conflict "KB says Unisoc T7250, page says T7250".
   assertEquals(matchSocExact("T7250")?.name, "Unisoc T7250");
   assertEquals(matchSocExact("Unisoc T7250")?.name, "Unisoc T7250");
   assertEquals(matchSocExact("Dimensity 6300")?.name, "Dimensity 6300");
-  // Still exact: a phrase is not a chip name.
   assertEquals(matchSocExact("Aulumu A17 for iPhone 17 Pro Max Case"), null);
-  // And the free-text matcher keeps its guard.
   assertEquals(matchSoc("Aulumu A17 for iPhone 17 Pro Max Case"), null);
 });
 
-// ---------------------------------------------------------- spec precedence
-
 Deno.test("a product page cannot overwrite a trusted knowledge-base entry", () => {
-  // Pages carry carousels and comparison tables, so a value matched anywhere
-  // on one may describe a different handset. A replay produced an AMOLED Moto
-  // G45 (it is IPS LCD) and a 70W Galaxy F07 (it is 25W) this way.
   const { listings } = normalizeBatch([
     {
       product_name: "Motorola G45 5G (Brilliant Blue, 128 GB) (8 GB RAM)",
@@ -791,8 +731,6 @@ Deno.test("a product page cannot overwrite a trusted knowledge-base entry", () =
 });
 
 Deno.test("a page still fills gaps the knowledge base leaves", () => {
-  // The rule is precedence, not exclusion — a trusted entry that says nothing
-  // about a field must not block the page from supplying it.
   const { listings } = normalizeBatch([
     {
       product_name: "Motorola G45 5G (Brilliant Blue, 128 GB) (8 GB RAM)",
@@ -816,7 +754,6 @@ Deno.test("a phone you cannot buy never leads the ranking", async () => {
     first.best.inStock !== false,
     `#1 is out of stock: ${first.modelName}`,
   );
-  // And no in-stock phone may sit below an out-of-stock one.
   let seenUnbuyable = false;
   for (const r of result.ranked) {
     if (r.best.inStock === false) seenUnbuyable = true;
@@ -828,13 +765,7 @@ Deno.test("a phone you cannot buy never leads the ranking", async () => {
   }
 });
 
-// ------------------------------------------------------------------ rendered links
-
 Deno.test("a rendered product link is never truncated", () => {
-  // Clipping to terminal width turned "?pid=MOBHGU9DYEBQW6NW" into
-  // "?pid=MOBH". That is not a shorter link, it is a broken one, and on
-  // Flipkart the pid selects the colour and memory variant being priced — so
-  // a clipped link also lands on a different SKU than the row it came from.
   const url =
     "https://www.flipkart.com/samsung-galaxy-m17-5g-moonlight-silver-128-gb/p/itmc3b8f7b511eca" +
     "?pid=MOBHGU9DYEBQW6NW&lid=LSTMOBHGU9DYEBQW6NWIWMUZV&marketplace=FLIPKART" +
@@ -842,17 +773,10 @@ Deno.test("a rendered product link is never truncated", () => {
   const shown = canonicalUrl(url);
   assert(shown.includes("pid=MOBHGU9DYEBQW6NW"), `pid was mangled: ${shown}`);
   assert(!shown.includes("…"));
-  // The tracking tail is what made it overflow in the first place.
   assert(!shown.includes("otracker") && !shown.includes("lid="));
 });
 
-// ------------------------------------------------------------ platform defaults
-
 Deno.test("the default platform set contains only marketplaces that return phones", () => {
-  // Reliance returned 0 in-category products in every recorded run and Tata
-  // CLiQ 1 usable product from 35 cards, both costing minutes of wall time
-  // and BrightData credit. A coverage table claiming four platforms when two
-  // return nothing is worse than claiming two.
   assertEquals(ALL_ENABLED.sort(), ["amazon", "flipkart"]);
   for (const p of ["reliance", "tatacliq"] as const) {
     assert(!PLATFORMS[p].enabled);
@@ -864,18 +788,11 @@ Deno.test("the default platform set contains only marketplaces that return phone
 });
 
 Deno.test("asking for a disabled platform still runs it", () => {
-  // `enabled` governs the default set only. Silently dropping a platform
-  // someone named on the command line would be its own bug.
   const urls = buildUrls("reliance", parseIntentRules("phones under 15000"), 1);
   assert(urls.length === 1 && urls[0].includes("reliancedigital.in/search"));
 });
 
-// -------------------------------------------------------------- benchmark scale
-
 Deno.test("every chip is on the same benchmark scale", () => {
-  // A v10 figure among v11 ones is invisible by inspection and misranks every
-  // comparison that crosses it. v11 puts even the slowest chip we track above
-  // 100k and the fastest under 3M, so anything outside that is a version slip.
   for (const soc of SOCS) {
     assert(
       soc.antutu >= 100_000 && soc.antutu <= 3_000_000,
@@ -886,8 +803,6 @@ Deno.test("every chip is on the same benchmark scale", () => {
 
 Deno.test("the benchmark table preserves known hardware ordering", () => {
   const at = (n: string) => SOCS.find((s) => s.name === n)!.antutu;
-  // Independently known ordering. A calibration run that inverts any of these
-  // has gone wrong, however plausible the individual numbers look.
   assert(at("Snapdragon 8 Gen 3") > at("Dimensity 8300"));
   assert(at("Dimensity 8300") > at("Dimensity 6300"));
   assert(at("Dimensity 6300") > at("Unisoc T7250"));
@@ -896,8 +811,6 @@ Deno.test("the benchmark table preserves known hardware ordering", () => {
 });
 
 Deno.test("every chipset named in the model KB exists in the chip table", () => {
-  // Otherwise the phone silently scores as if its chipset were unknown — the
-  // exact "SoC ?" outcome, but hidden behind a name that looks resolved.
   for (const m of PHONE_MODELS) {
     if (!m.soc) continue;
     assert(
@@ -907,8 +820,6 @@ Deno.test("every chipset named in the model KB exists in the chip table", () => 
   }
 });
 
-// ------------------------------------------------------- secondary spec source
-
 Deno.test("the secondary spec source reads a full sheet and a real benchmark", async () => {
   const html = await Deno.readTextFile(
     "tests/fixtures/beebom/realme-narzo-90x.html",
@@ -916,7 +827,6 @@ Deno.test("the secondary spec source reads a full sheet and a real benchmark", a
   const s = parseBeebomPage(html, "u", "realme-narzo-90x")!;
   assert(s !== null);
   assertEquals(s.socName, "MediaTek Dimensity 6300");
-  // Published per-phone, so it beats our per-chip approximation.
   assertEquals(s.antutu, 560000);
   assertEquals(s.batteryMah, 7000);
   assertEquals(s.refreshHz, 144);
@@ -928,9 +838,6 @@ Deno.test("the secondary spec source reads a full sheet and a real benchmark", a
 });
 
 Deno.test("a spec sheet without a benchmark still resolves the chipset", () => {
-  // Most budget phones are never benchmarked. Returning null for antutu and
-  // letting soc.ts supply the per-chip figure is correct; returning null for
-  // the whole page because one field is missing would not be.
   const html = Deno.readTextFileSync(
     "tests/fixtures/beebom/itel-zeno-200.html",
   );
@@ -941,12 +848,10 @@ Deno.test("a spec sheet without a benchmark still resolves the chipset", () => {
 });
 
 Deno.test("slug candidates cope with how brands are actually written", () => {
-  // Measured: "motorola-g45-5g" 404s, "moto-g45-5g" is the live page.
   assertEquals(
     beebomSlugs("Motorola G45 5G (8GB/128GB)", "Motorola")[0],
     "moto-g45-5g",
   );
-  // The marketplace config suffix must never reach the URL.
   assert(
     !beebomSlugs("realme Narzo 90x 5G (8GB/128GB)", "realme")[0].includes(
       "8gb",
@@ -959,9 +864,6 @@ Deno.test("slug candidates cope with how brands are actually written", () => {
 });
 
 Deno.test("a near-miss page is rejected rather than mis-attributed", () => {
-  // The audit caught this live: "Redmi Note 13 Pro+ 5G" slugged to
-  // "redmi-note-13-pro-5g", which is a real page for a different phone with a
-  // different chipset. A 200 is not a match.
   assertEquals(
     beebomSlugs("Redmi Note 13 Pro+ 5G", "Xiaomi")[0],
     "redmi-note-13-pro-plus-5g",
@@ -984,9 +886,6 @@ Deno.test("a near-miss page is rejected rather than mis-attributed", () => {
 });
 
 Deno.test("phones on the same chipset score the same, resolved or not", () => {
-  // The performance score is relative, and only some phones get a live
-  // benchmark. If a measured figure outranked the per-chip table, two
-  // identical handsets would separate purely on fetch luck.
   const chip = matchSocDetailed("Dimensity 6300")!.soc;
   const resolved = toSpecs({
     url: "u",
@@ -1011,8 +910,6 @@ Deno.test("phones on the same chipset score the same, resolved or not", () => {
 });
 
 Deno.test("a page value cannot silently correct a confident KB chipset", () => {
-  // Measured live: the secondary source reports the Redmi 14C 5G with the 4G
-  // model's Snapdragon 4 Gen 2. nanoreview and the KB both say 4s Gen 2.
   const kb = lookupModel("Redmi 14C 5G");
   assertEquals(kb?.soc, "Snapdragon 4s Gen 2");
   assertEquals(kb?.confidence, "high");
@@ -1024,8 +921,6 @@ Deno.test("a page with no chipset yields nothing rather than a hollow record", (
     null,
   );
 });
-
-// ------------------------------------------------------------ heal diagnosis
 
 Deno.test("heal classifies the failure modes seen in real runs", () => {
   const base = {
@@ -1042,7 +937,6 @@ Deno.test("heal classifies the failure modes seen in real runs", () => {
     rejectionReasons: {},
   };
 
-  // Tata CLiQ: the crawler never reached the grid.
   assertEquals(
     classifyFailure({
       ...base,
@@ -1052,14 +946,11 @@ Deno.test("heal classifies the failure modes seen in real runs", () => {
     }),
     "crawler_error",
   );
-  // Collector runs, returns nothing.
   assertEquals(classifyFailure({ ...base, rawCards: 0, priced: 0 }), "empty");
-  // Reliance: a phone query that returned earphones.
   assertEquals(
     classifyFailure({ ...base, categoryMatched: 0 }),
     "wrong_products",
   );
-  // Flipkart: 54 of 120 cards had no title or price.
   assertEquals(
     classifyFailure({ ...base, rawCards: 120, priced: 66, fieldFill: 0.5 }),
     "fields_missing",
@@ -1101,8 +992,6 @@ Deno.test("heal prompts name the specific fault, not a generic ask", () => {
   assert(missing.includes("66"));
 });
 
-// --------------------------------------------------- phones only, on purpose
-
 Deno.test("non-phone queries are declined, not badly ranked", () => {
   for (
     const q of [
@@ -1133,7 +1022,6 @@ Deno.test("phone queries are accepted", () => {
 });
 
 Deno.test("a bare model query is not mistaken for another category", () => {
-  // No category word at all — must not be declined on a guess.
   assertEquals(unsupportedReason(parseIntentRules("iqoo z10 lite 5g")), null);
 });
 
@@ -1142,7 +1030,6 @@ Deno.test("model hints resolve to the model code, not marketing suffixes", () =>
   assertEquals(parseIntentRules("iqoo z10 lite 5g").modelHint, "z10");
   assertEquals(parseIntentRules("sony wh-1000xm5").modelHint, "wh-1000xm5");
   assertEquals(parseIntentRules("redmi note 14 5g").modelHint, "note 14");
-  // A budget must never be read as a model.
   assertEquals(parseIntentRules("best phones under 15000").modelHint, null);
 });
 
@@ -1158,8 +1045,6 @@ Deno.test("naming a phone model floats it above better-value alternatives", asyn
 });
 
 Deno.test("REGRESSION: audio payloads yield nothing for a phone query", async () => {
-  // The saved headphone run, asked a phone question. Every card must be
-  // filtered, and the funnel must say why.
   const batches = await loadRun(["tests/fixtures/run-sony-wh1000xm5"]);
   const result = runPipeline(
     "best phones under 15000",
@@ -1178,11 +1063,6 @@ Deno.test("REGRESSION: audio payloads yield nothing for a phone query", async ()
     reasons.join(", "),
   );
 });
-
-// -------------------------------------------------- knowledge base integrity
-//
-// The KB is hand-maintained data, and a wrong entry corrupts ranking silently
-// (worse than a missing one, which just lowers confidence). These guard it.
 
 Deno.test("KB: no duplicate model keys", () => {
   const seen = new Set<string>();
@@ -1242,14 +1122,7 @@ Deno.test("KB: a Pro variant never resolves to its non-Pro sibling", () => {
   }
 });
 
-// ------------------------------------------------------- enrichment targeting
-
 Deno.test("enrichment targets the least-known products, not the top of the table", () => {
-  // Regression: the first implementation sliced the top N and *then* dropped
-  // well-documented products, so a budget of 14 fetches was spent on rank 1-14
-  // — almost all already in the KB — and never reached the unknown phones
-  // below them. Measured effect of the fix on the real fixture: chipset
-  // coverage 10/48 -> 24/48, average confidence 41% -> 63%.
   const mk = (
     key: string,
     confidence: number,
@@ -1277,7 +1150,6 @@ Deno.test("enrichment targets the least-known products, not the top of the table
     mk("half-known", 0.6, 0.6, "medium"),
   ];
 
-  // Mirror the selection logic: skip fully-known, then least-confident first.
   const eligible = ranked.filter((r) =>
     !(r.specCompleteness >= 0.85 && r.kbConfidence === "high")
   );
@@ -1290,8 +1162,6 @@ Deno.test("enrichment targets the least-known products, not the top of the table
 });
 
 Deno.test("SoC matching survives Flipkart's space-stripped highlight strings", () => {
-  // Stripping tags from a Flipkart PDP yields "Snapdragon6 | Octa Core" and
-  // bare part numbers like "T7250".
   assertEquals(
     matchSoc("4 GB RAM | 128 GB ROM T7250 | Octa Core Processor")?.name,
     "Unisoc T7250",
@@ -1300,17 +1170,10 @@ Deno.test("SoC matching survives Flipkart's space-stripped highlight strings", (
     matchSoc("Dimensity6300 | Octa Core Processor")?.name,
     "Dimensity 6300",
   );
-  // Ambiguous vendor-only strings must stay unresolved rather than guess.
   assertEquals(matchSoc("Snapdragon6 | Octa Core Processor"), null);
 });
 
-// ------------------------------------------------------- badges as promises
-
 Deno.test("BEST VALUE requires evidence, not just a good ratio", async () => {
-  // Regression from a live run: Maplin SC26 5G — unknown chipset, zero
-  // ratings, 55% confidence — was badged BEST VALUE purely because its
-  // imputed spec sheet divided nicely by a low price. A badge is a
-  // recommendation and needs a verified chipset plus real review volume.
   const batches = await loadRun([FIXTURE]);
   const intent = parseIntentRules("best phones under 15000");
   const { ranked } = runPipeline("q", intent, batches);
@@ -1335,8 +1198,6 @@ Deno.test("BEST VALUE requires evidence, not just a good ratio", async () => {
 });
 
 Deno.test("CHEAPEST is still allowed on an unverified product", async () => {
-  // It is a statement of fact about price, not a recommendation, so it must
-  // not be gated behind the same evidence bar.
   const batches = await loadRun([FIXTURE]);
   const { ranked } = runPipeline(
     "q",
@@ -1346,8 +1207,6 @@ Deno.test("CHEAPEST is still allowed on an unverified product", async () => {
   const cheapest = [...ranked].sort((a, b) => a.best.price - b.best.price)[0];
   assert(cheapest.badges.includes("CHEAPEST"), cheapest.badges.join(","));
 });
-
-// ------------------------------------------------------------ checkout price
 
 Deno.test("checkout details are parsed from a real Flipkart offer block", () => {
   const text =
@@ -1372,10 +1231,6 @@ Deno.test("checkout parsing degrades quietly on a page with no offers", () => {
 });
 
 Deno.test("the flat card discount does not reorder results", async () => {
-  // Measured across nine brands, Flipkart's "bank offer" was exactly 5.0% of
-  // the listed price every time. A uniform proportional discount cancels out
-  // of the value ratio, so ranking on it would be theatre. This pins that we
-  // rank on the listed price and treat checkout info as display-only.
   const batches = await loadRun([FIXTURE]);
   const intent = parseIntentRules("best phones under 15000");
   const plain = runPipeline("q", intent, batches);
@@ -1406,13 +1261,7 @@ Deno.test("the flat card discount does not reorder results", async () => {
   assertExists(withOffers.ranked[0].checkout);
 });
 
-// ------------------------------------------------- cross-platform grouping
-
 Deno.test("the same phone groups across Flipkart and Amazon title styles", () => {
-  // Amazon writes "<product> | <feature> | <feature>", Flipkart does not.
-  // Those feature tokens were leaking into the model key, so the same handset
-  // produced two different keys and never merged — which is why 0 of 48
-  // ranked products had offers on more than one platform.
   const pairs: Array<[string, string]> = [
     [
       "POCO M7 5G (Ocean Blue, 128 GB) (6 GB RAM)",
@@ -1458,12 +1307,7 @@ Deno.test("a cross-platform pair produces one candidate with the cheaper offer f
   assertEquals(candidates[0].best.price, 11999);
 });
 
-// ------------------------------------------- specs resolved before ranking
-
 Deno.test("SoC matches record whether the page named the vendor", () => {
-  // Flipkart writes "128 GB ROM 4 Gen 2 5G | Octa Core Processor", dropping
-  // "Snapdragon". That is real evidence but a weak identification, because
-  // "4 Gen 2" and "4s Gen 2" are different silicon.
   const named = matchSocDetailed("Qualcomm Snapdragon 4 Gen 2 processor");
   assertEquals(named?.soc.name, "Snapdragon 4 Gen 2");
   assertEquals(named?.ambiguous, false);
@@ -1478,9 +1322,6 @@ Deno.test("SoC matches record whether the page named the vendor", () => {
 });
 
 Deno.test("an abbreviated page value cannot overwrite a confident KB entry", () => {
-  // The C75 5G really does run the 4s Gen 2. A Flipkart highlights blob that
-  // drops the vendor word and says only "4 Gen 2" is an abbreviation, not a
-  // correction — it must not silently downgrade the phone to a different chip.
   const { listings } = normalizeBatch([
     {
       product_name: "POCO C75 5G (Enchanted Green, 64 GB) (4 GB RAM)",
@@ -1536,7 +1377,6 @@ Deno.test("buildCandidates groups without ranking, so specs can resolve first", 
   const { candidates, intent: resolved } = buildCandidates(intent, batches);
   assert(candidates.length > 40, `only ${candidates.length} candidates`);
   assertEquals(resolved.category, "phone");
-  // Not yet scored — that is the point.
   assert(!("score" in candidates[0]));
 });
 
@@ -1551,7 +1391,6 @@ Deno.test("the spec cache round-trips and reports hits", async () => {
   a.set(url, "Product highlights 8 GB RAM | 256 GB ROM", "direct");
   await a.save();
 
-  // Tracking parameters must not fragment the cache key.
   const b = new SpecStore(path);
   await b.load();
   assertExists(b.get("https://www.flipkart.com/x/p/itm1?pid=ABC&other=1"));
@@ -1560,13 +1399,7 @@ Deno.test("the spec cache round-trips and reports hits", async () => {
   await Deno.remove(path);
 });
 
-// ------------------------------------------- embedded JSON spec extraction
-
 Deno.test("spec text is harvested from the embedded JSON, not just visible markup", () => {
-  // Flipkart ships the real specification table inside __INITIAL_STATE__.
-  // Stripping <script> tags — what a naive html-to-text does — discards it and
-  // leaves only marketing highlights, which is why chargingW was missing on 36
-  // of 48 products and resolution on 29.
   const html = `<html><body><div>Product highlights 6 GB RAM</div>
     <script>window.__INITIAL_STATE__ = {"a":{"label_0":{"value":{"text":"Display Type"}},
     "label_1":{"value":{"text":["HD+ 120Hz Display"]}},
@@ -1588,7 +1421,6 @@ Deno.test("spec text is harvested from the embedded JSON, not just visible marku
   assert(combined.includes("Product highlights"), "keeps visible text");
   assert(combined.includes("33W Fast Charging"), "adds JSON text");
 
-  // And the extractor must now find fields it previously could not.
   const { specs } = specsFromText(combined);
   assertEquals(specs.refreshHz, 120);
   assertEquals(specs.batteryMah, 5160);
@@ -1604,8 +1436,6 @@ Deno.test("JSON harvesting is bounded and survives malformed input", () => {
   assert(jsonStateText(huge, 5_000).length <= 5_000);
 });
 
-// ------------------------------------------------ external spec database
-
 Deno.test("external spec pages parse into structured specs and benchmarks", async () => {
   const text = await Deno.readTextFile(
     "tests/fixtures/gsmarena/poco-m7-pro.txt",
@@ -1614,7 +1444,7 @@ Deno.test("external spec pages parse into structured specs and benchmarks", asyn
   assertExists(s);
   assertEquals(s.socName, "Dimensity 7025 Ultra");
   assertEquals(s.nm, 6);
-  assertEquals(s.antutu, 442015); // measured, not our approximation
+  assertEquals(s.antutu, 442015);
   assertEquals(s.geekbench, 2452);
   assertEquals(s.batteryMah, 5110);
   assertEquals(s.chargingW, 45);
@@ -1644,8 +1474,6 @@ Deno.test("model resolution refuses near-misses", () => {
     { name: "Galaxy M07", brand: "Samsung", slug: "samsung_galaxy_m07-4.php" },
   ];
 
-  // Exact matches resolve, including through the sub-brand mapping
-  // (POCO and Redmi are indexed under Xiaomi).
   assertEquals(
     resolveModel("poco m7 pro 5g", "POCO", index)?.slug,
     "xiaomi_poco_m7_pro_5g-2.php",
@@ -1659,14 +1487,11 @@ Deno.test("model resolution refuses near-misses", () => {
     "samsung_galaxy_m07-4.php",
   );
 
-  // "Redmi Note 14 5G" is NOT "Redmi Note 14s" — one character apart, different
-  // chipset. An earlier prefix-matching version accepted it. Never again.
   assertEquals(resolveModel("redmi note 14", "Xiaomi", index), null);
   assertEquals(resolveModel("nonexistent phone 9000", "Xiaomi", index), null);
 });
 
 Deno.test("model names are normalised across marketplace and database spellings", () => {
-  // Flipkart writes "MOTOROLA g35 5G"; the database writes "Moto G35".
   assertEquals(normaliseModel("MOTOROLA g35 5G"), normaliseModel("Moto G35"));
   assertEquals(
     normaliseModel("Samsung Galaxy M07 5G"),
@@ -1674,19 +1499,12 @@ Deno.test("model names are normalised across marketplace and database spellings"
   );
 });
 
-// -------------------------------------------- chipset matching needs context
-
 Deno.test("REGRESSION: a case brand name must not be read as a chipset", () => {
-  // Real failure. An Amazon recommendation carousel on a Rs 8,988 handset's
-  // page contained "Aulumu A17 for iPhone 17 Pro Max Magnetic Thermal Case".
-  // The bare "a17" alias matched, the phone was credited with an Apple A17 Pro
-  // and an AnTuTu of 1,600,000, and it ranked #1 at 80% confidence.
   const carousel =
     "P: null Rs 9,999.00 FREE delivery Wed, 26 Aug Feedback Aulumu A17 for " +
     "iPhone 17 Pro Max Magnetic Thermal Case | CoolHyper | with stand";
   assertEquals(matchSoc(carousel), null);
 
-  // The genuine article still resolves.
   assertEquals(matchSoc("Chipset Apple A17 Pro (3 nm)")?.name, "Apple A17 Pro");
   assertEquals(
     matchSoc("A17 Bionic hexa-core processor")?.name,
@@ -1695,25 +1513,17 @@ Deno.test("REGRESSION: a case brand name must not be read as a chipset", () => {
 });
 
 Deno.test("vendor-less chipset aliases require processor context", () => {
-  // Flipkart drops the vendor: "128 GB ROM T7250 | Octa Core Processor".
   assertEquals(
     matchSoc("4 GB RAM | 64 GB ROM T7250 | Octa Core Processor | 1.8 GHz")
       ?.name,
     "Unisoc T7250",
   );
-  // The same token loose in unrelated copy must not count.
   assertEquals(matchSoc("Order reference T7250 shipped on Tuesday"), null);
   assertEquals(matchSoc("Model number G99 packaging box"), null);
-  // With context, it does.
   assertEquals(matchSoc("Processor Helio G99 octa-core")?.name, "Helio G99");
 });
 
-// -------------------------------------------------- paid transport is a fallback
-
 Deno.test("--allow-paid is permission to fall back, not to spend by default", async () => {
-  // The first implementation routed every spec-database lookup through the
-  // paid transport whenever the flag was set, billing for pages the free
-  // transport serves perfectly well. Free must always be attempted first.
   let directCalls = 0;
   let paidCalls = 0;
 
@@ -1722,7 +1532,6 @@ Deno.test("--allow-paid is permission to fall back, not to spend by default", as
     "tests/fixtures/gsmarena/poco-m7-pro.txt",
   );
 
-  // Free transport healthy: the paid one must never be reached.
   const ok = await fetchExternalSpecs(entry, "poco m7 pro", (_u) => {
     directCalls++;
     return Promise.resolve(page);
@@ -1731,7 +1540,6 @@ Deno.test("--allow-paid is permission to fall back, not to spend by default", as
   assertEquals(directCalls, 1);
   assertEquals(paidCalls, 0);
 
-  // Free transport failing, with permission: fall back exactly once.
   const viaFallback = await fetchExternalSpecs(
     entry,
     "poco m7 pro",
@@ -1762,11 +1570,7 @@ Deno.test("a 429 from the spec database is surfaced as a distinct, stoppable err
   );
 });
 
-// ------------------------------------------------------- stock availability
-
 Deno.test("availability is read from the selected variant, not the page at large", async () => {
-  // Real page text. Flipkart states it as "Selected Color: <x> Out of stock",
-  // and the status belongs to the exact variant the URL points at.
   const out = await Deno.readTextFile(
     "tests/fixtures/pages/maplin-sc26-5g.txt",
   );
@@ -1779,8 +1583,6 @@ Deno.test("availability is read from the selected variant, not the page at large
 });
 
 Deno.test("a carousel's stock status cannot leak onto the product", () => {
-  // Same defensive shape as the Apple A17 incident: the phrase exists on the
-  // page, but not attached to the selected variant.
   const carousel =
     "Buy now Similar products Aulumu Case Out of stock Feedback More like this";
   assertEquals(parseCheckout(carousel).inStock, null);
@@ -1809,7 +1611,6 @@ Deno.test("an out-of-stock product is flagged and never recommended", () => {
   const analyzed = listings.map((l) => analyze(l));
   const candidates = groupListings(analyzed);
 
-  // Mark the cheaper one unavailable, as the resolver would.
   const ghost = candidates.find((c) => /Ghost/.test(c.modelName))!;
   ghost.best.inStock = false;
 
@@ -1821,7 +1622,6 @@ Deno.test("an out-of-stock product is flagged and never recommended", () => {
 
   assert(g.badges.includes("OUT OF STOCK"), g.badges.join(","));
   assert(g.cons.some((c) => /out of stock/i.test(c)), g.cons.join(" | "));
-  // It may still be listed, but it must not be held up as a recommendation.
   assert(!g.badges.includes("BEST VALUE"));
   assert(!g.badges.includes("FASTEST"));
 });
@@ -1845,15 +1645,12 @@ Deno.test("--in-stock-only removes unavailable products entirely", () => {
   );
 });
 
-// ---------------------------------------------------------- review mining
-
 Deno.test("the ratings histogram is parsed", async () => {
   const t = await Deno.readTextFile("tests/fixtures/reviews/poco-m7-5g.txt");
   const s = summariseReviews(t);
   assertEquals(s.totalRatings, 18971);
   assertEquals(s.totalReviews, 1065);
   assertEquals(s.distribution, { 1: 1239, 2: 647, 3: 1515, 4: 4233, 5: 11337 });
-  // 1-2 star share distinguishes a clean 4.2 from a polarised one.
   assertAlmostEquals(s.negativeShare!, 0.099, 0.005);
 });
 
@@ -1862,7 +1659,6 @@ Deno.test("polarity is judged per clause, not per review", async () => {
   const s = summariseReviews(t);
   const by = (a: string) => s.aspects.find((x) => x.aspect === a);
 
-  // "Phone speed just wow.. Camera not good." — one review, opposite verdicts.
   assert(
     (by("performance")?.positive ?? 0) > 0,
     JSON.stringify(by("performance")),
@@ -1892,8 +1688,6 @@ Deno.test("heating counts as a complaint even when phrased neutrally", () => {
 });
 
 Deno.test("variant boilerplate does not become a review of storage", () => {
-  // "Review for: Color X • RAM 8 GB • Storage 128 GB" prefixes every review;
-  // left in, every product would appear to have storage opinions.
   const s = summariseReviews(
     "4.0 • Nice Review for: Color Ocean Blue • RAM 8 GB • Storage 128 GB Good phone. Verified Purchase · Jan, 2025",
   );
@@ -1907,7 +1701,6 @@ Deno.test("a single grumble is not reported as a pattern", () => {
   const s = summariseReviews(
     "3.0 • Meh Battery is bad. Verified Purchase · Jan, 2025",
   );
-  // Mentioned, but not decisive enough to surface as a complaint.
   assert((s.aspects.find((a) => a.aspect === "battery")?.negative ?? 0) > 0);
   assertEquals(s.complained.length, 0);
 });
@@ -1919,17 +1712,10 @@ Deno.test("reviews URL keeps the pid, without which Flipkart serves nothing", ()
     ),
     "https://www.flipkart.com/poco-m7-5g/product-reviews/itm7c4?pid=MOBH9H",
   );
-  // Other marketplaces block their review pages entirely.
   assertEquals(reviewsUrlFor("https://www.amazon.in/x/dp/B0TEST"), null);
 });
 
-// ------------------------------------------------------------ search depth
-
 Deno.test("collector seeds are strided so extra requests buy new products", () => {
-  // A single collector seed walks ~5 result pages by itself (measured: seeding
-  // page=1 returned cards from result pages 1-5). Seeding 1,2,3 would re-fetch
-  // most of the same catalogue, so seeds step by the observed stride and three
-  // requests cover result pages 1-15 rather than 1-7.
   const intent = parseIntentRules("best phones under 15000");
   const urls = buildUrls("flipkart", intent, 3);
   assertEquals(urls.length, 3);
@@ -1938,7 +1724,6 @@ Deno.test("collector seeds are strided so extra requests buy new products", () =
   assert(urls[1].includes("page=6"), urls[1]);
   assert(urls[2].includes("page=11"), urls[2]);
 
-  // Amazon's dataset paginates literally, so its pages must stay consecutive.
   const az = buildUrls("amazon", intent, 3);
   assert(az[1].includes("page=2"), az[1]);
 });
@@ -1951,13 +1736,7 @@ Deno.test("the budget filter is applied at the source, not just in ranking", () 
   }
 });
 
-// ------------------------------------------- live-run regressions (round 14)
-
 Deno.test("REGRESSION: the marketplace query keeps the user's words", () => {
-  // It used to send a bare category word — "best phones under 15000" became
-  // "mobile phone" — and marketplace relevance is driven by the phrase. A live
-  // run returned keypad phones and white-label listings while Redmi, realme,
-  // POCO and iQOO never appeared at all.
   assertEquals(
     searchTerm(parseIntentRules("best phones under 15000")),
     "phones under 15000",
@@ -1966,7 +1745,6 @@ Deno.test("REGRESSION: the marketplace query keeps the user's words", () => {
     searchTerm(parseIntentRules("best gaming phone under 30000")),
     "gaming phone under 30000",
   );
-  // The brand is already in the words; it must not be duplicated.
   assertEquals(
     searchTerm(parseIntentRules("redmi phones under 15000")),
     "redmi phones under 15000",
@@ -1974,7 +1752,6 @@ Deno.test("REGRESSION: the marketplace query keeps the user's words", () => {
 });
 
 Deno.test("REGRESSION: keypad phones are not smartphones", () => {
-  // A Rs 2,699 Nokia 150 reached #4 with a BATTERY KING badge.
   for (
     const t of [
       "Nokia 150 Dual SIM Premium Keypad Mobile Phone with MP3 Player, Wireless FM Radio",
@@ -1985,7 +1762,6 @@ Deno.test("REGRESSION: keypad phones are not smartphones", () => {
     assertEquals(classify(t).category, "featurephone", t.slice(0, 40));
     assertEquals(categoryMatches("phone", classify(t).category), false);
   }
-  // Real smartphones are unaffected.
   assertEquals(
     classify("POCO M7 Pro 5G (Olive Twilight, 128 GB) (6 GB RAM)").category,
     "phone",
@@ -1993,8 +1769,6 @@ Deno.test("REGRESSION: keypad phones are not smartphones", () => {
 });
 
 Deno.test("REGRESSION: impossible specs are rejected, not recorded", () => {
-  // The same Nokia was credited with 20,000 mAh, 8/128GB, 50MP OIS and 5G,
-  // all harvested from a "Similar products" carousel.
   const contaminated =
     "Nokia 150 Keypad Phone | 2.4 inch display | 1000 mAh | Similar products " +
     "20000 mAh Power Bank 8GB 128GB 50MP OIS 120Hz 5G";
@@ -2013,7 +1787,6 @@ Deno.test("REGRESSION: impossible specs are rejected, not recorded", () => {
   assertEquals(specs.has5g, undefined);
   assertEquals(specs.ois, undefined);
 
-  // A genuine listing keeps everything.
   const real = specsFromText(
     "POCO M7 Pro 5G (Olive Twilight, 128 GB) (6 GB RAM) | 6.67 inch AMOLED 120Hz | 5110 mAh | 45W | 50MP OIS | 5G",
   ).specs;
@@ -2024,7 +1797,6 @@ Deno.test("REGRESSION: impossible specs are rejected, not recorded", () => {
 });
 
 Deno.test("implausible refresh rates are dropped rather than believed", () => {
-  // "240Hz" on a Flipkart page is the touch sampling rate.
   assertEquals(
     specsFromText("6.7 inch display 240Hz touch sampling").specs.refreshHz,
     undefined,

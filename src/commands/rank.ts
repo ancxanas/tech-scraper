@@ -1,11 +1,3 @@
-/**
- * `rank` command — run the analysis pipeline over saved scrape data.
- *
- * Free, offline, deterministic. This is the loop you iterate in:
- *
- *   deno task rank "best phones under 15000" --replay runs/latest
- */
-
 import { Command } from "@cliffy/command";
 import { colors } from "@cliffy/ansi/colors";
 import { loadRun } from "../core/replay.ts";
@@ -101,8 +93,6 @@ export const rankCommand = new Command()
       keepRejected: false,
     });
 
-    // Resolve specs BEFORE ranking. Cache hits are free; the fetch budget
-    // only limits genuinely new pages.
     if (options.specs !== false) {
       const { candidates } = buildCandidates(intent, batches);
       const resolved = await resolveSpecs(candidates, {

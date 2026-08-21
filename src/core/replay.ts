@@ -1,16 +1,3 @@
-/**
- * Replay store.
- *
- * Every live scrape is written to disk before analysis. Ranking can then be
- * re-run offline, for free, as many times as needed:
- *
- *   deno task dev search "best phones under 15000"        # spends credit, saves run
- *   deno task dev rank --replay runs/2026-08-21T.../      # free, instant, repeatable
- *
- * This is the difference between iterating on the ranking logic twice and
- * iterating on it two hundred times with $20 of scraping credit.
- */
-
 import type { PlatformId } from "./types.ts";
 import type { RawBatch } from "./pipeline.ts";
 
@@ -83,7 +70,6 @@ export async function saveRun(
   return dir;
 }
 
-/** Infer which platform a loose JSON file came from by peeking at its records. */
 export function inferPlatform(items: unknown[]): PlatformId {
   for (const item of items.slice(0, 20)) {
     if (!item || typeof item !== "object") continue;
@@ -119,11 +105,6 @@ async function readJsonArray(path: string): Promise<unknown[]> {
   return [];
 }
 
-/**
- * Load a run from a directory (with or without a manifest) or from a list of
- * individual JSON files. Unknown-shaped files are still accepted — platform is
- * inferred from the records themselves.
- */
 export async function loadRun(paths: string[]): Promise<RawBatch[]> {
   const files: string[] = [];
 

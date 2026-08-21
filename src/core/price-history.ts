@@ -1,19 +1,6 @@
-/**
- * Price history (Deno KV).
- *
- * v1 stored a flat list of v1 Product rows keyed by product name, which meant
- * every colour variant was a separate "product" and nothing could be joined
- * back to a ranked candidate. This version keys observations by the v2 model +
- * config identity, so history lines up exactly with what the ranker shows.
- *
- * The payoff is a real deal score: "cheapest in 45 days" beats guessing from a
- * single snapshot's discount percentage.
- */
-
 import type { PlatformId, RankedCandidate } from "./types.ts";
 
 export interface PriceObservation {
-  /** Candidate key: "poco m7 5g|6r-128s". */
   key: string;
   name: string;
   platform: PlatformId;
@@ -30,17 +17,10 @@ export interface PriceStats {
   max: number;
   avg: number;
   observations: number;
-  /**
-   * Distinct runs behind those observations. One run that finds the same
-   * model on three marketplaces writes three observations at the same
-   * timestamp — that is breadth, not history, and must not be mistaken for
-   * a price trend.
-   */
   runs: number;
   firstSeen: string;
   lastSeen: string;
   daysTracked: number;
-  /** 0 = cheapest ever seen, 1 = most expensive ever seen. */
   position: number;
   trend: "falling" | "rising" | "stable";
 }
@@ -55,13 +35,11 @@ async function getKv(): Promise<Deno.Kv | null> {
     kvInstance = await Deno.openKv();
     return kvInstance;
   } catch {
-    // KV needs --unstable-kv. Price history is a bonus, never a hard failure.
     kvUnavailable = true;
     return null;
   }
 }
 
-/** Record one observation per ranked candidate per platform offer. */
 export async function savePrices(
   ranked: RankedCandidate[],
   query: string,
@@ -86,7 +64,7 @@ export async function savePrices(
         await kv.set(["prices", c.key, offer.platform, now], obs);
         written++;
       } catch {
-        // A single failed write must not abort the run.
+        // ignored
       }
     }
   }
@@ -118,7 +96,6 @@ function summarise(key: string, obs: PriceObservation[]): PriceStats | null {
     Math.round((Date.parse(last) - Date.parse(first)) / 86_400_000),
   );
 
-  // Compare the newest reading against the mean of everything before it.
   const earlier = prices.slice(0, -1);
   const prevAvg = earlier.length
     ? earlier.reduce((a, b) => a + b, 0) / earlier.length
@@ -146,7 +123,6 @@ export async function getStats(key: string): Promise<PriceStats | null> {
   return summarise(key, await readObservations(key));
 }
 
-/** Bulk lookup used by the ranker to inform the deal score. */
 export async function getStatsFor(
   keys: string[],
 ): Promise<Map<string, PriceStats>> {
@@ -158,7 +134,6 @@ export async function getStatsFor(
   return out;
 }
 
-/** Every product we have ever recorded, newest observation first. */
 export async function listTracked(limit = 50): Promise<PriceStats[]> {
   const kv = await getKv();
   if (!kv) return [];

@@ -1,8 +1,3 @@
-/**
- * These types were the v1 intent contract. The deterministic parser in
- * src/core/intent.ts is the source of truth now; this shape survives only as
- * the wire format of the optional Gemini call.
- */
 export type ProductCategory =
   | "phone"
   | "headphone"

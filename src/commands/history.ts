@@ -1,10 +1,3 @@
-/**
- * `history` — price history for products the tool has already seen.
- *
- * Populated automatically by `find`. Keys line up with ranked candidates, so
- * "POCO M7 5G (6GB/128GB)" is one tracked product rather than one per colour.
- */
-
 import { Command } from "@cliffy/command";
 import { colors } from "@cliffy/ansi/colors";
 import { Table } from "@cliffy/table";

@@ -1,11 +1,3 @@
-/**
- * `doctor` — configuration and collector health in one place.
- *
- * Merges what used to be three commands (`doctor`, `status`, `scrapers`).
- * Answers the only question you actually ask when results look wrong: which
- * platform is broken, and why.
- */
-
 import { Command } from "@cliffy/command";
 import { colors } from "@cliffy/ansi/colors";
 import { Table } from "@cliffy/table";
@@ -34,14 +26,12 @@ export const doctorCommand = new Command()
   .action(async (options) => {
     const json = options.json;
 
-    // ---- environment
     const env = [
       envRow("BRIGHTDATA_API_KEY", true),
       envRow("UNLOCKER_ZONE", false),
       envRow("GEMINI_API_KEY", false),
     ];
 
-    // ---- collectors
     const checks: Array<
       {
         platform: string;

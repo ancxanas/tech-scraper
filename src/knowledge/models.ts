@@ -1,23 +1,4 @@
-/**
- * Offline model knowledge base (seed set).
- *
- * Purpose: recover specs that marketplace listing cards never expose
- * (chipset, panel type, refresh rate, charging, OIS...) so ranking can be
- * spec-aware without spending a scrape credit per product.
- *
- * Rules for this file:
- *  - Only add a model when the specs are actually known. A missing entry is
- *    handled gracefully (specs come from the title, confidence drops, and
- *    `--enrich` can fetch the rest live). A WRONG entry silently corrupts the
- *    ranking, which is far worse.
- *  - `confidence` marks how sure we are. "low" entries are used but flagged.
- *
- * Extend via `deno task kb:add` or by hand — matching is on normalised model
- * keys, so "POCO M7 5G (Ocean Blue, 128 GB) (8 GB RAM)" resolves to "poco m7 5g".
- */
-
 export interface ModelEntry {
-  /** Normalised model key: lowercase, no colour/config suffixes. */
   key: string;
   brand: string;
   display: string;
@@ -35,19 +16,12 @@ export interface ModelEntry {
   stereoSpeakers?: boolean;
   headphoneJack?: boolean;
   releaseYear?: number;
-  /** Promised OS upgrades, when the vendor states them. */
   osUpgrades?: number;
   confidence: "high" | "medium" | "low";
-  /** Extra aliases that should resolve to this entry. */
   aliases?: string[];
 }
 
 export const PHONE_MODELS: ModelEntry[] = [
-  // ---------------------------------------------- 2026 sub-15k arrivals
-  // Marketplace cards never print the chipset (measured: 0 of 48 listings in
-  // the reference run), so anything missing here shows up as "SoC ?" unless
-  // the spec database happens to answer. These are the models that came back
-  // blank in the live runs.
   {
     key: "realme narzo 90x 5g",
     brand: "realme",
@@ -74,8 +48,6 @@ export const PHONE_MODELS: ModelEntry[] = [
     resolution: "HD+",
     mainCameraMp: 50,
     releaseYear: 2026,
-    // Chipset and memory are well attested; panel and battery are not, so
-    // this stays medium rather than inventing the missing fields.
     confidence: "medium",
     aliases: ["narzo 100 lite"],
   },
@@ -99,8 +71,6 @@ export const PHONE_MODELS: ModelEntry[] = [
     key: "redmi a7 pro 4g",
     brand: "Xiaomi",
     display: "Redmi A7 Pro 4G",
-    // Same name, different silicon: the 4G variant drops to the T7250 and a
-    // 13MP camera. Keyed separately so the two cannot be conflated.
     soc: "Unisoc T7250",
     panel: "IPS LCD",
     inches: 6.9,
@@ -185,8 +155,6 @@ export const PHONE_MODELS: ModelEntry[] = [
     key: "motorola g35 5g",
     brand: "Motorola",
     display: "Motorola G35 5G",
-    // The captured page says only the word "Unisoc"; the model entry is what
-    // turns that into a chip with a benchmark.
     soc: "Unisoc T760",
     panel: "IPS LCD",
     inches: 6.72,
@@ -200,14 +168,10 @@ export const PHONE_MODELS: ModelEntry[] = [
     confidence: "medium",
     aliases: ["moto g35 5g", "moto g35"],
   },
-  // --------------------------------------------------------- Xiaomi / POCO
   {
     key: "poco m7 5g",
     brand: "POCO",
     display: "POCO M7 5G",
-    // Was "Snapdragon 4s Gen 2" here, which the Flipkart page, the spec
-    // database, Croma's launch post and Gadgets360 all contradict. The 4s
-    // Gen 2 is the POCO C75 5G's chip; this is the plain 4 Gen 2.
     soc: "Snapdragon 4 Gen 2",
     panel: "IPS LCD",
     inches: 6.88,
@@ -353,7 +317,6 @@ export const PHONE_MODELS: ModelEntry[] = [
     confidence: "high",
   },
 
-  // ------------------------------------------------------------- Samsung
   {
     key: "samsung galaxy m06 5g",
     brand: "Samsung",
@@ -473,13 +436,7 @@ export const PHONE_MODELS: ModelEntry[] = [
     confidence: "high",
   },
 
-  // -------------------------------------------------------------- realme
   {
-    // Two different phones share this name. realme's own spec page lists the
-    // Lite 4G as T7250 / 6300mAh / 13MP; the plain Lite is Dimensity 6300 /
-    // 6000mAh / 32MP. One entry could not be right for both, and the run's
-    // repeated "KB says T7250, page says Dimensity 6300" conflicts were this
-    // ambiguity, not a bad page.
     key: "realme narzo 80 lite 4g",
     brand: "realme",
     display: "realme Narzo 80 Lite 4G",
@@ -559,7 +516,6 @@ export const PHONE_MODELS: ModelEntry[] = [
     confidence: "high",
   },
 
-  // ------------------------------------------------------------- Motorola
   {
     key: "motorola g45 5g",
     brand: "Motorola",
@@ -599,7 +555,6 @@ export const PHONE_MODELS: ModelEntry[] = [
     aliases: ["moto g85 5g"],
   },
 
-  // ----------------------------------------------------------------- iQOO
   {
     key: "iqoo z10 lite 5g",
     brand: "iQOO",
@@ -632,7 +587,6 @@ export const PHONE_MODELS: ModelEntry[] = [
     confidence: "high",
   },
 
-  // --------------------------------------------------------------- Infinix
   {
     key: "infinix hot 50 5g",
     brand: "Infinix",
@@ -649,7 +603,6 @@ export const PHONE_MODELS: ModelEntry[] = [
     confidence: "medium",
   },
 
-  // ------------------------------------------------------------------ Lava
   {
     key: "lava blaze duo 5g",
     brand: "LAVA",
@@ -665,13 +618,7 @@ export const PHONE_MODELS: ModelEntry[] = [
     releaseYear: 2024,
     confidence: "medium",
   },
-  // =========================================================== round 4 batch
-  // India-market models, roughly ₹8k–₹45k. Confidence is honest: "high" means
-  // the spec sheet is well known, "medium" means one or two fields are from
-  // memory of a launch spec, "low" means treat with suspicion and prefer
-  // --enrich. Nothing here is a guess dressed up as a fact.
 
-  // ------------------------------------------------------------ Xiaomi/POCO
   {
     key: "redmi note 13 pro 5g",
     brand: "Xiaomi",
@@ -844,7 +791,6 @@ export const PHONE_MODELS: ModelEntry[] = [
     confidence: "high",
   },
 
-  // ---------------------------------------------------------------- Samsung
   {
     key: "samsung galaxy m34 5g",
     brand: "Samsung",
@@ -992,7 +938,6 @@ export const PHONE_MODELS: ModelEntry[] = [
     confidence: "medium",
   },
 
-  // ----------------------------------------------------------------- realme
   {
     key: "realme 12 pro 5g",
     brand: "realme",
@@ -1076,7 +1021,6 @@ export const PHONE_MODELS: ModelEntry[] = [
     confidence: "medium",
   },
 
-  // ------------------------------------------------------------ iQOO / vivo
   {
     key: "iqoo z9 5g",
     brand: "iQOO",
@@ -1127,7 +1071,6 @@ export const PHONE_MODELS: ModelEntry[] = [
     confidence: "high",
   },
 
-  // --------------------------------------------------------------- Motorola
   {
     key: "motorola g34 5g",
     brand: "Motorola",
@@ -1205,7 +1148,6 @@ export const PHONE_MODELS: ModelEntry[] = [
     aliases: ["moto edge 50 fusion"],
   },
 
-  // ------------------------------------------------------- OnePlus / Nothing
   {
     key: "oneplus nord ce 3 lite 5g",
     brand: "OnePlus",
@@ -1293,7 +1235,6 @@ export const PHONE_MODELS: ModelEntry[] = [
     confidence: "high",
   },
 
-  // ---------------------------------------------------------- Google / Apple
   {
     key: "google pixel 7a",
     brand: "Google",
@@ -1382,7 +1323,6 @@ for (const m of PHONE_MODELS) {
   for (const a of m.aliases ?? []) MODEL_INDEX.set(a, m);
 }
 
-/** Sorted longest-first so "poco m7 pro 5g" beats "poco m7 5g". */
 const MODEL_KEYS = [...MODEL_INDEX.keys()].sort((a, b) => b.length - a.length);
 
 export function lookupModel(text: string): ModelEntry | null {

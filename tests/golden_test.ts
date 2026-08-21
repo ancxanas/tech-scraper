@@ -1,27 +1,3 @@
-/**
- * Golden set — does the ranking produce the RIGHT ORDER?
- *
- * Every other test file checks that inputs are parsed correctly. None of them
- * check the thing the product actually promises: that the order is defensible.
- * That gap let a Rs 8,988 handset with a misparsed Apple A17 Pro reach #1, and
- * only manual inspection caught it.
- *
- * Ground truth is a problem here — the knowledge base is hand-typed by the same
- * author as the ranker, so asserting against it proves nothing. This file
- * therefore leans on three kinds of claim that do not depend on anyone's
- * recollection:
- *
- *  1. INVARIANTS — properties that must hold for any correct ranker, whatever
- *     the weights are. Determinism. Cheaper-is-not-worse. Pareto dominance.
- *  2. GATES — promises the CLI makes out loud: budget, category, evidence
- *     behind badges, confidence reflecting real knowledge.
- *  3. ANCHORS — a small number of orderings that are uncontroversial on the
- *     captured fixture, plus adversarial products that must NOT win.
- *
- * When a weight is deliberately changed, anchors may legitimately move; the
- * invariants and gates must not.
- */
-
 import { assert, assertEquals, assertExists } from "@std/assert";
 import { loadRun } from "../src/core/replay.ts";
 import { runPipeline } from "../src/core/pipeline.ts";
@@ -53,7 +29,6 @@ function knownFields(r: RankedCandidate): number {
   return SPEC_FIELDS.filter((f) => r.specs[f] !== null).length;
 }
 
-/** Rank a hand-built set of listings, bypassing the marketplace fixtures. */
 function rankSynthetic(
   rows: Array<Record<string, unknown>>,
   query = QUERY,
@@ -63,7 +38,6 @@ function rankSynthetic(
   return rankCandidates(candidates, parseIntentRules(query)).ranked;
 }
 
-/** A fully-specified phone, so tests vary one axis at a time. */
 function phone(
   name: string,
   price: number,
@@ -103,8 +77,6 @@ function phone(
   };
 }
 
-// ═══════════════════════════════════════════════════════════ 1. INVARIANTS
-
 Deno.test("golden/invariant: ranking is deterministic", async () => {
   const batches = await loadRun([FIXTURE]);
   const intent = parseIntentRules(QUERY);
@@ -122,7 +94,7 @@ Deno.test("golden/invariant: the same phone cheaper never ranks worse", () => {
     phone("Gamma Three", 10000),
   ]);
   const cheaper = rankSynthetic([
-    phone("Alpha One", 9000), // was the most expensive
+    phone("Alpha One", 9000),
     phone("Beta Two", 12000),
     phone("Gamma Three", 10000),
   ]);
@@ -136,7 +108,6 @@ Deno.test("golden/invariant: the same phone cheaper never ranks worse", () => {
 });
 
 Deno.test("golden/invariant: a Pareto-dominant phone outranks the one it dominates", () => {
-  // Same price, better or equal on every spec axis, better rating.
   const ranked = rankSynthetic([
     phone("Dominant", 12000, {
       ram: 8,
@@ -178,8 +149,6 @@ Deno.test("golden/invariant: more memory at the same price never ranks worse", (
     ranked.map((r) => r.modelName).join(" > "),
   );
 });
-
-// ═══════════════════════════════════════════════════════════════ 2. GATES
 
 Deno.test("golden/gate: nothing over budget is ever shown", async () => {
   const batches = await loadRun([FIXTURE]);
@@ -239,11 +208,7 @@ Deno.test("golden/gate: scores are bounded and strictly ordered", async () => {
   }
 });
 
-// ══════════════════════════════════════════════════════════════ 3. ANCHORS
-
 Deno.test("golden/anchor: an unverifiable bargain cannot beat a verified phone", () => {
-  // The adversarial case, drawn from real failures: dirt cheap, no reviews,
-  // no specs the extractor can read. It may appear; it may not lead.
   const ranked = rankSynthetic([
     phone("Verified Phone", 13000, { rating: 4.3, reviews: 80000 }),
     {
@@ -262,7 +227,6 @@ Deno.test("golden/anchor: an unverifiable bargain cannot beat a verified phone",
 Deno.test("golden/anchor: an inflated MRP does not buy a top placement", () => {
   const ranked = rankSynthetic([
     phone("Honest Phone", 12000, { rating: 4.3, reviews: 60000 }),
-    // Same specs, "70% off" a fictional MRP.
     {
       ...phone("Fake Discount", 12000, { rating: 4.3, reviews: 60000 }),
       original_price: 39999,
@@ -276,9 +240,6 @@ Deno.test("golden/anchor: an inflated MRP does not buy a top placement", () => {
 });
 
 Deno.test("golden/anchor: the best-specced phone in the fixture reaches the top 3", async () => {
-  // POCO M7 Pro 5G is the only sub-Rs 15,000 device in this capture with an
-  // AMOLED 120Hz panel, OIS and 45W charging. Whatever the weights, a ranker
-  // that does not surface it is wrong.
   const batches = await loadRun([FIXTURE]);
   const { ranked } = runPipeline(QUERY, parseIntentRules(QUERY), batches);
   const idx = ranked.findIndex((r) => /m7 pro/i.test(r.modelName));
@@ -290,7 +251,6 @@ Deno.test("golden/anchor: a gaming query lifts the faster chip", () => {
     phone("Fast Chip", 13000) as Record<string, unknown>,
     phone("Big Battery", 13000, { battery: 7000, charge: 15 }),
   ]);
-  // Same set, but the query now asks for gaming; the performance weight rises.
   const gaming = rankSynthetic(
     [
       {

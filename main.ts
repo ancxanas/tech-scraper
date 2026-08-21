@@ -13,7 +13,7 @@ try {
     }
   }
 } catch {
-  // .env file not found — that's fine, expect env var to be set
+  // ignored
 }
 
 const { cli } = await import("./src/cli.ts");

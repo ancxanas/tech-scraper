@@ -1,20 +1,3 @@
-/**
- * Calibrate the per-chip benchmark table against one source, on one scale.
- *
- * Why this exists: the performance score is relative, so the table's internal
- * consistency matters more than any single number's absolute truth. Pulling
- * figures per phone from whatever source answered mixes AnTuTu versions --
- * v10 and v11 differ by roughly 20-30% -- and that difference lands on the
- * ranking as if it were a hardware difference.
- *
- * nanoreview publishes a page per chipset with AnTuTu v11 and Geekbench 6 on
- * a single scale, which is what makes it usable as the calibration source
- * even though its per-phone coverage of the Indian budget shelf is thin.
- *
- *   deno task calibrate          print the diff, change nothing
- *   deno task calibrate --write  apply it to src/knowledge/soc.ts
- */
-
 import { SOCS } from "../src/knowledge/soc.ts";
 
 const BASE = "https://nanoreview.net/en/soc";
@@ -38,7 +21,6 @@ function slugFor(name: string, vendor: string): string[] {
     .replace(/^-|-$/g, "");
   const p = VENDOR_PREFIX[vendor] ?? vendor;
   const out = [`${p}-${base}`];
-  // MediaTek drops the family word for Helio/Dimensity in some entries.
   if (!base.startsWith(p)) out.push(base);
   return out;
 }
@@ -48,11 +30,6 @@ function parse(htmlText: string): { antutu: number | null } {
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
     .replace(/\s+/g, " ");
-  // The page carries three kinds of number: the chip's own benchmark table,
-  // a feed of user-submitted runs, and a leaderboard of phones using the
-  // chip. Only the first is the chip's figure, and it is the one labelled
-  // "Total score" -- anchoring on the word "AnTuTu" picks up user submissions
-  // that vary by 10% run to run.
   const a = t.match(/Total score\s*(\d{5,7})/i);
   return { antutu: a ? Number(a[1]) : null };
 }
@@ -104,13 +81,6 @@ for (const [name, ours, theirs] of rows) {
 console.log(`\n${rows.length} calibrated, ${missing.length} not on the source`);
 if (missing.length) console.log("missing:", missing.join(", "));
 
-// The source does not carry every chip -- Unisoc's budget parts and Apple's
-// A-series are absent. Leaving those on the old scale would be worse than the
-// problem being fixed: a table half in one AnTuTu version and half in another
-// misranks every comparison that crosses the boundary. So they are converted
-// using the ratio observed on the calibrated chips nearest them in
-// performance, which is local rather than a single global factor because the
-// drift is not uniform (weak chips sat ~45% low, flagships ~12%).
 function convert(ours: number): number {
   const near = rows
     .map(([, o, t]) => [Math.abs(o - ours), t / o] as const)

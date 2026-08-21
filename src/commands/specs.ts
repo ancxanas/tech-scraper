@@ -1,19 +1,3 @@
-/**
- * `specs` — populate the spec cache for a catalogue, politely and resumably.
- *
- * Resolving specs inline during a ranking run works, but it is the wrong shape
- * for bulk work: the free transport rate-limits after roughly a hundred
- * requests, and a ranking run should not sit waiting on a spec database.
- *
- * This does the slow part once. Every resolved model is cached permanently, so
- * an interrupted run resumes rather than restarting, and subsequent rankings
- * are instant.
- *
- * Transport choice matters here:
- *   - direct  : free, but GSMArena returns HTTP 429 under sustained load
- *   - paid    : Web Unlocker, no rate limit, one request per model, one time
- */
-
 import { Command } from "@cliffy/command";
 import { colors } from "@cliffy/ansi/colors";
 import { loadRun } from "../core/replay.ts";

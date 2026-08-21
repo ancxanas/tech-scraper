@@ -1,16 +1,3 @@
-/**
- * Value ranking engine.
- *
- * Design principles:
- *  1. Gates before scores. A product that isn't what the user asked for is
- *     removed with a recorded reason — never merely penalised.
- *  2. Spec quality is measured on ABSOLUTE anchors (a 6000mAh battery is good
- *     regardless of what else showed up in the scrape), while value is measured
- *     RELATIVE to the candidate set (percentile of spec-points-per-rupee).
- *  3. Unknown data is imputed from peers and the resulting score is discounted
- *     by a confidence factor, so a mystery phone can never win on price alone.
- */
-
 import type {
   Candidate,
   RankedCandidate,
@@ -20,7 +7,6 @@ import type {
 } from "./types.ts";
 import { categoryMatches } from "./classify.ts";
 
-/** Piecewise-linear interpolation over (input, score) anchor points. */
 function curve(value: number, points: Array<[number, number]>): number {
   if (value <= points[0][0]) return points[0][1];
   const last = points[points.length - 1];
@@ -48,7 +34,6 @@ const PANEL_SCORE: Record<string, number> = {
 
 function perfScore(antutu: number | null): number | null {
   if (antutu === null) return null;
-  // Log scale: perceived difference between 200k and 400k >> 1.6M and 1.8M.
   const lo = Math.log(150_000);
   const hi = Math.log(2_200_000);
   return clamp(((Math.log(antutu) - lo) / (hi - lo)) * 100);
@@ -149,7 +134,6 @@ function extrasScore(s: Specs): number | null {
   return (score / known) * 100;
 }
 
-/** Weights over the phone spec dimensions, nudged by the query's priorities. */
 function specWeights(intent: RankIntent): Record<string, number> {
   const base: Record<string, number> = {
     performance: 0.3,
@@ -175,26 +159,16 @@ function specWeights(intent: RankIntent): Record<string, number> {
   return base;
 }
 
-/**
- * Bayesian-shrunk rating: 4.9 from 3 people must not beat 4.3 from 150k.
- *
- * Shrinkage alone is not enough — with a strong prior a 14-review product
- * inherits the segment average and looks trustworthy. So the shrunk score is
- * additionally pulled toward "unknown" (45) by an evidence factor that only
- * approaches 1 once a few thousand people have actually rated the thing.
- */
 function trustScore(
   rating: number | null,
   count: number | null,
   priorMean: number,
 ): number | null {
   if (rating === null) return null;
-  const m = 500; // prior strength, in "virtual reviews"
+  const m = 500;
   const v = count ?? 0;
   const blended = (v / (v + m)) * rating + (m / (v + m)) * priorMean;
-  // 3.0★ -> 0, 4.7★ -> 100. Below 3 is effectively a warning sign.
   const base = clamp(((blended - 3.0) / 1.7) * 100);
-  // Evidence: 0 reviews -> 0.35, 100 -> ~0.6, 1k -> ~0.75, 10k+ -> ~1.
   const evidence = clamp(0.35 + Math.log10(v + 1) / 5.5, 0.35, 1);
   const NEUTRAL = 45;
   return clamp(NEUTRAL + (base - NEUTRAL) * evidence);
@@ -214,18 +188,10 @@ function percentileRank(value: number, sorted: number[]): number {
   return (below / (sorted.length - 1)) * 100;
 }
 
-/** "WH-1000XM5" / "wh 1000xm5" / "wh1000xm5" all collapse to "wh1000xm5". */
 function modelToken(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-/**
- * Did the user name a specific model, and is this it?
- *
- * Searching "sony wh-1000xm5" and getting the WH-CH520 first because it is
- * cheaper is a failure, however good the value maths is. Exact model matches
- * are floated above everything else; the rest are kept, but as alternatives.
- */
 function matchesModel(
   hint: string | null,
   brands: string[],
@@ -234,39 +200,29 @@ function matchesModel(
 ): boolean {
   if (!hint) return false;
   const h = modelToken(hint);
-  // A hint needs a digit to be specific — "phone" or "pro" must not gate.
   if (h.length < 2 || !/\d/.test(h)) return false;
   const hay = modelToken(`${name} ${key}`);
   if (!hay.includes(h)) return false;
-  // Short codes like "m7" are ambiguous across brands ("Galaxy M7" vs
-  // "POCO M7"), so when the query named a brand it must agree.
   if (h.length <= 3 && brands.length > 0) {
     return brands.some((b) => hay.includes(modelToken(b)));
   }
   return true;
 }
 
-/** Minimal shape the ranker needs from the price-history store. */
 export interface PriceHistoryEntry {
   min: number;
   max: number;
-  /** 0 = cheapest ever recorded, 1 = most expensive. */
   position: number;
   trend: "falling" | "rising" | "stable";
   observations: number;
-  /** Distinct runs behind those observations — see PriceStats.runs. */
   runs: number;
   daysTracked: number;
 }
 
 export interface RankOptions {
-  /** Candidate key -> recorded price history, when we have any. */
   priceHistory?: Map<string, PriceHistoryEntry>;
-  /** Drop candidates whose only offers are known out-of-stock. */
   inStockOnly?: boolean;
-  /** Hide sponsored placements. */
   excludeSponsored?: boolean;
-  /** Budget tolerance: allow this fraction over budgetMax (default 0 = strict). */
   budgetTolerance?: number;
 }
 
@@ -284,7 +240,6 @@ export function rankCandidates(
   const rejected: Array<{ candidate: Candidate; reasons: string[] }> = [];
   const survivors: Candidate[] = [];
 
-  // ------------------------------------------------------------------ gates
   for (const c of candidates) {
     const reasons: string[] = [];
 
@@ -340,7 +295,6 @@ export function rankCandidates(
 
   if (survivors.length === 0) return { ranked: [], rejected };
 
-  // -------------------------------------------------- peer stats for imputation
   const weights = specWeights(intent);
   const rawComponents: Array<Record<string, number | null>> = survivors.map((
     c,
@@ -358,8 +312,6 @@ export function rankCandidates(
     const vals = rawComponents
       .map((r) => (r as Record<string, number | null>)[key])
       .filter((v): v is number => v !== null);
-    // Impute slightly BELOW the peer median: unknown specs are usually unknown
-    // because the product is obscure, not because it is secretly excellent.
     peerMedian[key] = (median(vals) ?? 50) * 0.9;
   }
 
@@ -370,7 +322,6 @@ export function rankCandidates(
     ? ratings.reduce((a, b) => a + b, 0) / ratings.length
     : 4.0;
 
-  // --------------------------------------------------------------- spec score
   const specScores = survivors.map((_c, i) => {
     const comp = rawComponents[i] as unknown as Record<string, number | null>;
     let total = 0;
@@ -388,13 +339,11 @@ export function rankCandidates(
     return { total: clamp(total), imputedWeight, comp };
   });
 
-  // ------------------------------------------------------------- value score
   const ratios = survivors.map((c, i) =>
     specScores[i].total / (c.best.price / 1000)
   );
   const sortedRatios = [...ratios].sort((a, b) => a - b);
 
-  // ------------------------------------------------------------- deal scoring
   const prices = survivors.map((c) => c.best.price);
   const medPrice = median(prices) ?? 0;
 
@@ -402,59 +351,37 @@ export function rankCandidates(
     const spec = specScores[i];
     const comp = spec.comp;
 
-    // Value is spec-points per rupee. When the spec sheet is largely imputed
-    // that ratio is an assertion, not a measurement, so it is scaled back by
-    // how much we actually know. Without this a Rs 6,499 phone with no
-    // readable specs and no reviews outranked a verified Rs 13,000 one purely
-    // on price — again caught by the golden set.
     const evidence = 1 - spec.imputedWeight;
     const valueScore = clamp(
       percentileRank(ratios[i], sortedRatios) * (0.45 + 0.55 * evidence),
     );
     const trust = trustScore(c.rating, c.ratingCount, priorMean);
 
-    // ---- deal quality
     let deal = 50;
     const o = c.best;
     if (o.discountPct !== null && o.mrp) {
-      // Indian marketplaces routinely invent the MRP. The previous curve only
-      // *reduced* the bonus for an implausible discount, so a fabricated "70%
-      // off" still bought ~28 points and outranked an identical phone sold
-      // honestly at the same price — caught by tests/golden_test.ts.
-      //
-      // Credibility now decays to zero: 40% off is taken at face value, 55%
-      // counts for 25, and anything at or beyond 80% earns nothing at all.
       const d = o.discountPct;
       const credible = d <= 40 ? d : Math.max(0, 40 - (d - 40) * 2);
       deal += credible * 0.6;
-      // Beyond ~60% the MRP is not merely unhelpful, it is evidence the
-      // listing is dishonest — which is a negative signal about the seller,
-      // not a neutral one. The UI already warns about it in the cons list.
       if (d > 60) deal -= 8;
     }
     if (c.offers.length > 1) {
       const spread = Math.max(...c.offers.map((x) => x.price)) - o.price;
       if (spread > 0) deal += Math.min(15, (spread / o.price) * 100);
-      deal += 5; // cross-platform confirmation is itself a signal
+      deal += 5;
     }
     if (medPrice && o.price < medPrice) deal += 5;
 
-    // Recorded history beats a single snapshot's discount claim: a "50% off"
-    // banner means nothing if the phone has sat at this price for six weeks.
     const hist = options.priceHistory?.get(c.key);
-    // Two runs, not two observations: three marketplaces sampled once each in
-    // the same run say nothing about whether this price is a low point, and
-    // must not buy 20 deal points.
     if (hist && hist.runs >= 2) {
       if (o.price <= hist.min) deal += 20;
       else if (hist.position <= 0.15) deal += 12;
       else if (hist.position >= 0.85) deal -= 12;
-      if (hist.trend === "falling") deal -= 4; // wait, it is still dropping
+      if (hist.trend === "falling") deal -= 4;
       else if (hist.trend === "rising") deal += 4;
     }
     const dealScore = clamp(deal);
 
-    // ---- confidence
     const confidence = clamp(
       (1 - spec.imputedWeight) * 60 +
         c.specCompleteness * 20 +
@@ -475,9 +402,6 @@ export function rankCandidates(
       (trust ?? 45) * 0.2 +
       dealScore * 0.15;
 
-    // Low-confidence candidates get pulled toward the middle rather than
-    // being allowed to win on an imputed spec sheet. A phone whose chipset,
-    // battery and panel are all unknown is a gamble, and the score says so.
     const total = clamp(totalRaw * (0.7 + 0.3 * confidence));
 
     const pick = (k: string) => Math.round(comp[k] ?? peerMedian[k] ?? 45);
@@ -513,7 +437,6 @@ export function rankCandidates(
     };
   });
 
-  // If the query named a specific model and we found it, it leads — always.
   const anyExactMatch = ranked.some((r) => r.matchesRequestedModel);
   // Anything you cannot buy sorts below everything you can. A replay put an
   // out-of-stock Galaxy M17 at #1 wearing TOP PICK, which is not a
@@ -535,8 +458,6 @@ export function rankCandidates(
   annotate(ranked, intent, options.priceHistory);
   return { ranked, rejected };
 }
-
-// ------------------------------------------------------------------ narrative
 
 function annotate(
   ranked: RankedCandidate[],
@@ -566,19 +487,11 @@ function annotate(
     ),
   };
 
-  // Superlative badges are only awarded among candidates we actually have data
-  // for — "BEST VALUE" on a phone with an unknown chipset is not a recommendation.
   const badgesFromHistory = new Set<string>();
-  // Superlative badges are a recommendation, so they demand real evidence.
-  // Confidence alone was not enough: a phone with an unknown chipset, no
-  // reviews at all and 55% confidence took "BEST VALUE" on a live run purely
-  // because its imputed spec sheet divided nicely by its price.
   const credible = ranked.filter((r) => r.score.confidence >= 0.5);
   const pool = credible.length >= 2 ? credible : ranked;
 
-  /** Enough evidence to actively recommend, not merely to list. */
   const isVouchable = (r: RankedCandidate) =>
-    // Never recommend something that cannot be bought.
     r.best.inStock !== false &&
     r.score.confidence >= 0.6 &&
     r.specs.socName !== null &&
@@ -588,9 +501,6 @@ function annotate(
   const vouchable = pool.filter(isVouchable);
   const recommendPool = vouchable.length >= 2 ? vouchable : pool;
 
-  // CHEAPEST is a statement of fact about price, so it is computed over every
-  // ranked product. Restricting it to the credible pool made it lie: it would
-  // sit on the cheapest *verified* phone while a cheaper one was listed above.
   const cheapest = ranked.reduce((
     a,
     b,
@@ -603,10 +513,6 @@ function annotate(
     a,
     b,
   ) => (b.score.performance > a.score.performance ? b : a));
-  // A superlative has to be a clear win. Two phones on the same chipset get
-  // the same benchmark and the same performance score, and `reduce` hands the
-  // badge to whichever the sort happened to put first — an arbitrary
-  // distinction the reader would take as a measured one.
   const fastestIsClear = !pool.some((r) =>
     r !== fastest && r.score.performance >= fastest.score.performance - 0.5
   );
@@ -620,8 +526,6 @@ function annotate(
     a,
     b,
   ) => (b.score.battery > a.score.battery ? b : a));
-  // Same tie problem: 5000mAh is the default in this segment, so BATTERY KING
-  // must go to a phone that actually leads, not to the first 5000mAh row.
   const batteryIsClear = !pool.some((r) =>
     r !== bestBattery && r.score.battery >= bestBattery.score.battery - 0.5
   );
@@ -695,14 +599,8 @@ function annotate(
     }
 
     const hist = priceHistory?.get(r.key);
-    // `runs`, not `observations`: a model sold on three marketplaces logs
-    // three prices in a single run, and "lowest of the three we just read"
-    // is not a price history. Two separate runs is the floor for any claim
-    // about movement over time.
     if (hist && hist.runs >= 2) {
       if (r.best.price <= hist.min) {
-        // Prepend: "cheapest we have ever seen it" outranks any spec bullet,
-        // and pros are capped at five.
         pros.unshift(
           hist.daysTracked >= 1
             ? `lowest price in ${hist.daysTracked} day(s) of tracking`
@@ -767,7 +665,6 @@ function buildVerdict(
   r: RankedCandidate,
   intent: RankIntent,
   medPrice: number,
-  /** Nothing in the set is faster, so "compromises on raw speed" is a lie. */
   leadsPerformance: boolean,
 ): string {
   const price = `₹${r.best.price.toLocaleString("en-IN")}`;
@@ -791,16 +688,11 @@ function buildVerdict(
   if (strengths.length) bits.push(`leads on ${strengths.join(" and ")}`);
 
   const weak: string[] = [];
-  // Performance scores are absolute, so an entire budget set can sit under 40.
-  // Telling the fastest phone in the set that it compromises on speed — while
-  // badging it FASTEST — is the sort of contradiction that costs trust.
   if (r.score.performance < 40 && !leadsPerformance) weak.push("raw speed");
   if (r.score.display < 45) weak.push("screen quality");
   if (r.score.battery < 45) weak.push("battery");
   if (weak.length) bits.push(`compromises on ${weak.join(" and ")}`);
 
-  // Kept even for the set leader: on a gaming query, "the best here is still
-  // not enough" is the single most useful thing we can say.
   if (intent.priorities.includes("performance") && r.score.performance < 50) {
     bits.push("not ideal for gaming");
   }

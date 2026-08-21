@@ -1,14 +1,3 @@
-/**
- * `index` — build the external spec-database model index.
- *
- * Run once, then occasionally as new phones launch. The index is what lets a
- * marketplace listing be resolved to an authoritative spec page without using
- * the database's search, which is behind a bot challenge.
- *
- * Deliberately slow. GSMArena returns HTTP 429 to impatient clients — this was
- * learned the hard way — so requests are sequential and paced.
- */
-
 import { Command } from "@cliffy/command";
 import { colors } from "@cliffy/ansi/colors";
 import { buildIndex, loadIndex } from "../knowledge/gsmarena.ts";

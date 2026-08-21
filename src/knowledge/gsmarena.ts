@@ -1,53 +1,18 @@
-/**
- * GSMArena as an external spec and benchmark source.
- *
- * Why this exists: the hand-typed knowledge base is the weakest link in the
- * project (I wrote it from memory), and merchant pages are actively wrong, not
- * merely incomplete — Flipkart's PDP yields "240Hz" for a 120Hz phone because
- * that string is the touch sampling rate, and "10W" for an 18W charger. A
- * dedicated spec database is the correct source of truth, and it carries
- * measured AnTuTu and GeekBench figures, which replaces the approximate
- * numbers I typed into soc.ts.
- *
- * Two constraints shape the design:
- *
- *  1. Search is behind a Cloudflare Turnstile challenge, so model -> URL cannot
- *     be resolved by searching. Brand listing pages are plain static HTML
- *     though, so an index is built from those instead.
- *  2. Guessing a URL returns a *different phone's* specs, which is far worse
- *     than having none. Every resolution is therefore verified against the
- *     page's own title before its data is accepted.
- */
-
 import { fetchDirect, htmlToText } from "../lib/fetch-page.ts";
 import type { ExternalSpecs } from "./spec-source.ts";
 
 const BASE = "https://www.gsmarena.com";
-/**
- * Committed, not cached. The index costs ~80s of paced requests to rebuild and
- * risks a rate limit, so it ships with the repo and the tool works on a fresh
- * clone. (It also must not live under .cache/, which tooling treats as
- * disposable — losing it silently disabled the whole spec database.)
- */
 const INDEX_PATH = "data/gsmarena-index.json";
-/** Be a good citizen: this is someone else's server. */
 const DELAY_MS = 1200;
 
 export interface IndexEntry {
-  /** Model name as GSMArena writes it, e.g. "Redmi Note 14 5G". */
   name: string;
   brand: string;
-  /** Page slug, e.g. "xiaomi_redmi_note_14-13456.php". */
   slug: string;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/**
- * Comparable form: lowercase alphanumerics, with the naming differences
- * between marketplaces and GSMArena folded away. Flipkart writes "MOTOROLA
- * g35 5G"; GSMArena writes "Moto G35".
- */
 export function normaliseModel(s: string): string {
   return s
     .toLowerCase()
@@ -55,8 +20,6 @@ export function normaliseModel(s: string): string {
     .replace(/\b(5g|4g|lte|dual sim|india)\b/g, " ")
     .replace(/[^a-z0-9]+/g, "");
 }
-
-// ------------------------------------------------------------------- index
 
 export async function loadIndex(path = INDEX_PATH): Promise<IndexEntry[]> {
   try {
@@ -100,18 +63,12 @@ export function parseBrandPage(html: string, brand: string): IndexEntry[] {
 }
 
 export interface BuildOptions {
-  /** Only index these brands (case-insensitive). Empty = all. */
   brands?: string[];
-  /** Listing pages per brand; each holds ~40 models, newest first. */
   pagesPerBrand?: number;
   path?: string;
   verbose?: boolean;
 }
 
-/**
- * Build the model index from brand listing pages. Run once; it is cached and
- * only needs refreshing when new phones launch.
- */
 export async function buildIndex(
   opts: BuildOptions = {},
 ): Promise<IndexEntry[]> {
@@ -127,7 +84,6 @@ export async function buildIndex(
   const entries: IndexEntry[] = [];
   for (const maker of makers) {
     for (let p = 1; p <= pages; p++) {
-      // Page 2+ uses the "-f-<id>-0-p<n>" form.
       const url = p === 1
         ? `${BASE}/${maker.page}`
         : `${BASE}/${
@@ -148,7 +104,6 @@ export async function buildIndex(
     }
   }
 
-  // Deduplicate on slug.
   const seen = new Set<string>();
   const unique = entries.filter((e) => {
     if (seen.has(e.slug)) return false;
@@ -159,20 +114,6 @@ export async function buildIndex(
   return unique;
 }
 
-// ---------------------------------------------------------------- resolving
-
-/**
- * Find the index entry for a model.
- *
- * Deliberately strict. A wrong match attaches another phone's chipset and
- * benchmark to a product, which would corrupt the ranking invisibly — so an
- * ambiguous or partial match returns null and the caller falls back.
- */
-/**
- * Sub-brands are indexed under their parent on GSMArena: POCO and Redmi live
- * under Xiaomi ("xiaomi_poco_m8_power_5g"), iQOO under vivo, CMF under
- * Nothing. Without this the brand filter excludes the very phones we want.
- */
 const BRAND_PARENT: Record<string, string> = {
   poco: "xiaomi",
   redmi: "xiaomi",
@@ -202,7 +143,6 @@ export function resolveModel(
     const n = normaliseModel(e.name);
     const withBrand = normaliseModel(`${e.brand} ${e.name}`);
     if (n === target || withBrand === target) {
-      // A second distinct exact match means the name is ambiguous.
       if (exact && exact.slug !== e.slug) return null;
       exact = e;
     } else if (target.startsWith(n) || n.startsWith(target)) {
@@ -211,17 +151,11 @@ export function resolveModel(
   }
   if (exact) return exact;
 
-  // No prefix fallback. It was tried and it silently mis-resolved
-  // "Redmi Note 14 5G" to "Redmi Note 14s" — a different phone with a
-  // different chipset — because one name is a prefix of the other and they
-  // differ by a single character. Attaching the wrong handset's benchmark is
-  // precisely the failure this module exists to prevent, so an inexact name
-  // simply does not resolve.
+  // No prefix fallback: it once resolved "Redmi Note 14 5G" to
+  // "Redmi Note 14s" — a different phone with a different chipset.
   void prefixed;
   return null;
 }
-
-// ---------------------------------------------------------------- extraction
 
 function num(m: RegExpMatchArray | null, i = 1): number | null {
   if (!m) return null;
@@ -280,12 +214,6 @@ export function parseSpecPage(text: string, url: string): ExternalSpecs | null {
   };
 }
 
-/**
- * Fetch and verify a model's spec page.
- *
- * Returns null unless the page's own title agrees with the model we asked for.
- * That check is the difference between an external source and a liability.
- */
 export class RateLimited extends Error {
   constructor() {
     super("gsmarena rate limit (HTTP 429)");
@@ -303,9 +231,6 @@ export async function fetchSpecs(
   try {
     html = await fetcher(url);
   } catch (err) {
-    // 429 means every subsequent request will fail too. Surface it as a
-    // distinct type so the caller stops immediately instead of grinding
-    // through the whole catalogue collecting failures.
     if (err instanceof Error && /\b429\b/.test(err.message)) {
       throw new RateLimited();
     }

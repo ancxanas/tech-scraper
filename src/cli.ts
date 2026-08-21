@@ -1,16 +1,3 @@
-/**
- * CLI surface.
- *
- * Deliberately small. Everything the tool does is one of five verbs:
- *
- *   find      scrape live, rank, save the raw payload for replay
- *   rank      re-rank saved payloads offline, for free
- *   snapshot  re-download a payload you already paid for
- *   heal      diagnose and repair a broken collector
- *   doctor    check config, credentials and collector health
- *   history   price history for products already seen
- */
-
 import { Command } from "@cliffy/command";
 import { findCommand } from "./commands/find.ts";
 import { rankCommand } from "./commands/rank.ts";

@@ -1,24 +1,9 @@
-/**
- * Category classification.
- *
- * The old pipeline ranked earphones for a "phones under 15000" query because
- * relevance was token overlap against the raw query string ("phones under
- * 15000" shares no tokens with anything, so everything scored equally) and the
- * only defence was a regex blocklist applied AFTER scoring.
- *
- * Here classification is a first-class, weighted decision made BEFORE scoring,
- * and a mismatch is a hard gate, not a penalty.
- */
-
 import type { Category } from "./types.ts";
 
 interface Rule {
   category: Category;
-  /** Strong signals — a single hit is near-conclusive. */
   strong?: RegExp[];
-  /** Weak signals — supporting evidence. */
   weak?: RegExp[];
-  /** If present, this category is ruled out. */
   veto?: RegExp[];
 }
 
@@ -54,10 +39,8 @@ const RULES: Rule[] = [
     ],
   },
   {
-    // Keypad/feature phones. They match every smartphone signal a title can
-    // carry ("Mobile Phone", "Dual SIM", a brand name) but are a different
-    // product entirely: a live run put a Rs 2,699 Nokia 150 at #4 with a
-    // BATTERY KING badge. Listed before the phone rule so it wins the tie.
+    // Keypad phones match every smartphone signal a title can carry. Listed
+    // before the phone rule so a Nokia 150 never ranks as a smartphone again.
     category: "featurephone",
     strong: [
       /\bkeypad\b/i,
@@ -76,7 +59,6 @@ const RULES: Rule[] = [
     category: "phone",
     strong: [
       /\b(smartphone|mobile\s*phone)\b/i,
-      // "(Colour, 128 GB)" + "(8 GB RAM)" is the canonical Indian phone card.
       /\(\s*[\w\s]+,\s*\d+\s*(?:gb|tb)\s*\)/i,
       /\biphone\s*\d/i,
       /\bgalaxy\s+[amszf]\d/i,
@@ -126,8 +108,6 @@ const RULES: Rule[] = [
     category: "accessory",
     strong: [
       /\b(back\s*cover|flip\s*cover|tempered\s*glass|screen\s*(guard|protector)|charging\s*cable|usb\s*cable|charger|adapter|power\s*bank|powerbank|car\s*mount|mobile\s*holder|selfie\s*stick|stylus|memory\s*card|sim\s*ejector)\b/i,
-      // Audio accessories and spare parts — a silicone case for a WH-1000XM5
-      // is not a competitor to the WH-1000XM5.
       /\b(carrying\s*case|hard\s*case|silicone\s*case|travel\s*case|headphone\s*case|headphones\s*case)\b/i,
       /\b(ear\s*pads?|ear\s*cushions?|earpads?|ear\s*tips?|eartips?|headband\s*(cover|pad)|ear\s*cups?\s*protector)\b/i,
       /\b(hinge|replacement\s*part|spare\s*part|repair\s*kit)\b/i,
@@ -143,18 +123,8 @@ export interface Classification {
   evidence: string[];
 }
 
-/**
- * Amazon titles are "<product> | <feature> | <feature> | …".
- *
- * Vetoes must only look at the product-noun head, never the feature tail:
- * "Itel Zeno 200 (…) | … | Charger in Box" is a phone, not a charger, and
- * "realme NARZO 90x 5G | … | 400% Ultra Boom Speaker" is a phone, not a
- * speaker. Matching vetoes against the whole string silently deleted four
- * genuine phones from a 16-card Amazon payload.
- */
 function productHead(title: string): string {
   const head = title.split("|")[0];
-  // Fall back to a character window when the title uses no pipe separators.
   return (head.length >= 12 ? head : title).slice(0, 90);
 }
 
@@ -164,8 +134,6 @@ export function classify(title: string, url = ""): Classification {
   const scores = new Map<Category, { score: number; evidence: string[] }>();
 
   for (const rule of RULES) {
-    // Vetoes are evaluated on the head only; positive signals may come from
-    // anywhere, since feature text is legitimate evidence of what a thing is.
     if (rule.veto?.some((r) => r.test(head))) continue;
     let score = 0;
     const evidence: string[] = [];
@@ -194,7 +162,6 @@ export function classify(title: string, url = ""): Classification {
   const sorted = [...scores.entries()].sort((a, b) => b[1].score - a[1].score);
   const [topCat, top] = sorted[0];
   const runnerUp = sorted[1]?.[1].score ?? 0;
-  // Confidence rises with absolute evidence and with the margin over #2.
   const margin = (top.score - runnerUp) / Math.max(top.score, 1);
   const confidence = Math.min(
     1,
@@ -208,7 +175,6 @@ export function classify(title: string, url = ""): Classification {
   };
 }
 
-/** Categories that are acceptable substitutes for one another in a query. */
 const COMPATIBLE: Partial<Record<Category, Category[]>> = {
   earbuds: ["headphone"],
   headphone: ["earbuds"],

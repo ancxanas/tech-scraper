@@ -1,11 +1,3 @@
-/**
- * Rich terminal rendering.
- *
- * Everything here degrades gracefully: colours are dropped when NO_COLOR is
- * set, layouts reflow to the terminal width, and any value we are unsure about
- * is rendered dim with a marker rather than presented as fact.
- */
-
 import { colors } from "@cliffy/ansi/colors";
 import { canonicalUrl } from "../core/normalize.ts";
 import { Table } from "@cliffy/table";
@@ -33,7 +25,6 @@ export function rupees(n: number | null): string {
   return `₹${Math.round(n).toLocaleString("en-IN")}`;
 }
 
-/** Colour a 0..100 score: red -> yellow -> green. */
 function scoreColor(v: number): (s: string) => string {
   if (v >= 75) return colors.green;
   if (v >= 55) return colors.yellow;
@@ -153,7 +144,6 @@ function nameCell(r: RankedCandidate, width: number): string {
   return colors.bold(name) + badges;
 }
 
-/** The main ranking table. */
 export function rankTable(ranked: RankedCandidate[], limit: number): string {
   if (ranked.length === 0) return colors.yellow("  No products matched.\n");
 
@@ -195,7 +185,6 @@ export function rankTable(ranked: RankedCandidate[], limit: number): string {
   return table.toString();
 }
 
-/** Detailed cards for the top N picks. */
 export function detailCards(ranked: RankedCandidate[], count: number): string {
   const out: string[] = [];
   for (const r of ranked.slice(0, count)) {
@@ -219,7 +208,6 @@ export function detailCards(ranked: RankedCandidate[], count: number): string {
           : ""
       }`,
     );
-    // What you actually pay, when enrichment fetched the offer block.
     const co = r.checkout;
     if (co) {
       const bits: string[] = [];
@@ -249,7 +237,6 @@ export function detailCards(ranked: RankedCandidate[], count: number): string {
     out.push(`  ${colors.italic(r.verdict)}`);
     out.push("");
 
-    // Score bars
     const dims: Array<[string, number]> = [
       ["Performance", r.score.performance],
       ["Display", r.score.display],
@@ -281,9 +268,6 @@ export function detailCards(ranked: RankedCandidate[], count: number): string {
     );
     out.push("");
 
-    // What buyers actually say. Shown, never scored — marketplace reviews are
-    // incentivised, and Flipkart is the only source we can read, so this is
-    // one shop's customers rather than a market consensus.
     const rv = r.reviews;
     if (rv && (rv.praised.length || rv.complained.length || rv.distribution)) {
       out.push("");
@@ -364,10 +348,7 @@ export function detailCards(ranked: RankedCandidate[], count: number): string {
   return out.join("\n");
 }
 
-/** Side-by-side spec matrix for the top N. */
 export function comparisonMatrix(ranked: RankedCandidate[], count = 5): string {
-  // One row per model family — comparing four memory configs of the same phone
-  // side by side tells the buyer nothing.
   const seen = new Set<string>();
   const top: RankedCandidate[] = [];
   for (const r of ranked) {
@@ -460,7 +441,6 @@ function truncate(s: string, n: number): string {
   return s.length > n ? `${s.slice(0, n - 1)}…` : s;
 }
 
-/** Coverage + funnel diagnostics — where every card went. */
 export function diagnosticsTable(diags: PipelineDiagnostics[]): string {
   const table = new Table()
     .header([
@@ -507,7 +487,6 @@ function fillCell(fill: number): string {
   return paint(`${pct}%`);
 }
 
-/** Why things were thrown out — the check that the filter isn't over-eager. */
 export function rejectionSummary(result: PipelineResult, limit = 8): string {
   const tally = new Map<string, number>();
   for (const d of result.diagnostics) {
@@ -526,7 +505,6 @@ export function rejectionSummary(result: PipelineResult, limit = 8): string {
   return `\n${rule("FILTERED OUT")}\n\n${lines.join("\n")}\n`;
 }
 
-/** Explain the one case where the table is not in descending score order. */
 function sortNote(ranked: RankedCandidate[]): string {
   const matched = ranked.filter((r) => r.matchesRequestedModel);
   if (matched.length === 0 || matched.length === ranked.length) return "";
@@ -548,7 +526,6 @@ export function renderFull(
     details: number;
     compare: boolean;
     diagnostics: boolean;
-    /** How many products were enriched in this run, if any. */
     enriched?: number;
   },
 ): string {
@@ -571,7 +548,6 @@ export function renderFull(
     ),
   );
 
-  // If a lot of the table is guesswork, say so and point at the free fix.
   const unverified =
     result.ranked.filter((r) => r.score.confidence < 0.5).length;
   if (unverified >= 3) {

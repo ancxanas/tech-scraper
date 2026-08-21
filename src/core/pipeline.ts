@@ -1,12 +1,3 @@
-/**
- * End-to-end analysis pipeline: raw platform payloads -> ranked candidates.
- *
- * Deliberately decoupled from BrightData. It takes raw JSON batches from
- * anywhere — a live scrape, a replay directory, or a unit test fixture — so the
- * expensive part (scraping) and the part that needs iteration (ranking) can be
- * developed independently.
- */
-
 import type {
   AnalyzedListing,
   Candidate,
@@ -30,15 +21,10 @@ export interface RawBatch {
 }
 
 export interface PipelineOptions extends RankOptions {
-  /** Extra PDP text keyed by listing id, from `--enrich`. */
   enrichText?: Map<string, string>;
-  /** Checkout details keyed by listing id, from the same enrichment pass. */
   checkoutInfo?: Map<string, import("./checkout.ts").CheckoutInfo>;
-  /** Verified external specs keyed by listing id. */
   externalSpecs?: Map<string, Partial<import("./types.ts").Specs>>;
-  /** Mined review summaries keyed by listing id. */
   reviewData?: Map<string, import("./reviews.ts").ReviewSummary>;
-  /** Keep rejected listings for the diagnostics view. */
   keepRejected?: boolean;
 }
 
@@ -59,11 +45,6 @@ function fieldFill(listings: AnalyzedListing[]): number {
   return hits / (listings.length * fields.length);
 }
 
-/**
- * When the query names a product but no category ("sony wh-1000xm5"), infer the
- * category from what actually came back. Without this the ranker falls through
- * to phone scoring and grades headphones on chipset and camera.
- */
 function inferCategory(listings: AnalyzedListing[]): RankIntent["category"] {
   const tally = new Map<string, number>();
   for (const l of listings) {
@@ -75,12 +56,6 @@ function inferCategory(listings: AnalyzedListing[]): RankIntent["category"] {
   return top[0] as RankIntent["category"];
 }
 
-/**
- * Phase 1: raw payloads -> grouped candidates, with no ranking yet.
- *
- * Exposed separately so specs can be resolved before anything is scored.
- * Ranking must not decide which products it is allowed to learn about.
- */
 export function buildCandidates(
   intentIn: RankIntent,
   batches: RawBatch[],
@@ -114,9 +89,6 @@ export function buildCandidates(
       const hit = c.listings.find((l) => options.checkoutInfo!.has(l.id));
       if (!hit) continue;
       c.checkout = options.checkoutInfo!.get(hit.id);
-      // The checkout block was read from the best offer's own page, so its
-      // availability belongs to that offer. `best` is the same object as
-      // offers[0], so the --in-stock-only gate sees this too.
       if (c.checkout?.inStock !== null && c.checkout?.inStock !== undefined) {
         c.best.inStock = c.checkout.inStock;
       }
@@ -135,8 +107,6 @@ export function runPipeline(
   const allAnalyzed: AnalyzedListing[] = [];
   let intent = intentIn;
 
-  // First pass: normalise + analyse everything, so category inference has
-  // evidence to work from before any gating happens.
   const analyzedByBatch = batches.map((batch) => {
     const { listings, stats } = normalizeBatch(batch.items, batch.platform);
     return {
@@ -153,8 +123,6 @@ export function runPipeline(
     const inferred = inferCategory(analyzedByBatch.flatMap((b) => b.analyzed));
     if (inferred !== "unknown") intent = { ...intent, category: inferred };
   }
-  // Only phones are ranked. If the query turned out to be for something else,
-  // every candidate will be gated out below and the caller reports why.
   const rankableIntent: RankIntent = { ...intent, category: "phone" };
 
   for (const { batch, stats, listings, analyzed } of analyzedByBatch) {
@@ -188,7 +156,7 @@ export function runPipeline(
       priced: listings.filter((l) => l.price !== null).length,
       categoryMatched,
       inBudget,
-      survived: 0, // filled after ranking
+      survived: 0,
       fieldFill: fieldFill(analyzed),
       status: batch.status,
       error: batch.error,
@@ -210,9 +178,6 @@ export function runPipeline(
       const hit = c.listings.find((l) => options.checkoutInfo!.has(l.id));
       if (!hit) continue;
       c.checkout = options.checkoutInfo!.get(hit.id);
-      // The checkout block was read from the best offer's own page, so its
-      // availability belongs to that offer. `best` is the same object as
-      // offers[0], so the --in-stock-only gate sees this too.
       if (c.checkout?.inStock !== null && c.checkout?.inStock !== undefined) {
         c.best.inStock = c.checkout.inStock;
       }
@@ -224,7 +189,6 @@ export function runPipeline(
     options,
   );
 
-  // Attribute survivors back to their source platforms for the coverage table.
   const survivedByPlatform = new Map<string, number>();
   for (const r of ranked) {
     for (const l of r.listings) {

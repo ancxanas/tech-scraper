@@ -1,47 +1,16 @@
-/**
- * Offline SoC knowledge base.
- *
- * Values are AnTuTu **v11** / Geekbench 6 figures used for RELATIVE ranking
- * only.
- *
- * The version matters more than it looks. v10 and v11 differ by 20-45%, and
- * the gap is not a constant -- weaker chips drift furthest. A table holding
- * both versions therefore misranks every comparison that crosses the
- * boundary, which is a hardware-looking difference that no buyer could see
- * and no reviewer could reproduce. So the table is calibrated as a whole,
- * from one source, by `deno task calibrate`.
- *
- * Provenance: 51 entries read from that source's per-chip pages. Apple and
- * the Ultra/Pro MediaTek variants it does not list were converted using the
- * ratio observed on the calibrated chips nearest them. Unisoc's budget parts
- * are absent from it entirely and are measured off phones that use them
- * (T760 from the Moto G35, T8300 from the Redmi A7 Pro 5G) or bridged via
- * the Tiger T615, which two sources both publish. They are never presented as exact measurements — the UI shows
- * them as a performance tier plus an approximate index.
- *
- * `aliases` are matched case-insensitively against product titles, URL slugs
- * and enriched spec blobs. Longest alias wins, so put specific strings first.
- */
-
 export interface SocEntry {
-  /** Canonical display name. */
   name: string;
   vendor: "qualcomm" | "mediatek" | "samsung" | "apple" | "google" | "unisoc";
-  /** Approximate AnTuTu v10 total score. */
   antutu: number;
-  /** Approximate Geekbench 6 single / multi core. */
   gb6Single?: number;
   gb6Multi?: number;
-  /** Fabrication node in nm — proxy for efficiency. */
   nm?: number;
-  /** Launch year of the chip. */
   year: number;
   has5g: boolean;
   aliases: string[];
 }
 
 export const SOCS: SocEntry[] = [
-  // ---------------------------------------------------------------- Qualcomm
   {
     name: "Snapdragon 8 Gen 3",
     vendor: "qualcomm",
@@ -208,7 +177,6 @@ export const SOCS: SocEntry[] = [
     aliases: ["snapdragon 662", "sd 662"],
   },
 
-  // ---------------------------------------------------------------- MediaTek
   {
     name: "Dimensity 9300",
     vendor: "mediatek",
@@ -397,7 +365,6 @@ export const SOCS: SocEntry[] = [
     aliases: ["helio g81", "g81"],
   },
 
-  // ----------------------------------------------------------------- Samsung
   {
     name: "Exynos 1580",
     vendor: "samsung",
@@ -454,10 +421,7 @@ export const SOCS: SocEntry[] = [
     aliases: ["exynos 1280"],
   },
 
-  // ------------------------------------------------------------------ Unisoc
   {
-    // Redmi A7 Pro 5G. Unisoc's budget 5G part is common in the 2026 sub-15k
-    // shelf and its absence here left several phones showing "SoC ?".
     name: "Unisoc T8300",
     vendor: "unisoc",
     antutu: 646113,
@@ -469,8 +433,6 @@ export const SOCS: SocEntry[] = [
     aliases: ["unisoc t8300", "t8300"],
   },
   {
-    // Moto G35 5G. The captured product page says only "Unisoc" plus this
-    // number, so without the entry the page read as no chipset at all.
     name: "Unisoc T760",
     vendor: "unisoc",
     antutu: 628581,
@@ -482,8 +444,6 @@ export const SOCS: SocEntry[] = [
     aliases: ["unisoc t760", "t760"],
   },
   {
-    // Lava Yuva-class entry phones. Genuinely slow — worth knowing rather
-    // than imputing, because an unknown chip gets a median-ish guess.
     name: "Unisoc SC9863A",
     vendor: "unisoc",
     antutu: 160000,
@@ -561,7 +521,6 @@ export const SOCS: SocEntry[] = [
     aliases: ["unisoc t612", "t612"],
   },
 
-  // ------------------------------------------------------------------- Apple
   {
     name: "Apple A18",
     vendor: "apple",
@@ -607,7 +566,6 @@ export const SOCS: SocEntry[] = [
     aliases: ["apple a15", "a15 bionic"],
   },
 
-  // ------------------------------------------------------------------ Google
   {
     name: "Tensor G4",
     vendor: "google",
@@ -630,7 +588,6 @@ export const SOCS: SocEntry[] = [
     has5g: true,
     aliases: ["tensor g3"],
   },
-  // ------------------------------------------------- Qualcomm (added round 4)
   {
     name: "Snapdragon 8 Gen 2",
     vendor: "qualcomm",
@@ -675,7 +632,6 @@ export const SOCS: SocEntry[] = [
     has5g: true,
     aliases: ["snapdragon 7 gen 1", "7 gen 1"],
   },
-  // ------------------------------------------------- MediaTek (added round 4)
   {
     name: "Dimensity 8400 Ultra",
     vendor: "mediatek",
@@ -797,7 +753,6 @@ export const SOCS: SocEntry[] = [
     has5g: false,
     aliases: ["helio g36", "g36"],
   },
-  // --------------------------------------------------- Google (added round 4)
   {
     name: "Tensor G2",
     vendor: "google",
@@ -811,7 +766,6 @@ export const SOCS: SocEntry[] = [
   },
 ];
 
-/** Highest AnTuTu in the KB — used to normalise performance to 0..1. */
 export const MAX_ANTUTU = Math.max(...SOCS.map((s) => s.antutu));
 
 const ALIAS_INDEX: Array<{ alias: string; soc: SocEntry }> = SOCS
@@ -820,30 +774,9 @@ const ALIAS_INDEX: Array<{ alias: string; soc: SocEntry }> = SOCS
 
 export interface SocMatch {
   soc: SocEntry;
-  /**
-   * True when the alias that matched carried no vendor name — Flipkart writes
-   * "128 GB ROM 4 Gen 2 5G | Octa Core Processor", dropping "Snapdragon"
-   * entirely. Such a match is real evidence but a weak identification, because
-   * "4 Gen 2" and "4s Gen 2" are different chips and the abbreviation is
-   * lossy. Callers should not let one overwrite a confident knowledge-base
-   * entry; they should raise it for review instead.
-   */
   ambiguous: boolean;
 }
 
-/** Find a SoC mentioned anywhere in a blob of text, with match quality. */
-/**
- * Resolve a chipset name that arrived in a STRUCTURED field, where the whole
- * string is the chip and nothing else.
- *
- * `matchSoc` scans free text, so it requires a nearby context word before
- * trusting a vendor-less alias — otherwise "Aulumu A17" reads as an Apple
- * A17. That rule is right for page text and wrong here: a spec source that
- * returns Processor = "T7250" has given us the chip with no room for a
- * coincidence, and running it through the text matcher returned nothing,
- * which surfaced as the nonsense conflict "KB says Unisoc T7250, page says
- * T7250".
- */
 export function matchSocExact(name: string): SocEntry | null {
   const n = name.toLowerCase().replace(/\s+/g, " ").trim();
   if (!n) return null;
@@ -860,32 +793,19 @@ export function matchSocDetailed(text: string): SocMatch | null {
   const soc = matchSoc(text);
   if (!soc) return null;
   const hay = text.toLowerCase();
-  // Which alias actually hit? If any matching alias names a vendor, the
-  // identification is solid.
   const hit = soc.aliases.find((a) => hay.includes(a));
   const ambiguous = hit ? !VENDOR_WORDS.test(hit) : true;
   return { soc, ambiguous };
 }
 
-/**
- * Words that establish we are looking at a chipset, not a coincidence.
- *
- * Product pages carry recommendation carousels, and a bare alias will happily
- * match inside another product's name — "Aulumu A17 for iPhone 17 Pro Max
- * Magnetic Thermal Case" once awarded a Rs 8,988 handset an Apple A17 Pro and
- * an AnTuTu of 1.6M, putting it top of the ranking.
- */
 const VENDOR_WORDS =
   /snapdragon|dimensity|helio|exynos|unisoc|tensor|bionic|mediatek|qualcomm|apple/;
 
 const CHIPSET_CONTEXT =
   /processor|chipset|cpu|octa[- ]?core|quad[- ]?core|soc\b|ghz|snapdragon|dimensity|helio|exynos|unisoc|tensor|bionic/i;
 
-/** Find a SoC mentioned anywhere in a blob of text. Longest alias wins. */
 export function matchSoc(text: string): SocEntry | null {
   if (!text) return null;
-  // Flipkart's highlight strings lose spaces when tags are stripped
-  // ("Snapdragon6 | Octa Core"), so re-separate vendor names from their digits.
   const hay = ` ${
     text
       .toLowerCase()
@@ -896,7 +816,6 @@ export function matchSoc(text: string): SocEntry | null {
       )
   } `;
   for (const { alias, soc } of ALIAS_INDEX) {
-    // Bare numeric aliases ("4 gen 2") need word boundaries to avoid false hits.
     const idx = hay.indexOf(alias);
     if (idx === -1) continue;
     const before = hay[idx - 1];
@@ -905,8 +824,6 @@ export function matchSoc(text: string): SocEntry | null {
       c === undefined || /[^a-z0-9]/.test(c);
     if (!isBoundary(before) || !isBoundary(after)) continue;
 
-    // A vendor-less alias ("4 gen 2", "t7250") only counts when the surrounding
-    // text is actually talking about a processor.
     if (!VENDOR_WORDS.test(alias)) {
       const window = hay.slice(Math.max(0, idx - 70), idx + alias.length + 70);
       if (!CHIPSET_CONTEXT.test(window)) continue;

@@ -1,13 +1,3 @@
-/**
- * Variant grouping.
- *
- * A marketplace search returns the same phone many times: once per colour, per
- * storage tier, per seller, per platform. The old pipeline deduped on the exact
- * normalised name, so four colours of the same phone occupied four of the top
- * ten slots. Here one *model + memory config* is one candidate, and every card
- * we saw for it becomes an offer inside that candidate.
- */
-
 import type { AnalyzedListing, Candidate, Offer, Specs } from "./types.ts";
 
 function mergeSpecs(listings: AnalyzedListing[]): {
@@ -16,7 +6,6 @@ function mergeSpecs(listings: AnalyzedListing[]): {
   completeness: number;
   kbConfidence: Candidate["kbConfidence"];
 } {
-  // Prefer the listing that knows the most, then fill gaps from the others.
   const ordered = [...listings].sort((a, b) =>
     b.specCompleteness - a.specCompleteness
   );
@@ -44,15 +33,12 @@ function mergeSpecs(listings: AnalyzedListing[]): {
   };
 }
 
-/** Rating across platforms, weighted by how many people actually rated. */
 function blendRating(listings: AnalyzedListing[]): {
   rating: number | null;
   count: number | null;
 } {
   const rated = listings.filter((l) => l.rating !== null && l.rating > 0);
   if (rated.length === 0) return { rating: null, count: null };
-  // Per-platform max review count (the same platform repeats the same number
-  // across colour variants — summing it would inflate confidence).
   const perPlatform = new Map<string, { rating: number; count: number }>();
   for (const l of rated) {
     const count = l.ratingCount ?? 0;
@@ -87,13 +73,6 @@ function toOffer(l: AnalyzedListing): Offer | null {
   };
 }
 
-/**
- * Group listings into candidates.
- *
- * Cards with no price still join their model group — they contribute specs,
- * ratings and cross-platform evidence even though they cannot be the best
- * offer. That is how a 45%-broken scrape still produces a complete picture.
- */
 export function groupListings(listings: AnalyzedListing[]): Candidate[] {
   const byModel = new Map<string, AnalyzedListing[]>();
   for (const l of listings) {
@@ -106,7 +85,6 @@ export function groupListings(listings: AnalyzedListing[]): Candidate[] {
   const candidates: Candidate[] = [];
 
   for (const [modelKey, group] of byModel) {
-    // Split by memory config: 6/128 and 8/256 are genuinely different buys.
     const byConfig = new Map<string, AnalyzedListing[]>();
     for (const l of group) {
       const arr = byConfig.get(l.configKey);
@@ -114,9 +92,6 @@ export function groupListings(listings: AnalyzedListing[]): Candidate[] {
       else byConfig.set(l.configKey, [l]);
     }
 
-    // Partially-known configs ("?r-128s") and fully unknown ones ("?r-?s") must
-    // not become phantom candidates alongside the real 6/128 and 8/128 entries.
-    // Fold each into the best-matching fully-known config.
     foldPartialConfigs(byConfig);
 
     const configPrices: Array<{ configKey: string; price: number }> = [];
@@ -133,14 +108,11 @@ export function groupListings(listings: AnalyzedListing[]): Candidate[] {
       const offers = ls
         .map(toOffer)
         .filter((o): o is Offer => o !== null)
-        // Cheapest first, but a known-in-stock offer outranks an unknown one
-        // at the same price.
         .sort((a, b) =>
           a.price - b.price ||
           (b.inStock === true ? 1 : 0) - (a.inStock === true ? 1 : 0)
         );
 
-      // Dedupe offers: same platform + same price is the same deal.
       const seen = new Set<string>();
       const uniqueOffers = offers.filter((o) => {
         const k = `${o.platform}:${o.price}`;
@@ -149,7 +121,7 @@ export function groupListings(listings: AnalyzedListing[]): Candidate[] {
         return true;
       });
 
-      if (uniqueOffers.length === 0) continue; // nothing purchasable here
+      if (uniqueOffers.length === 0) continue;
 
       const { specs, sources, completeness, kbConfidence } = mergeSpecs(ls);
       const { rating, count } = blendRating(ls);
@@ -178,14 +150,6 @@ export function groupListings(listings: AnalyzedListing[]): Candidate[] {
   return candidates;
 }
 
-/**
- * Merge configs that are only partially known into fully-known siblings.
- *
- * A Flipkart card recovered from a URL slug often yields storage but not RAM
- * ("?r-128s"). Left alone it would appear as a second, duplicate row for a
- * phone we already list as 6/128. Matching rule: same storage wins; otherwise
- * the cheapest known config absorbs it.
- */
 function foldPartialConfigs(byConfig: Map<string, AnalyzedListing[]>): void {
   if (byConfig.size < 2) return;
 
@@ -195,7 +159,7 @@ function foldPartialConfigs(byConfig: Map<string, AnalyzedListing[]>): void {
   const partial = [...byConfig.keys()].filter((k) => k.includes("?"));
   for (const key of partial) {
     const orphans = byConfig.get(key)!;
-    const storage = key.split("-")[1]; // "128s" or "?s"
+    const storage = key.split("-")[1];
 
     const sameStorage = known.filter((k) => k.split("-")[1] === storage);
     const pool = sameStorage.length ? sameStorage : known;
@@ -242,8 +206,6 @@ function buildDisplayName(
         : `${specs.storageGb}GB`,
     );
   }
-  // Surface SKU qualifiers (carrier-locked, refurbished) in the name itself —
-  // they are the whole reason the price looks good.
   const qualifier = modelKey.split("#")[1];
   const suffix = qualifier ? ` [${qualifier.replace(/\+/g, " + ")}]` : "";
   return (cfg.length ? `${base} (${cfg.join("/")})` : base) + suffix;

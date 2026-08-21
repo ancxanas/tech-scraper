@@ -1,14 +1,3 @@
-/**
- * Raw marketplace record -> canonical `Listing`.
- *
- * The single most important job here is LOSS RECOVERY. Marketplace scrapers
- * routinely return cards where the title/price selector missed but the product
- * URL is intact (in the sample Flipkart run, 54 of 120 cards). Those cards used
- * to be silently dropped, which is how a "phones under 15000" search ended up
- * ranking ₹1,599 earphones: the good cards were thrown away and the junk that
- * happened to parse survived.
- */
-
 import type { Listing, PlatformId } from "./types.ts";
 
 const PLATFORM_NAMES: Record<PlatformId, string> = {
@@ -29,10 +18,6 @@ function firstString(raw: Raw, keys: string[]): string | null {
   return null;
 }
 
-/**
- * Money arrives as a number, a string ("₹13,999", "13,999.00"), or an object
- * ({value, currency, symbol}). Normalise all three.
- */
 export function parseMoney(v: unknown): number | null {
   if (v === null || v === undefined) return null;
   if (typeof v === "number") return Number.isFinite(v) && v > 0 ? v : null;
@@ -58,7 +43,6 @@ function parsePercent(v: unknown): number | null {
   return n > 0 && n <= 100 ? n : null;
 }
 
-/** BrightData emits some booleans as the strings "true"/"false". */
 function parseBool(v: unknown): boolean | null {
   if (typeof v === "boolean") return v;
   if (typeof v === "string") {
@@ -72,7 +56,6 @@ function parseBool(v: unknown): boolean | null {
 function parseRating(v: unknown): number | null {
   const n = typeof v === "number" ? v : Number.parseFloat(String(v ?? ""));
   if (!Number.isFinite(n)) return null;
-  // Some sources give a percentage or a 0..100 score.
   if (n > 5 && n <= 100) return Math.round((n / 20) * 10) / 10;
   return n > 0 && n <= 5 ? n : null;
 }
@@ -91,7 +74,6 @@ function parseCount(v: unknown): number | null {
   return Math.round(n);
 }
 
-/** Brand casing that title-casing would otherwise mangle. */
 const BRAND_CASING: Record<string, string> = {
   poco: "POCO",
   iqoo: "iQOO",
@@ -126,18 +108,11 @@ const BRAND_CASING: Record<string, string> = {
 function titleCaseToken(tok: string): string {
   const lower = tok.toLowerCase();
   if (BRAND_CASING[lower]) return BRAND_CASING[lower];
-  // Alphanumeric model codes like "c85x", "m7", "sc26" -> uppercase.
   if (/^[a-z]{1,3}\d+[a-z]?$/.test(lower)) return lower.toUpperCase();
   if (/^\d/.test(lower)) return lower;
   return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
 
-/**
- * Recover a product title from a marketplace URL slug.
- *
- *   /poco-c85x-sunset-gold-128-gb/p/itm5e9...  ->  "POCO C85X Sunset Gold 128 GB"
- *   /product/samsung-galaxy-m06-5g-black-lgm2 ->  "Samsung Galaxy M06 5G Black"
- */
 export function titleFromUrl(url: string): string | null {
   if (!url) return null;
   let path: string;
@@ -150,7 +125,6 @@ export function titleFromUrl(url: string): string | null {
   const segments = path.split("/").filter(Boolean);
   if (segments.length === 0) return null;
 
-  // Flipkart: /<slug>/p/<itemid>. Reliance: /product/<slug>. Amazon: /<slug>/dp/<asin>.
   let slug = segments[0];
   const pIdx = segments.findIndex((s) => s === "p" || s === "dp");
   if (pIdx > 0) slug = segments[pIdx - 1];
@@ -158,7 +132,6 @@ export function titleFromUrl(url: string): string | null {
   else slug = segments[segments.length - 1];
 
   if (!slug || slug.length < 4) return null;
-  // Drop trailing opaque ids ("lgm2lf", "itm5e970a19e6ad3", pure hashes).
   const tokens = slug
     .split(/[-_]/)
     .filter((t) => t.length > 0)
@@ -167,7 +140,6 @@ export function titleFromUrl(url: string): string | null {
 
   if (tokens.length === 0) return null;
   const last = tokens[tokens.length - 1];
-  // Reliance appends a 5-8 char alphanumeric SKU with no vowels/meaning.
   if (
     tokens.length > 2 && /^[a-z0-9]{5,8}$/i.test(last) &&
     !/^\d+(gb|tb|mp|mah|hz)?$/i.test(last)
@@ -209,7 +181,6 @@ function stableId(platform: string, url: string, title: string): string {
   return `${platform}:${(h >>> 0).toString(36)}`;
 }
 
-/** Strip marketplace tracking noise so URLs dedupe cleanly. */
 export function canonicalUrl(url: string): string {
   if (!url) return "";
   try {
@@ -231,14 +202,9 @@ export interface NormalizeStats {
   rawCards: number;
   titleRecovered: number;
   dropped: number;
-  /** Cards dropped because they carried an upstream scraper error. */
   errorCards: number;
 }
 
-/**
- * Normalise a batch of raw records from one platform.
- * Never throws; unusable records are counted, not silently swallowed.
- */
 export function normalizeBatch(
   rawItems: unknown[],
   platformHint?: PlatformId,
@@ -301,10 +267,6 @@ export function normalizeBatch(
       raw.original_price ?? raw.initial_price ?? raw.originalPrice ?? raw.mrp ??
         raw.list_price ?? raw.strike_price,
     );
-    // An "MRP" below the selling price is a parse artefact, not a discount.
-    // An MRP more than 5x the price is likewise bad data (one Amazon card
-    // claimed ₹1,59,994 MRP on an ₹8,899 phone), so it is discarded rather
-    // than rewarded with a 94% discount.
     let mrp = mrpRaw;
     if (mrp !== null && price !== null && (mrp <= price || mrp > price * 5)) {
       mrp = null;
@@ -330,7 +292,6 @@ export function normalizeBatch(
       if (/out of stock|sold out|unavailable|currently unavailable/.test(a)) {
         inStock = false;
       } else if (/in stock|available|pincode/.test(a)) {
-        // "Please enter a pincode" is Reliance's default — unknown, not absent.
         inStock = /pincode/.test(a) ? null : true;
       }
     }

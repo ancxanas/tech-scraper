@@ -1,26 +1,7 @@
-/**
- * Review mining.
- *
- * Star ratings do not discriminate in this segment — nearly every phone sits
- * between 4.1 and 4.3, so the number carries almost no information about which
- * to buy. What buyers actually write does: heating, battery drain, a dim
- * screen, a camera that disappoints, service that never answers.
- *
- * This is deliberately a lexicon, not a model. It is deterministic, testable
- * offline, and its mistakes are inspectable. It also stays DISPLAY-ONLY: the
- * counts are shown to the reader and do not move the score. Marketplace
- * reviews are incentivised and gamed, and this project has already been bitten
- * twice by trusting a source further than it deserved.
- *
- * Flipkart only. Amazon's review pages are bot-blocked, so the UI must say
- * whose buyers are talking rather than implying a market-wide consensus.
- */
-
 export interface Review {
   stars: number;
   text: string;
   verified: boolean;
-  /** As printed, e.g. "Mar, 2025". */
   date: string | null;
 }
 
@@ -36,7 +17,6 @@ export interface AspectTally {
   aspect: string;
   positive: number;
   negative: number;
-  /** A short buyer phrase, for showing rather than asserting. */
   example: string | null;
 }
 
@@ -44,7 +24,6 @@ export interface ReviewSummary {
   totalRatings: number | null;
   totalReviews: number | null;
   distribution: RatingDistribution | null;
-  /** Share of 1- and 2-star ratings, 0..1. */
   negativeShare: number | null;
   sampled: number;
   aspects: AspectTally[];
@@ -52,7 +31,6 @@ export interface ReviewSummary {
   complained: AspectTally[];
 }
 
-/** Aspect -> the words buyers use for it. */
 const ASPECTS: Array<[string, RegExp]> = [
   ["battery", /\b(battery|backup|charg\w*|drain\w*|power\s*bank)\b/i],
   ["heating", /\b(heat\w*|hot|overheat\w*|temperature|warm)\b/i],
@@ -81,7 +59,6 @@ const NEGATIVE =
 const NEGATION =
   /\b(not|no|never|isn'?t|doesn'?t|don'?t|can'?t|won'?t|without)\b/i;
 
-/** Aspects that are complaints by their very mention. */
 const INHERENTLY_NEGATIVE = new Set(["heating"]);
 
 function decodeEntities(s: string): string {
@@ -92,7 +69,6 @@ function decodeEntities(s: string): string {
     .replace(/&nbsp;/g, " ");
 }
 
-/** Parse the ratings histogram: "1 ★ 1,239 2 ★ 647 …". */
 export function parseDistribution(text: string): RatingDistribution | null {
   const out: Partial<RatingDistribution> = {};
   for (const m of text.matchAll(/([1-5])\s*★\s*([\d,]+)/g)) {
@@ -105,13 +81,6 @@ export function parseDistribution(text: string): RatingDistribution | null {
     : null;
 }
 
-/**
- * Split a reviews page into individual reviews.
- *
- * Each begins with its own star score: "4.0 • Value-for-money Review for:
- * Color Ocean Blue • RAM 8 GB • Storage 128 GB <body> <name> , <city>
- * Helpful for 370 150 Verified Purchase · Mar, 2025".
- */
 export function parseReviews(text: string): Review[] {
   const out: Review[] = [];
   const parts = text.split(/(?=\b[1-5]\.\d\s*•\s)/);
@@ -121,11 +90,8 @@ export function parseReviews(text: string): Review[] {
     if (!head) continue;
 
     let body = part.slice(head[0].length);
-    // "Review for: Color X • RAM 8 GB • Storage 128 GB" is boilerplate, and
-    // leaving it in would have every review mention "storage".
     body = body.replace(/Review for:[^|]*?Storage\s*\d+\s*GB\s*/i, " ");
     body = body.replace(/Review for:\s*/i, " ");
-    // Trailing attribution carries no opinion.
     body = body.replace(/\s*Helpful for[\s\S]*$/i, " ");
 
     out.push({
@@ -140,7 +106,6 @@ export function parseReviews(text: string): Review[] {
   return out;
 }
 
-/** Split a review into clauses, so polarity is judged near the aspect. */
 function clauses(text: string): string[] {
   return text
     .split(/[.!?,;]+|\band\b|\bbut\b/i)
@@ -148,13 +113,6 @@ function clauses(text: string): string[] {
     .filter((c) => c.length > 2);
 }
 
-/**
- * Count how buyers speak about each aspect.
- *
- * Polarity is judged clause by clause, not per review: "Phone speed just wow.
- * Camera not good." must register performance-positive and camera-negative,
- * not one muddled average.
- */
 export function mineAspects(reviews: Review[]): AspectTally[] {
   const tally = new Map<string, AspectTally>();
 
@@ -169,7 +127,6 @@ export function mineAspects(reviews: Review[]): AspectTally[] {
         let positive = POSITIVE.test(clause);
         let negative = NEGATIVE.test(clause);
         if (NEGATION.test(clause)) {
-          // "not good" is a complaint; "no heating issues" is praise.
           [positive, negative] = [negative, positive];
         }
         if (INHERENTLY_NEGATIVE.has(aspect) && !NEGATION.test(clause)) {
@@ -181,7 +138,7 @@ export function mineAspects(reviews: Review[]): AspectTally[] {
         else if (negative && !positive) entry.negative++;
         else if (review.stars >= 4) entry.positive++;
         else if (review.stars <= 2) entry.negative++;
-        else continue; // genuinely neutral mention
+        else continue;
 
         if (!entry.example && clause.length <= 70) entry.example = clause;
         tally.set(aspect, entry);
@@ -194,7 +151,6 @@ export function mineAspects(reviews: Review[]): AspectTally[] {
   );
 }
 
-/** Full summary for one product's reviews page. */
 export function summariseReviews(pageText: string): ReviewSummary {
   const distribution = parseDistribution(pageText);
   const totals = pageText.match(
@@ -212,8 +168,6 @@ export function summariseReviews(pageText: string): ReviewSummary {
       )
     : null;
 
-  // Only report a verdict where buyers were reasonably consistent. A single
-  // grumble is not a pattern.
   const MIN_MENTIONS = 2;
   const decisive = (a: AspectTally, side: "pos" | "neg") => {
     const [win, lose] = side === "pos"
@@ -234,13 +188,6 @@ export function summariseReviews(pageText: string): ReviewSummary {
   };
 }
 
-/**
- * PDP URL -> reviews URL. Flipkart only; other marketplaces block theirs.
- *
- * The `pid` parameter must be carried across. Without it Flipkart serves a
- * reviews page with no ratings histogram and no reviews at all — which looks
- * exactly like a product nobody has reviewed, rather than a malformed request.
- */
 export function reviewsUrlFor(productUrl: string): string | null {
   if (!/flipkart\.com/.test(productUrl) || !productUrl.includes("/p/")) {
     return null;

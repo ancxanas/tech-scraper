@@ -1,14 +1,5 @@
 import { bdFetch } from "./brightdata.ts";
 
-/**
- * Fetch a page directly, with no proxy and no credit cost.
- *
- * Marketplaces block datacenter IPs aggressively (Flipkart returns 403 from
- * any cloud host), but a residential connection in-country often sails
- * through. Since this is free, it is always worth trying before spending a Web
- * Unlocker request — and Web Unlocker requires business KYC, which not every
- * account has.
- */
 export async function fetchDirect(
   url: string,
   timeoutMs = 15_000,
@@ -35,20 +26,6 @@ export async function fetchDirect(
   }
 }
 
-/**
- * Harvest text nodes out of the JSON state blob embedded in the page.
- *
- * Flipkart ships the full specification table inside `__INITIAL_STATE__` as
- * {"label_0":{"value":{"text":"Display Type"}},"label_1":{"value":{"text":
- * ["HD+ 120Hz Display"]}}} — so stripping <script> tags, which is what a naive
- * html-to-text does, throws away the richest data on the page. The visible
- * markup only carries the marketing highlights.
- *
- * Rather than parse that structure (deeply nested and liable to change), this
- * harvests every "text" node and concatenates the distinct values. Order is
- * lost, which is fine: extraction is regex over key:value fragments such as
- * "Refresh Rate:120Hz" and "5160 mAh".
- */
 export function jsonStateText(html: string, cap = 20_000): string {
   const out: string[] = [];
   const re =
@@ -65,12 +42,10 @@ export function jsonStateText(html: string, cap = 20_000): string {
   return [...new Set(out)].join(" | ").slice(0, cap);
 }
 
-/** Visible text plus the embedded JSON spec table. */
 export function pageToText(html: string): string {
   return `${htmlToText(html)} | ${jsonStateText(html)}`;
 }
 
-/** Crude HTML -> text. Enough for regex spec extraction; no DOM needed. */
 export function htmlToText(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")

@@ -1,12 +1,3 @@
-/**
- * BrightData Data Collector API (DCA) driver.
- *
- * Extracted from the v1 `tools/scraper.ts`, which bundled this with a product
- * parser that the v2 pipeline replaced. Only the transport belongs here now:
- * trigger a collection, poll until it yields records, surface failures loudly
- * rather than returning an empty array that looks like "no results".
- */
-
 import { bdFetch, pollUntil } from "./brightdata.ts";
 
 interface TriggerBatchResponse {

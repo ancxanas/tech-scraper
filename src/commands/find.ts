@@ -1,11 +1,3 @@
-/**
- * `find` — live search: scrape, save the raw payloads, then rank offline.
- *
- * The raw payloads are written to disk BEFORE analysis, so a crash in the
- * ranking code never costs a scrape credit, and any run can be replayed with
- * `rank --replay` afterwards.
- */
-
 import { Command } from "@cliffy/command";
 import { colors } from "@cliffy/ansi/colors";
 import { ALL_ENABLED, type Platform, PLATFORMS } from "../config.ts";
@@ -34,8 +26,6 @@ function parsePlatforms(raw?: string): Platform[] {
   const picked = valid.filter((p) => wanted.includes(p));
   if (!picked.length) return ALL_ENABLED;
 
-  // Opting in to a platform that is off by default is allowed — but say why
-  // it is off, so a run that returns nothing from it is not a surprise.
   for (const p of picked) {
     const config = PLATFORMS[p];
     if (!config.enabled && config.disabledReason) {
@@ -49,7 +39,6 @@ function parsePlatforms(raw?: string): Platform[] {
   return picked;
 }
 
-/** Optional LLM pass; failures are non-fatal, rules already gave us an intent. */
 async function maybeEnhanceIntent(intent: RankIntent): Promise<RankIntent> {
   if (!Deno.env.get("GEMINI_API_KEY")) return intent;
   try {
@@ -57,8 +46,6 @@ async function maybeEnhanceIntent(intent: RankIntent): Promise<RankIntent> {
     const llm = await parseIntent(intent.raw);
     return {
       ...intent,
-      // Only fill gaps — the deterministic parse is the source of truth for
-      // anything it was confident about.
       category: intent.category === "unknown"
         ? (llm.category as RankIntent["category"]) ?? "unknown"
         : intent.category,
@@ -139,7 +126,6 @@ export const findCommand = new Command()
     let intent = parseIntentRules(query);
     intent = await maybeEnhanceIntent(intent);
 
-    // Refuse before spending a single request, not after.
     const unsupported = unsupportedReason(intent);
     if (unsupported) {
       console.error(colors.yellow(`\n  ${unsupported}`));
@@ -195,8 +181,6 @@ export const findCommand = new Command()
       budgetTolerance: (options.budgetTolerance ?? 0) / 100,
     });
 
-    // Re-rank with recorded history so the deal score reflects whether this
-    // price is actually good *for this product*, not just good-looking today.
     if (options.history !== false && result.ranked.length > 0) {
       const stats = await getStatsFor(result.ranked.map((r) => r.key));
       if (stats.size > 0) {
@@ -208,10 +192,6 @@ export const findCommand = new Command()
       }
     }
 
-    // Resolve specs BEFORE ranking, exactly as `rank` does. Ranking first and
-    // enriching the leaders — which this command used to do — is circular: a
-    // phone ranks low because its specs are unknown, so it never gets
-    // resolved, so it stays low.
     if (options.specs !== false) {
       const { candidates } = buildCandidates(intent, batches);
       const resolved = await resolveSpecs(candidates, {
@@ -260,7 +240,7 @@ export const findCommand = new Command()
             ),
           );
         }
-      } catch { /* price history is a bonus, never fatal */ }
+      } catch { /* ignored */ }
     }
 
     if (options.json) {

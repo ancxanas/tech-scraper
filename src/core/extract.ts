@@ -1,11 +1,3 @@
-/**
- * Spec extraction: title/slug parsing merged with the offline knowledge base.
- *
- * Precedence: enriched PDP data > knowledge base > title/slug regex > inferred.
- * Every field records where it came from so the UI can be honest about what is
- * measured vs. assumed.
- */
-
 import type { AnalyzedListing, Listing, Specs, SpecSource } from "./types.ts";
 import { classify } from "./classify.ts";
 import { lookupModel } from "../knowledge/models.ts";
@@ -68,8 +60,6 @@ export function detectBrand(text: string): string | null {
   return null;
 }
 
-/** Colour words and their modifiers. In Indian listings the model name always
- * ends where the colour begins, so these act as a truncation point. */
 const COLOUR_WORDS = new Set([
   "black",
   "white",
@@ -166,7 +156,6 @@ const COLOUR_WORDS = new Set([
   "soft",
 ]);
 
-/** Words that mark a materially different SKU, not a colour. */
 const QUALIFIERS: Array<[RegExp, string]> = [
   [/\block(?:ed)?\s+with\s+([a-z]+)/i, "carrier-locked"],
   [/\brefurbish(?:ed)?\b/i, "refurbished"],
@@ -176,7 +165,6 @@ const QUALIFIERS: Array<[RegExp, string]> = [
   [/\bwith\s+offer\b|\bcombo\b/i, "bundle"],
 ];
 
-/** SKU qualifiers that must be surfaced to the buyer, not silently merged. */
 export function detectQualifiers(title: string): string[] {
   const found: string[] = [];
   for (const [re, label] of QUALIFIERS) {
@@ -185,24 +173,11 @@ export function detectQualifiers(title: string): string[] {
   return found;
 }
 
-/**
- * Strip colour/config noise to get a stable model identity.
- *
- *   "POCO M7 5G (Ocean Blue, 128 GB) (8 GB RAM)"        -> "poco m7 5g"
- *   "POCO M7 5G Satin Black 128 GB"        (from slug)  -> "poco m7 5g"
- *   "POCO M7 5G - Locked with Airtel Prepaid (Mint...)" -> "poco m7 5g #carrier-locked"
- *
- * The last case matters: a carrier-locked SKU is cheaper for a reason and must
- * never be merged into the unlocked phone's offer list.
- */
 export function deriveModelKey(title: string): string {
   const qualifiers = detectQualifiers(title);
 
-  // Amazon writes "<product> | <feature> | <feature>"; Flipkart does not. Left
-  // in, those feature tokens become part of the model key and the same phone
-  // fails to group across platforms — "realme narzo 100 lite 5g" on Flipkart
-  // vs "realme narzo 100 lite 5g 7000mah" on Amazon. Cross-platform offer
-  // comparison is the whole point of scraping four sites, so cut the tail.
+  // Amazon titles carry "| feature | feature" tails; left in, they become
+  // part of the model key and break grouping.
   let head = title.split("|")[0];
   let cutAt = Infinity;
   for (const [re] of QUALIFIERS) {
@@ -212,7 +187,7 @@ export function deriveModelKey(title: string): string {
   if (cutAt !== Infinity) head = head.slice(0, cutAt);
 
   let t = head.toLowerCase();
-  t = t.replace(/\([^)]*\)/g, " "); // drop parenthesised colour/config groups
+  t = t.replace(/\([^)]*\)/g, " ");
   t = t.replace(/\b\d+\s*(gb|tb)\b\s*(ram|rom|storage)?/g, " ");
   t = t.replace(/[^a-z0-9+\s]/g, " ").replace(/\s+/g, " ").trim();
 
@@ -239,8 +214,6 @@ export function deriveModelKey(title: string): string {
   const out: string[] = [];
   for (const tok of t.split(" ")) {
     if (!tok) continue;
-    // Truncate at the first colour word or filler, but only once we have a
-    // plausible model name (brand + at least one model token).
     if (out.length >= 2 && (COLOUR_WORDS.has(tok) || stop.has(tok))) break;
     if (out.length < 2 && stop.has(tok)) continue;
     out.push(tok);
@@ -257,7 +230,6 @@ function num(m: RegExpMatchArray | null, i = 1): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Parse whatever specs the listing text exposes. */
 export function specsFromText(text: string): {
   specs: Partial<Specs>;
   sources: Partial<Record<keyof Specs, SpecSource>>;
@@ -275,7 +247,6 @@ export function specsFromText(text: string): {
     }
   };
 
-  // RAM: "(8 GB RAM)" or "8GB RAM" or "8+128"
   set("ramGb", num(text.match(/(\d+)\s*gb\s*ram/i)), "title");
   const plus = text.match(/\b(\d+)\s*\+\s*(\d+)\s*gb\b/i);
   if (plus) {
@@ -283,7 +254,6 @@ export function specsFromText(text: string): {
     set("storageGb", Number.parseInt(plus[2]), "title");
   }
 
-  // Storage: "(Colour, 128 GB)" — the second capture of the config group.
   const cfg = text.match(/\(\s*[^,()]+,\s*(\d+)\s*(gb|tb)\s*\)/i);
   if (cfg) {
     const v = Number.parseInt(cfg[1]) *
@@ -331,7 +301,6 @@ export function specsFromText(text: string): {
   );
   if (colour) set("colour", colour[1].trim(), "title");
 
-  // Some listings state the benchmark directly: "AnTuTu 623K+".
   const antutuClaim = text.match(/antutu\s*:?\s*(\d{2,4})\s*k\b/i) ??
     text.match(/antutu\s*:?\s*(\d{5,7})\b/i);
   if (antutuClaim) {
@@ -357,28 +326,10 @@ export function specsFromText(text: string): {
 }
 
 export interface AnalyzeOptions {
-  /** Extra text per listing id from PDP enrichment. */
   enrichText?: Map<string, string>;
-  /**
-   * Verified specs from an external database, keyed by listing id. These
-   * outrank everything: a dedicated spec source beats a merchant page, which
-   * has been observed reporting a phone's touch sampling rate as its refresh
-   * rate and a 25W charger as 45W.
-   */
   externalSpecs?: Map<string, Partial<Specs>>;
 }
 
-/**
- * Reject values that cannot describe a smartphone.
- *
- * Product pages carry recommendation carousels and cross-sell blocks, so a
- * number matched anywhere on the page may belong to a power bank or another
- * handset. A live run gave a Rs 2,699 keypad phone "20,000 mAh", "8/128GB",
- * "50MP OIS" and "5G", then badged it BATTERY KING at #4.
- *
- * These bounds are deliberately generous — they exclude the impossible, not
- * the merely unusual.
- */
 function plausible(specs: Partial<Specs>): void {
   const drop = <K extends keyof Specs>(k: K) => {
     delete specs[k];
@@ -412,8 +363,6 @@ function plausible(specs: Partial<Specs>): void {
     drop("refreshHz");
   }
 
-  // A screen under 4.5" is not a modern smartphone panel, so anything the
-  // extractor "found" alongside it came from elsewhere on the page.
   if (specs.displayInches != null && specs.displayInches < 4.5) {
     drop("displayInches");
     drop("refreshHz");
@@ -467,7 +416,6 @@ export function analyze(
     }
   };
 
-  // 0. A verified external spec database outranks everything else.
   const external = opts.externalSpecs?.get(listing.id);
   if (external) {
     const srcs: Partial<Record<keyof Specs, SpecSource>> = {};
@@ -477,22 +425,6 @@ export function analyze(
     apply(external, srcs, true);
   }
 
-  // 1. Enriched PDP text — but not over a knowledge-base entry we trust.
-  //
-  // Product pages are not just the product. They carry recommendation
-  // carousels, comparison tables and cross-sell blocks, so a value matched
-  // anywhere on the page may belong to a different handset entirely. A replay
-  // over the 14:39 run showed exactly that once enrichment reached more
-  // pages: the Moto G45 came back AMOLED (it is IPS LCD), the Galaxy F07 came
-  // back with 70W charging (it is 25W), the Redmi A7 Pro 4G was given a
-  // Dimensity 6300 (it is a Unisoc T7250), and the Galaxy F17 5G an
-  // unambiguous but wrong Dimensity 6100+.
-  //
-  // So for a model the knowledge base describes with HIGH confidence, the KB
-  // goes first and the page may only fill the gaps it leaves. Anywhere they
-  // disagree is reported rather than silently applied. Medium and low
-  // confidence entries still yield to the page, which is the case where the
-  // page is usually the better source.
   const kbPreview = lookupModel(listing.title) ?? lookupModel(slugText);
   const kbIsTrusted = kbPreview?.confidence === "high";
 
@@ -533,7 +465,6 @@ export function analyze(
     apply(e.specs, e.sources, external || kbIsTrusted ? false : true);
   }
 
-  // 2. Knowledge base for the resolved model.
   const modelKey = deriveModelKey(listing.title);
   const kb = kbPreview;
   if (kb) {
@@ -556,11 +487,9 @@ export function analyze(
     }
   }
 
-  // 3. Title / slug regex fills the rest.
   const t = specsFromText(fullText);
   apply(t.specs, t.sources, false);
 
-  // 4. Cheap inferences.
   if (specs.has5g === null && /\b4g\b/i.test(listing.title)) {
     specs.has5g = false;
     sources.has5g = "title";
@@ -588,7 +517,6 @@ export function analyze(
   };
 }
 
-/** Human-facing product name: drop the colour/marketing tail, keep config. */
 export function cleanModelName(title: string): string {
   let t = title.replace(/\s+/g, " ").trim();
   t = t.replace(/\s*\|\s*.*$/, "");

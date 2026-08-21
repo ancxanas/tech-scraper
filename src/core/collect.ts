@@ -1,17 +1,3 @@
-/**
- * Live collection layer.
- *
- * Returns RAW platform payloads — no parsing, no filtering. Everything
- * downstream (normalise → classify → group → rank) works identically on live
- * payloads and on replayed ones, so ranking can be iterated for free.
- *
- * Also fixes the URL construction bugs that poisoned the old runs:
- *   - Reliance was hard-coded to /collection/smartphones regardless of query,
- *     which is why a "phones under 15000" search returned ₹499 earphones.
- *   - Tata CLiQ used a category code glued into the text param, producing a
- *     URL whose product grid never renders (hence wait_element_timeout).
- */
-
 import { colors } from "@cliffy/ansi/colors";
 import { type Platform, PLATFORMS } from "../config.ts";
 import { runCollector } from "../lib/collector.ts";
@@ -19,27 +5,12 @@ import { searchAmazonPreBuilt } from "../lib/amazon-dataset.ts";
 import type { PlatformId, RankIntent } from "./types.ts";
 import type { RawBatch } from "./pipeline.ts";
 
-/**
- * How deep to go on each platform for a given `--pages` value.
- *
- * Measured on the reference run, "one page" is not one thing:
- *
- *   Flipkart collector, 1 seed URL -> 120 cards spanning result pages 1-5.
- *     The collector paginates internally.
- *   Amazon prebuilt dataset, pages_to_search: 1 -> 16 products, page 1 only.
- *     Thin enough that Amazon contributed 8 in-budget products to a
- *     48-product ranking while Flipkart contributed 65.
- *
- * So `--pages` is scaled per platform to mean comparable breadth rather than
- * an equal number of requests.
- */
 function depthFor(platform: Platform, pages: number): number {
   return platform === "amazon" ? pages * 3 : pages;
 }
 
 export interface CollectOptions {
   pages: number;
-  /** Hard ceiling on collector invocations for this run — credit guard. */
   maxRequests?: number;
   timeoutMs?: number;
 }
@@ -55,21 +26,6 @@ const CATEGORY_HINT: Record<string, string> = {
   camera: "camera",
 };
 
-/** The keyword string we actually send to a marketplace search box. */
-/**
- * The keyword actually typed into the marketplace search box.
- *
- * This used to discard the query and send a bare category word: "best phones
- * under 15000" became "mobile phone". Marketplace relevance ranking is driven
- * by the phrase, so that generic term returned keypad feature phones, obscure
- * white-label listings and accessories, while the popular value handsets
- * (Redmi, realme, POCO, iQOO) never appeared at all. The budget facet on the
- * URL cannot compensate — it filters what came back, it does not change what
- * the site chose to return.
- *
- * The user's own words are the best query. Only the parts that mean nothing to
- * a search box are stripped: superlatives like "best", and filler.
- */
 const QUERY_NOISE =
   /\b(best|top|good|nice|great|show|find|me|some|please|the|a|an|list|of|any|which|what|are)\b/gi;
 
@@ -79,12 +35,6 @@ export function searchTerm(intent: RankIntent): string {
     .replace(/\s+/g, " ")
     .trim();
 
-  // Keep the budget in the phrase — "phones under 15000" is a query Indian
-  // marketplaces are well tuned for, and it steers relevance toward the
-  // segment rather than the long tail.
-  // No need to prepend the brand: intent.brands was derived from these very
-  // words, so it is already in the phrase. Prepending produced "Xiaomi redmi
-  // phones under 15000".
   if (cleaned.length >= 3) return cleaned;
 
   const parts: string[] = [];
@@ -98,8 +48,6 @@ function flipkartUrl(intent: RankIntent, page: number): string {
   const params = [
     `q=${encodeURIComponent(searchTerm(intent))}`,
     `page=${page}`,
-    // Sort by popularity so page 1 is the segment's real contenders rather
-    // than whatever the relevance model surfaces for a fuzzy phrase.
     "sort=popularity",
   ];
   if (intent.budgetMax) {
@@ -123,17 +71,11 @@ function amazonUrl(intent: RankIntent, page: number): string {
     `page=${page}`,
   ];
   if (intent.budgetMax) {
-    // Amazon's price filter is in rupees, low-price/high-price.
     params.push("low-price=0", `high-price=${intent.budgetMax}`);
   }
   return `https://www.amazon.in/s?${params.join("&")}`;
 }
 
-/**
- * Reliance Digital: use the real search endpoint, not a static collection.
- * The collection URL ignores the query entirely — the root cause of the
- * earphones-in-a-phone-search bug.
- */
 function relianceUrl(intent: RankIntent, page: number): string {
   const params = [
     `q=${encodeURIComponent(searchTerm(intent))}`,
@@ -144,11 +86,6 @@ function relianceUrl(intent: RankIntent, page: number): string {
   return `https://www.reliancedigital.in/search?${params.join("&")}`;
 }
 
-/**
- * Tata CLiQ: plain text search. The old builder embedded
- * "query:relevance:category:MSH1210" into `text`, which returns a page whose
- * product grid never mounts, so the collector timed out after 48 polls.
- */
 function tataCliqUrl(intent: RankIntent, page: number): string {
   const params = [
     "searchCategory=all",
@@ -164,14 +101,6 @@ function tataCliqUrl(intent: RankIntent, page: number): string {
   return `https://www.tatacliq.com/search/?${params.join("&")}`;
 }
 
-/**
- * How many result pages a single collector seed URL walks by itself.
- *
- * Observed: seeding `page=1` returned cards from result pages 1 through 5.
- * Seeding consecutive pages would therefore re-fetch ~80% of the same
- * catalogue, so seeds are strided instead — page 1, 6, 11 — and each extra
- * request buys genuinely new products.
- */
 const COLLECTOR_STRIDE = 5;
 
 export function buildUrls(
@@ -213,21 +142,14 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   ]);
 }
 
-/** Collect raw payloads from every requested platform, in parallel. */
 export async function collectRaw(
   platforms: Platform[],
   intent: RankIntent,
   options: CollectOptions,
 ): Promise<RawBatch[]> {
-  // No `enabled` filter here: the caller decides. Silently dropping a
-  // platform someone asked for with --platforms would be its own bug, and
-  // `enabled` only governs what the DEFAULT set contains.
   const enabled = platforms;
-  // Must exceed the collector's OWN polling budget (48 attempts x 10s = 480s),
-  // or we abort a job that was still going to succeed. A live run lost all 168
-  // Flipkart cards to this: Reliance finished at 287s and Tata CLiQ at 298s,
-  // both just inside the old 300s wrapper, while Flipkart needed longer and was
-  // killed 180s before its own deadline.
+  // Must exceed the collector's own polling budget (48 x 10s = 480s); a live
+  // run lost all 168 Flipkart cards to a shorter wrapper timeout.
   const timeoutMs = options.timeoutMs ?? 540_000;
 
   const jobs = enabled.map(async (platform): Promise<RawBatch> => {
@@ -248,8 +170,6 @@ export async function collectRaw(
           timeoutMs,
           platformName,
         );
-        // Re-shape into raw-style records so the normaliser treats every
-        // platform identically.
         items = results.map((r) => ({
           product_name: r.title,
           selling_price: r.price,
