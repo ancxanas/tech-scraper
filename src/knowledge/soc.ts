@@ -442,6 +442,45 @@ export const SOCS: SocEntry[] = [
 
   // ------------------------------------------------------------------ Unisoc
   {
+    // Redmi A7 Pro 5G. Unisoc's budget 5G part is common in the 2026 sub-15k
+    // shelf and its absence here left several phones showing "SoC ?".
+    name: "Unisoc T8300",
+    vendor: "unisoc",
+    antutu: 415000,
+    gb6Single: 730,
+    gb6Multi: 1980,
+    nm: 6,
+    year: 2025,
+    has5g: true,
+    aliases: ["unisoc t8300", "t8300"],
+  },
+  {
+    // Moto G35 5G. The captured product page says only "Unisoc" plus this
+    // number, so without the entry the page read as no chipset at all.
+    name: "Unisoc T760",
+    vendor: "unisoc",
+    antutu: 395000,
+    gb6Single: 700,
+    gb6Multi: 1900,
+    nm: 6,
+    year: 2022,
+    has5g: true,
+    aliases: ["unisoc t760", "t760"],
+  },
+  {
+    // Lava Yuva-class entry phones. Genuinely slow — worth knowing rather
+    // than imputing, because an unknown chip gets a median-ish guess.
+    name: "Unisoc SC9863A",
+    vendor: "unisoc",
+    antutu: 105000,
+    gb6Single: 180,
+    gb6Multi: 620,
+    nm: 28,
+    year: 2019,
+    has5g: false,
+    aliases: ["unisoc sc9863a", "sc9863a", "sc9863"],
+  },
+  {
     name: "Unisoc T8200",
     vendor: "unisoc",
     antutu: 380000,

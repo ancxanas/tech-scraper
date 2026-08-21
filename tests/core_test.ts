@@ -1187,23 +1187,24 @@ Deno.test("SoC matches record whether the page named the vendor", () => {
 });
 
 Deno.test("an abbreviated page value cannot overwrite a confident KB entry", () => {
+  // The C75 5G really does run the 4s Gen 2. A Flipkart highlights blob that
+  // drops the vendor word and says only "4 Gen 2" is an abbreviation, not a
+  // correction — it must not silently downgrade the phone to a different chip.
   const { listings } = normalizeBatch([
     {
-      product_name: "POCO M7 5G (Ocean Blue, 128 GB) (6 GB RAM)",
-      selling_price: 12499,
+      product_name: "POCO C75 5G (Enchanted Green, 64 GB) (4 GB RAM)",
+      selling_price: 7499,
       product_url:
-        "https://www.flipkart.com/poco-m7-5g-ocean-blue-128-gb/p/itm1",
+        "https://www.flipkart.com/poco-c75-5g-enchanted-green-64-gb/p/itm1",
     },
   ], "flipkart");
 
   const enrichText = new Map([[
     listings[0].id,
-    "Product highlights 6 GB RAM | 128 GB ROM 4 Gen 2 5G | Octa Core Processor | 2.2 GHz",
+    "Product highlights 4 GB RAM | 64 GB ROM 4 Gen 2 5G | Octa Core Processor | 2.2 GHz",
   ]]);
   const a = analyze(listings[0], { enrichText });
 
-  // The KB says 4s Gen 2 with high confidence; the page abbreviated. Keep the
-  // KB value and let the conflict reporter raise it for a human.
   assertEquals(a.specs.socName, "Snapdragon 4s Gen 2");
   assertEquals(a.specSources.socName, "kb");
 });
