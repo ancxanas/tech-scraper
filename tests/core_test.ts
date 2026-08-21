@@ -2404,3 +2404,26 @@ Deno.test("a price refresh refuses to spend a fetch on an unparseable platform",
     globalThis.fetch = origFetch;
   }
 });
+
+Deno.test("a refresh that reached nothing says so instead of going quiet", () => {
+  const lines: string[] = [];
+  const orig = console.error;
+  console.error = (...a: unknown[]) => lines.push(a.map(String).join(" "));
+  reportRefresh({
+    checkout: new Map(),
+    fetched: 0,
+    cached: 0,
+    unpriced: 0,
+    failed: 3,
+    skipped: 0,
+    changed: [],
+    stockChanged: [],
+    seen: [],
+  });
+  console.error = orig;
+  const out = lines.join("\n");
+  assert(
+    out.includes("unreachable") && out.includes("keeps its card prices"),
+    `silent failure: ${out}`,
+  );
+});

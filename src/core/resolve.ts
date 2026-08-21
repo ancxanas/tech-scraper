@@ -70,7 +70,7 @@ export interface ResolveResult {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** The pid that identifies the product a URL was meant to show. */
-function pidOf(url: string): string | null {
+export function pidOf(url: string): string | null {
   try {
     return new URL(url).searchParams.get("pid");
   } catch {
@@ -556,6 +556,11 @@ export async function refreshPrices(
     // selects one SELLER's listing - the cheapest at scrape time, and often
     // the one that then sells out. Fetching it returns that seller's dead
     // offer; dropping it returns the buy box, which is what a buyer sees.
+    // Asking to refresh means asking the network; "cache" as a transport
+    // would make every fetch throw before it starts.
+    const mode: FetchMode = opts.mode === "cache"
+      ? "auto"
+      : opts.mode ?? "auto";
     const url = canonicalUrl(c.best.url ?? "");
     if (!url) continue;
     // parseCheckout reads Flipkart's buy box; Amazon pages carry neither its
@@ -581,7 +586,7 @@ export async function refreshPrices(
         if (n > 0) await sleep(opts.pace ?? 900);
         const got = await fetchPage(
           url,
-          opts.mode ?? "auto",
+          mode,
           opts.allowPaid ?? false,
         );
         // fetchPage already ran pageToText; converting again only adds noise.
@@ -669,12 +674,17 @@ export function reportRefreshDetail(r: RefreshResult): void {
 }
 
 export function reportRefresh(r: RefreshResult): void {
-  if (!r.fetched && !r.cached) return;
+  // A refresh that read nothing must still say so - silence reads as success.
+  if (!r.fetched && !r.cached && !r.skipped && !r.failed) return;
   const parts = [`${r.fetched} refetched`];
   if (r.cached) parts.push(`${r.cached} still fresh`);
   if (r.skipped) parts.push(`${r.skipped} skipped (no Flipkart parser)`);
   if (r.unpriced) parts.push(`${r.unpriced} with no price on the page`);
-  if (r.failed) parts.push(`${r.failed} unreadable`);
+  if (r.failed && !r.fetched) {
+    parts.push(`${r.failed} unreachable — the table keeps its card prices`);
+  } else if (r.failed) {
+    parts.push(`${r.failed} unreadable`);
+  }
   // Prices move between requests; a sample's age is part of the number.
   const ages = r.seen
     .map((s) => s.sampledAt ? Date.now() - Date.parse(s.sampledAt) : 0)
