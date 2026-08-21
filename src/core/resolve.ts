@@ -483,6 +483,7 @@ export interface RefreshResult {
   checkout: Map<string, CheckoutInfo>;
   fetched: number;
   cached: number;
+  unpriced: number;
   failed: number;
   changed: Array<
     { product: string; from: number; to: number; seller: string | null }
@@ -496,12 +497,15 @@ export async function refreshPrices(
     allowPaid?: boolean;
     mode?: FetchMode;
     pace?: number;
+    /** Asking to refresh means refetch; the cache is for the passive path. */
+    useCache?: boolean;
   } = {},
 ): Promise<RefreshResult> {
   const out: RefreshResult = {
     checkout: new Map(),
     fetched: 0,
     cached: 0,
+    unpriced: 0,
     failed: 0,
     changed: [],
   };
@@ -516,7 +520,7 @@ export async function refreshPrices(
     const url = c.best.url;
     if (!url) continue;
     try {
-      let text = store.getPrice(url);
+      let text = opts.useCache === true ? store.getPrice(url) : null;
       if (text) {
         out.cached++;
       } else {
@@ -527,11 +531,16 @@ export async function refreshPrices(
           opts.allowPaid ?? false,
         );
         text = pageToText(got.text);
-        store.setPrice(url, text, got.via);
+        // Only keep a page we could actually read a price from. Caching an
+        // unreadable one hides the failure behind a warm cache for an hour.
+        if (parseCheckout(text).pagePrice !== null) {
+          store.setPrice(url, text, got.via);
+        }
         out.fetched++;
         n++;
       }
       const checkout = parseCheckout(text);
+      if (checkout.pagePrice === null) out.unpriced++;
       if (!hasCheckoutInfo(checkout)) continue;
 
       const from = c.best.price;
@@ -562,7 +571,9 @@ export async function refreshPrices(
 
 export function reportRefresh(r: RefreshResult): void {
   if (!r.fetched && !r.cached) return;
-  const parts = [`${r.fetched} refetched`, `${r.cached} still fresh`];
+  const parts = [`${r.fetched} refetched`];
+  if (r.cached) parts.push(`${r.cached} still fresh`);
+  if (r.unpriced) parts.push(`${r.unpriced} with no price on the page`);
   if (r.failed) parts.push(`${r.failed} unreadable`);
   console.error(colors.dim(`  Prices: ${parts.join(", ")}`));
   for (const c of r.changed.slice(0, 8)) {

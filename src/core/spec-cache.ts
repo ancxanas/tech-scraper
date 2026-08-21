@@ -2,7 +2,10 @@ const DEFAULT_PATH = ".cache/specs.json";
 
 const SPEC_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const PRICE_TTL_MS = 60 * 60 * 1000;
-const PRICE_PREFIX = "price://";
+// Bumped when the parser changes, so entries written by an older, worse
+// parser cannot be served back as if they were still valid. A run that
+// stored markdown no parser could read looked like a warm cache for an hour.
+const PRICE_PREFIX = "price://v2/";
 
 function ttlFor(key: string): number {
   return key.startsWith(PRICE_PREFIX) ? PRICE_TTL_MS : SPEC_TTL_MS;

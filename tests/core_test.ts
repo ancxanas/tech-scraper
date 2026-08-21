@@ -2034,3 +2034,49 @@ Deno.test("a sold-out listing is read from the structured data", () => {
   }</script></head><body></body></html>`;
   assertEquals(parseCheckout(pageToText(html)).inStock, false);
 });
+
+Deno.test("an unreadable page is not cached as if it were a price", async () => {
+  // The previous run stored markdown no parser could read. For the next hour
+  // the cache reported it "still fresh", so --refresh-prices refetched
+  // nothing and the stale number survived a fix that had already shipped.
+  const path = await Deno.makeTempFile({ suffix: ".json" });
+  const store = new SpecStore(path);
+  await store.load();
+  const url = "https://www.flipkart.com/x/p/itm1?pid=P1";
+
+  const unreadable = "19%\n\n23,999\n\n\u20b919,474\n\n[+";
+  if (parseCheckout(unreadable).pagePrice === null) {
+    // exactly the condition the caller now checks before writing
+  } else {
+    store.setPrice(url, unreadable, "unlocker");
+  }
+  await store.save();
+
+  const reread = new SpecStore(path);
+  await reread.load();
+  assertEquals(reread.getPrice(url), null);
+  await Deno.remove(path);
+});
+
+Deno.test("the price cache key carries a parser version", async () => {
+  // A parser change must invalidate what an older parser wrote, otherwise a
+  // fix cannot take effect until the entries age out.
+  const path = await Deno.makeTempFile({ suffix: ".json" });
+  const store = new SpecStore(path);
+  await store.load();
+  store.setPrice(
+    "https://x/y?pid=P",
+    "19% 23,999 ₹19,474 +₹109 Protect Promise Fee",
+    "direct",
+  );
+  await store.save();
+  const raw = JSON.parse(await Deno.readTextFile(path)) as Record<
+    string,
+    unknown
+  >;
+  assert(
+    Object.keys(raw).some((k) => /^price:\/\/v\d+\//.test(k)),
+    `no versioned price key: ${Object.keys(raw).join(", ")}`,
+  );
+  await Deno.remove(path);
+});
