@@ -2431,3 +2431,62 @@ Deno.test("a refresh that reached nothing says so instead of going quiet", () =>
     `silent failure: ${out}`,
   );
 });
+
+Deno.test("a measured page price outranks the card quotes around it", () => {
+  const raws = [
+    {
+      product_name: "Samsung Galaxy M17 5G (Moonlight Silver, 128 GB) (6 GB RAM)",
+      selling_price: 12951,
+      product_url:
+        "https://www.flipkart.com/samsung-galaxy-m17-5g-a/p/itmA?pid=MOBHA",
+    },
+    {
+      product_name: "Samsung Galaxy M17 5G (Moonlight Silver, 128 GB) (6 GB RAM)",
+      selling_price: 13499,
+      product_url:
+        "https://www.flipkart.com/samsung-galaxy-m17-5g-b/p/itmB?pid=MOBHB",
+    },
+  ];
+  const { listings } = normalizeBatch(raws, "flipkart");
+  const { candidates } = buildCandidates(
+    {
+      raw: "test",
+      category: "phone",
+      brands: [],
+      excludeBrands: [],
+      budgetMax: 15000,
+      budgetMin: null,
+      budgetOperator: "under",
+      priorities: [],
+      mustHave: [],
+      modelHint: null,
+    },
+    [{
+      platform: "flipkart",
+      platformName: "Flipkart",
+      items: raws,
+      status: "ok",
+    }],
+    {
+      checkoutInfo: new Map([[
+        listings[0].id,
+        {
+          pagePrice: 19474,
+          pageMrp: null,
+          seller: "SmartTechMart",
+          inStock: true,
+          deliveryBy: null,
+          buyAt: null,
+          bankOffer: null,
+          exchangeUpTo: null,
+          noCostEmi: false,
+          pincodeBlocked: false,
+        },
+      ]]),
+    },
+  );
+  const [c] = candidates;
+  assertEquals(c.best.price, 19474); // measured, not the cheapest card
+  assertEquals(c.offers[0].url, listings[0].url);
+  assertEquals(c.offers.some((o) => o.price === 13499), true); // kept below
+});

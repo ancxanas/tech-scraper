@@ -1,6 +1,7 @@
 import type {
   AnalyzedListing,
   Candidate,
+  Offer,
   PipelineDiagnostics,
   PipelineResult,
   PlatformId,
@@ -12,6 +13,8 @@ import { groupListings } from "./group.ts";
 import { rankCandidates, type RankOptions } from "./rank.ts";
 import { categoryMatches } from "./classify.ts";
 
+type CheckoutMap = Map<string, import("./checkout.ts").CheckoutInfo>;
+
 export interface RawBatch {
   platform: PlatformId;
   platformName: string;
@@ -22,10 +25,74 @@ export interface RawBatch {
 
 export interface PipelineOptions extends RankOptions {
   enrichText?: Map<string, string>;
-  checkoutInfo?: Map<string, import("./checkout.ts").CheckoutInfo>;
+  checkoutInfo?: CheckoutMap;
   externalSpecs?: Map<string, Partial<import("./types.ts").Specs>>;
   reviewData?: Map<string, import("./reviews.ts").ReviewSummary>;
   keepRejected?: boolean;
+}
+
+/**
+ * One place decides what checkout data does to a candidate, so the
+ * interactive and replay paths cannot drift apart.
+ *
+ * A page we measured outranks every card quote: cards are scraped from
+ * search listings whose cheapest seller is routinely dead by fetch time,
+ * while the sampled offer was read off the buy box itself. If the sampled
+ * listing is not already the headline, it is promoted - price, stock and
+ * all - and the remaining offers follow it.
+ */
+function attachCheckout(candidates: Candidate[], info?: CheckoutMap): void {
+  if (!info?.size) return;
+  for (const c of candidates) {
+    const hit = c.listings.find((l) => info.has(l.id));
+    if (!hit) continue;
+    const co = info.get(hit.id)!;
+    c.checkout = co;
+    // Seller, EMI and delivery notes ride along without reordering anything;
+    // only a price actually read off the buy box may lead the candidate.
+    if (co.pagePrice === null) {
+      if (
+        c.best.url === hit.url && co.inStock !== null &&
+        co.inStock !== undefined
+      ) {
+        c.best.inStock = co.inStock;
+      }
+      continue;
+    }
+    // Already the headline: just carry the measured stock state.
+    if (c.best.url === hit.url) {
+      if (co.inStock !== null && co.inStock !== undefined) {
+        c.best.inStock = co.inStock;
+      }
+      continue;
+    }
+    const base = c.best.price || 1;
+    // Within 2% of the cheapest card the cards are trusted; promotion is
+    // for disagreement - a stale or dead seller's quote.
+    if (Math.abs(co.pagePrice - base) / base <= 0.02) continue;
+
+    const verified: Offer = {
+      platform: hit.platform,
+      platformName: hit.platformName,
+      price: co.pagePrice,
+      mrp: co.pageMrp ?? hit.mrp,
+      discountPct: null,
+      url: hit.url,
+      inStock: co.inStock,
+      rating: hit.rating,
+      ratingCount: hit.ratingCount,
+    };
+    if (verified.mrp && verified.mrp > verified.price) {
+      verified.discountPct = Math.round(
+        ((verified.mrp - verified.price) / verified.mrp) * 100,
+      );
+    }
+    c.best = verified;
+    c.offers = [
+      verified,
+      ...c.offers.filter((o) => o.url !== verified.url),
+    ];
+  }
 }
 
 function fieldFill(listings: AnalyzedListing[]): number {
@@ -85,16 +152,7 @@ export function buildCandidates(
       if (hit) c.reviews = options.reviewData!.get(hit.id);
     }
   }
-  if (options.checkoutInfo?.size) {
-    for (const c of candidates) {
-      const hit = c.listings.find((l) => options.checkoutInfo!.has(l.id));
-      if (!hit) continue;
-      c.checkout = options.checkoutInfo!.get(hit.id);
-      if (c.checkout?.inStock !== null && c.checkout?.inStock !== undefined) {
-        c.best.inStock = c.checkout.inStock;
-      }
-    }
-  }
+  attachCheckout(candidates, options.checkoutInfo);
   return { intent, candidates };
 }
 
@@ -191,16 +249,7 @@ export function runPipeline(
       if (hit) c.reviews = options.reviewData!.get(hit.id);
     }
   }
-  if (options.checkoutInfo?.size) {
-    for (const c of candidates) {
-      const hit = c.listings.find((l) => options.checkoutInfo!.has(l.id));
-      if (!hit) continue;
-      c.checkout = options.checkoutInfo!.get(hit.id);
-      if (c.checkout?.inStock !== null && c.checkout?.inStock !== undefined) {
-        c.best.inStock = c.checkout.inStock;
-      }
-    }
-  }
+  attachCheckout(candidates, options.checkoutInfo);
   const { ranked, rejected } = rankCandidates(
     candidates,
     rankableIntent,
