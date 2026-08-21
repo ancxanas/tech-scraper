@@ -533,7 +533,11 @@ export async function refreshPrices(
   let n = 0;
 
   for (const c of top) {
-    const url = c.best.url;
+    // Canonical, not the card's URL. A Flipkart card carries `lid`, which
+    // selects one SELLER's listing - the cheapest at scrape time, and often
+    // the one that then sells out. Fetching it returns that seller's dead
+    // offer; dropping it returns the buy box, which is what a buyer sees.
+    const url = canonicalUrl(c.best.url ?? "");
     if (!url) continue;
     try {
       let sampledAt: string;

@@ -2292,3 +2292,17 @@ Deno.test("a refreshed price reports when we sampled it", async () => {
     globalThis.fetch = origFetch;
   }
 });
+
+Deno.test("a price fetch drops the seller-specific listing id", () => {
+  // pid identifies the phone and colour; lid identifies ONE SELLER's offer.
+  // The search card links to the cheapest seller, who is often the one that
+  // sells out - fetching with lid returned "₹12,951, AwesomeOnline" while the
+  // buy box on the same product was ₹19,474 from SmartTechMart.
+  const cardUrl =
+    "https://www.flipkart.com/samsung-galaxy-m17-5g-moonlight-silver-128-gb/p/itmc3b8f7b511eca" +
+    "?pid=MOBHGU9DYEBQW6NW&lid=LSTMOBHGU9DYEBQW6NWIWMUZV&marketplace=FLIPKART&q=phones+under+15000";
+  const fetched = canonicalUrl(cardUrl);
+  assert(fetched.includes("pid=MOBHGU9DYEBQW6NW"), fetched);
+  assert(!fetched.includes("lid="), `lid survived: ${fetched}`);
+  assert(!fetched.includes("marketplace="), fetched);
+});
