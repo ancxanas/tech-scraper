@@ -14,7 +14,8 @@
     "index": "deno run --allow-net --allow-env --allow-read --allow-write main.ts index",
     "specs": "deno run --allow-net --allow-env --allow-read --allow-write main.ts specs",
     "audit": "deno run --allow-net --allow-env --allow-read --allow-write scripts/audit-knowledge.ts",
-    "calibrate": "deno run --allow-net --allow-read --allow-write scripts/calibrate-soc.ts"
+    "calibrate": "deno run --allow-net --allow-read --allow-write scripts/calibrate-soc.ts",
+    "verify-prices": "deno run --allow-net --allow-read scripts/verify-card-prices.ts"
   },
   "imports": {
     "@cliffy/command": "jsr:@cliffy/command@^1.2",
