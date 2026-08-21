@@ -389,9 +389,12 @@ Measured on the real sub-₹15,000 fixture:
 | average confidence    | 41%           | **63%**             |
 | Web Unlocker requests | —             | **0**               |
 
-28 of 30 pages fetched directly; the 2 failures were Amazon, which serves a bot
-page to unknown clients. Flipkart returns its "Product highlights" block in the
-initial HTML, and that block contains exactly what the ranker needs:
+28 of 30 pages fetched directly; the failures were Amazon, which serves a bot
+page to unknown clients. On an account that _does_ have a working Web Unlocker
+zone, those Amazon pages enrich through the fallback — a real run showed "27
+direct (free), 3 via Web Unlocker", i.e. full coverage with three paid requests.
+Flipkart returns its "Product highlights" block in the initial HTML, and that
+block contains exactly what the ranker needs:
 
 ```
 4 GB RAM | 128 GB ROM T7250 | Octa Core Processor | 1.8 GHz Clock Speed
@@ -422,6 +425,31 @@ confidence score and says so.
 The ranking table now also nudges you when it is guessing: if three or more
 results have sub-50% confidence it prints the exact `--enrich N` command to fix
 them.
+
+---
+
+## Round 6: badges are promises, so they need evidence
+
+A live run put `BEST VALUE` on `Maplin SC26 5G` — unknown chipset, zero ratings,
+55% confidence — purely because its _imputed_ spec sheet divided nicely by a low
+price. The confidence gate (>= 0.5) was not a high enough bar for something the
+UI presents as a recommendation.
+
+Superlative badges now require real evidence: a resolved chipset, at least 100
+ratings, a rating of 3.5 or better, and 60% confidence. On the reference fixture
+`BEST VALUE` moved to `Ai+ Pulse 2` — Unisoc T7250, 4.2★ from 9,500 buyers —
+which is a defensible thing to tell someone to buy.
+
+`CHEAPEST` deliberately does _not_ sit behind that bar, because it is a
+statement of fact rather than a recommendation. Fixing this exposed a second
+bug: it had been computed over the credible pool only, so it could sit on the
+cheapest _verified_ phone while a cheaper one was listed above it. It is now
+computed over every ranked product and is therefore true.
+
+The `--enrich` hint also stopped contradicting itself. After a run of
+`--enrich 30` it used to advise `--enrich 20`; it now reports how many products
+remain unverified _after_ enrichment and explains that their pages simply do not
+state a chipset.
 
 ---
 

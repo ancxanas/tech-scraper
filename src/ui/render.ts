@@ -473,6 +473,8 @@ export function renderFull(
     details: number;
     compare: boolean;
     diagnostics: boolean;
+    /** How many products were enriched in this run, if any. */
+    enriched?: number;
   },
 ): string {
   const parts = [

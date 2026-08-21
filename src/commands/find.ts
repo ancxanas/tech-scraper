@@ -152,6 +152,7 @@ export const findCommand = new Command()
       }
     }
 
+    let enrichedCount = 0;
     let result = runPipeline(query, intent, batches, {
       inStockOnly: options.inStockOnly,
       budgetTolerance: (options.budgetTolerance ?? 0) / 100,
@@ -191,6 +192,7 @@ export const findCommand = new Command()
         });
       }
       if (!options.json) {
+        enrichedCount = enriched.fetched;
         reportEnrichment(enriched);
       }
     }
@@ -210,6 +212,7 @@ export const findCommand = new Command()
           details: options.details,
           compare: options.compare !== false,
           diagnostics: options.diagnostics !== false,
+          enriched: enrichedCount,
         }),
       );
       if (savedTo) {

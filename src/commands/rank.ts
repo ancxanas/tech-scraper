@@ -83,6 +83,7 @@ export const rankCommand = new Command()
       Deno.exit(2);
     }
 
+    let enrichedCount = 0;
     let result = runPipeline(query, intent, batches, {
       inStockOnly: options.inStockOnly,
       budgetTolerance: (options.budgetTolerance ?? 0) / 100,
@@ -107,6 +108,7 @@ export const rankCommand = new Command()
           enrichText: enriched.text,
         });
       }
+      enrichedCount = enriched.fetched;
       reportEnrichment(enriched);
     }
 
@@ -127,6 +129,7 @@ export const rankCommand = new Command()
         details: options.details,
         compare: options.compare !== false,
         diagnostics: options.diagnostics !== false,
+        enriched: enrichedCount,
       }),
     );
   });

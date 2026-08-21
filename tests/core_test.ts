@@ -918,3 +918,46 @@ Deno.test("SoC matching survives Flipkart's space-stripped highlight strings", (
   // Ambiguous vendor-only strings must stay unresolved rather than guess.
   assertEquals(matchSoc("Snapdragon6 | Octa Core Processor"), null);
 });
+
+// ------------------------------------------------------- badges as promises
+
+Deno.test("BEST VALUE requires evidence, not just a good ratio", async () => {
+  // Regression from a live run: Maplin SC26 5G — unknown chipset, zero
+  // ratings, 55% confidence — was badged BEST VALUE purely because its
+  // imputed spec sheet divided nicely by a low price. A badge is a
+  // recommendation and needs a verified chipset plus real review volume.
+  const batches = await loadRun([FIXTURE]);
+  const intent = parseIntentRules("best phones under 15000");
+  const { ranked } = runPipeline("q", intent, batches);
+
+  for (const r of ranked) {
+    if (!r.badges.includes("BEST VALUE") && !r.badges.includes("FASTEST")) {
+      continue;
+    }
+    assertExists(
+      r.specs.socName,
+      `${r.modelName} badged without a known chipset`,
+    );
+    assert(
+      (r.ratingCount ?? 0) >= 100,
+      `${r.modelName} badged on ${r.ratingCount ?? 0} reviews`,
+    );
+    assert(
+      r.score.confidence >= 0.6,
+      `${r.modelName} badged at ${r.score.confidence} confidence`,
+    );
+  }
+});
+
+Deno.test("CHEAPEST is still allowed on an unverified product", async () => {
+  // It is a statement of fact about price, not a recommendation, so it must
+  // not be gated behind the same evidence bar.
+  const batches = await loadRun([FIXTURE]);
+  const { ranked } = runPipeline(
+    "q",
+    parseIntentRules("best phones under 15000"),
+    batches,
+  );
+  const cheapest = [...ranked].sort((a, b) => a.best.price - b.best.price)[0];
+  assert(cheapest.badges.includes("CHEAPEST"), cheapest.badges.join(","));
+});

@@ -541,11 +541,31 @@ function annotate(
   // Superlative badges are only awarded among candidates we actually have data
   // for — "BEST VALUE" on a phone with an unknown chipset is not a recommendation.
   const badgesFromHistory = new Set<string>();
+  // Superlative badges are a recommendation, so they demand real evidence.
+  // Confidence alone was not enough: a phone with an unknown chipset, no
+  // reviews at all and 55% confidence took "BEST VALUE" on a live run purely
+  // because its imputed spec sheet divided nicely by its price.
   const credible = ranked.filter((r) => r.score.confidence >= 0.5);
   const pool = credible.length >= 2 ? credible : ranked;
 
-  const cheapest = pool.reduce((a, b) => (b.best.price < a.best.price ? b : a));
-  const bestValue = pool.reduce((
+  /** Enough evidence to actively recommend, not merely to list. */
+  const isVouchable = (r: RankedCandidate) =>
+    r.score.confidence >= 0.6 &&
+    r.specs.socName !== null &&
+    (r.ratingCount ?? 0) >= 100 &&
+    (r.rating ?? 0) >= 3.5;
+
+  const vouchable = pool.filter(isVouchable);
+  const recommendPool = vouchable.length >= 2 ? vouchable : pool;
+
+  // CHEAPEST is a statement of fact about price, so it is computed over every
+  // ranked product. Restricting it to the credible pool made it lie: it would
+  // sit on the cheapest *verified* phone while a cheaper one was listed above.
+  const cheapest = ranked.reduce((
+    a,
+    b,
+  ) => (b.best.price < a.best.price ? b : a));
+  const bestValue = recommendPool.reduce((
     a,
     b,
   ) => (b.score.valueScore > a.score.valueScore ? b : a));
@@ -668,9 +688,11 @@ function annotate(
 
     const badges: string[] = [];
     if (anyMatch && !r.matchesRequestedModel) badges.push("ALTERNATIVE");
-    if (r === bestValue) badges.push("BEST VALUE");
+    if (r === bestValue && isVouchable(r)) badges.push("BEST VALUE");
     if (r === cheapest) badges.push("CHEAPEST");
-    if (r === fastest && (r.specs.antutu ?? 0) > 0) badges.push("FASTEST");
+    if (r === fastest && (r.specs.antutu ?? 0) > 0 && isVouchable(r)) {
+      badges.push("FASTEST");
+    }
     if (r === bestBattery && (r.specs.batteryMah ?? 0) > 0) {
       badges.push("BATTERY KING");
     }
