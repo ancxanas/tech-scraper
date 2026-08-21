@@ -357,6 +357,13 @@ export function specsFromText(text: string): {
 export interface AnalyzeOptions {
   /** Extra text per listing id from PDP enrichment. */
   enrichText?: Map<string, string>;
+  /**
+   * Verified specs from an external database, keyed by listing id. These
+   * outrank everything: a dedicated spec source beats a merchant page, which
+   * has been observed reporting a phone's touch sampling rate as its refresh
+   * rate and a 25W charger as 45W.
+   */
+  externalSpecs?: Map<string, Partial<Specs>>;
 }
 
 const SPEC_FIELDS_FOR_COMPLETENESS: Array<keyof Specs> = [
@@ -402,6 +409,16 @@ export function analyze(
     }
   };
 
+  // 0. A verified external spec database outranks everything else.
+  const external = opts.externalSpecs?.get(listing.id);
+  if (external) {
+    const srcs: Partial<Record<keyof Specs, SpecSource>> = {};
+    for (const k of Object.keys(external) as Array<keyof Specs>) {
+      srcs[k] = "gsmarena";
+    }
+    apply(external, srcs, true);
+  }
+
   // 1. Enriched PDP text wins — with one exception.
   //
   // Flipkart abbreviates chipsets ("128 GB ROM 4 Gen 2 5G"), dropping the
@@ -422,7 +439,7 @@ export function analyze(
         delete e.specs.perfTier;
       }
     }
-    apply(e.specs, e.sources, true);
+    apply(e.specs, e.sources, external ? false : true);
   }
 
   // 2. Knowledge base for the resolved model.

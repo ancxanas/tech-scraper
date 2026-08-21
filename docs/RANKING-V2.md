@@ -579,6 +579,72 @@ hand-maintained and I am the one who typed it.
 
 ---
 
+## Round 9: an external spec database, because guessing does not scale
+
+An audit of where every field came from produced two findings. The first was
+that the resolver was reading the wrong half of the page (fixed in round 8). The
+second was worse: **merchant pages are actively wrong, not merely incomplete.**
+
+```
+POCO C75 5G     page says 240Hz   — that is the touch sampling rate, not refresh
+POCO C75 5G     page says 10W     — actual 18W
+Samsung M07     page says 45W     — actual 25W
+Moto G35        page says 60Hz    — actual 120Hz
+```
+
+Confidently wrong data is worse than missing data, and no amount of better regex
+fixes a source that states the wrong number. The knowledge base was no better: I
+typed it from memory, and every AnTuTu figure in `soc.ts` is an approximation I
+recalled rather than measured.
+
+So specs now come from a dedicated spec database (GSMArena), which also
+publishes _measured_ benchmarks:
+
+```
+Chipset  Mediatek Dimensity 7025 Ultra (6 nm)
+Battery  5110 mAh   Charging 45W
+Display  AMOLED, 120Hz, 6.67", 1080 x 2400
+Tests    AnTuTu: 442015 (v10)   GeekBench: 2452 (v6)
+```
+
+Precedence is now `spec database > merchant page > knowledge base > title`, and
+a measured AnTuTu replaces the approximation from `soc.ts` whenever one exists.
+
+### Three problems that had to be solved
+
+**Search is behind a bot challenge.** `results.php3` returns a Cloudflare
+Turnstile page, so model → URL cannot be resolved by searching. Brand listing
+pages are plain static HTML, so an index is built from those instead:
+`deno task index` walks 17 brands and caches 1,849 models.
+
+**Guessing a URL returns another phone's specs.** Early on I hand-wrote a
+plausible URL and got a completely different handset's spec sheet back. Every
+resolution is therefore verified against the page's own title before its data is
+accepted, and prefix matching was removed entirely after it silently resolved
+"Redmi Note 14 5G" to "Redmi Note 14s" — one character apart, different chipset.
+An inexact name now simply does not resolve.
+
+**Rate limiting is real.** Roughly 140 rapid requests during development earned
+an HTTP 429, which first appeared as a baffling intermittent "19 matched" then
+"0 matched". Requests are now sequential and paced at 1.1s, every resolved model
+is cached permanently, and a 429 aborts the remaining queue immediately rather
+than grinding through it collecting failures. Re-running later resumes from the
+cache.
+
+### Sub-brands
+
+POCO and Redmi are indexed under Xiaomi (`xiaomi_poco_m7_pro_5g`), iQOO under
+vivo, CMF under Nothing. Without that mapping the brand filter excluded exactly
+the phones that top the rankings.
+
+### Still open
+
+The chipset conflict on POCO M7 5G is now corroborated by two independent
+sources — the Flipkart page and the spec database both say Snapdragon 4 Gen 2,
+against `models.ts` which says 4s Gen 2. That entry should be corrected.
+
+---
+
 ## What is still worth doing
 
 1. **Amazon PDPs need a transport.** Direct fetch gets a bot page, so Amazon

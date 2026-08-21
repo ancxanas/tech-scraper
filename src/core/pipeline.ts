@@ -34,6 +34,8 @@ export interface PipelineOptions extends RankOptions {
   enrichText?: Map<string, string>;
   /** Checkout details keyed by listing id, from the same enrichment pass. */
   checkoutInfo?: Map<string, import("./offers.ts").CheckoutInfo>;
+  /** Verified external specs keyed by listing id. */
+  externalSpecs?: Map<string, Partial<import("./types.ts").Specs>>;
   /** Keep rejected listings for the diagnostics view. */
   keepRejected?: boolean;
 }
@@ -84,7 +86,12 @@ export function buildCandidates(
 ): { intent: RankIntent; candidates: Candidate[] } {
   const analyzed = batches.flatMap((batch) => {
     const { listings } = normalizeBatch(batch.items, batch.platform);
-    return listings.map((l) => analyze(l, { enrichText: options.enrichText }));
+    return listings.map((l) =>
+      analyze(l, {
+        enrichText: options.enrichText,
+        externalSpecs: options.externalSpecs,
+      })
+    );
   });
 
   let intent = intentIn;

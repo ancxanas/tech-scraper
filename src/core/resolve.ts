@@ -17,12 +17,21 @@ import { fetchDirect, fetchPageMarkdown, pageToText } from "../lib/unlock.ts";
 import { type CheckoutInfo, hasCheckoutInfo, parseCheckout } from "./offers.ts";
 import { SpecStore } from "./specstore.ts";
 import { matchSocDetailed } from "../knowledge/soc.ts";
-import type { Candidate } from "./types.ts";
+import {
+  fetchSpecs as fetchGsmSpecs,
+  type GsmSpecs,
+  loadIndex,
+  RateLimited,
+  resolveModel,
+} from "../knowledge/gsmarena.ts";
+import type { Candidate, Specs } from "./types.ts";
 
 export type FetchMode = "auto" | "direct" | "unlocker" | "cache-only";
 
 export interface ResolveOptions {
   mode?: FetchMode;
+  /** Consult the external spec database (default true when an index exists). */
+  useExternal?: boolean;
   /** Hard ceiling on network fetches. Cache hits never count against it. */
   limit?: number;
   concurrency?: number;
@@ -39,11 +48,19 @@ export interface SpecConflict {
   productPage: string;
   /** The page used an abbreviation, so this needs a human, not an overwrite. */
   ambiguous: boolean;
+  /** Merchant listings and a spec database are not equal evidence. */
+  source: "merchant" | "spec-db";
 }
 
 export interface ResolveResult {
   text: Map<string, string>;
   checkout: Map<string, CheckoutInfo>;
+  /** Verified specs from the external database, keyed by listing id. */
+  external: Map<string, Partial<Specs>>;
+  gsmMatched: number;
+  gsmUnmatched: number;
+  /** The spec database throttled us; remaining models were left unresolved. */
+  gsmRateLimited: boolean;
   fromCache: number;
   fetchedDirect: number;
   fetchedPaid: number;
@@ -54,6 +71,8 @@ export interface ResolveResult {
   conflicts: SpecConflict[];
   errors: string[];
 }
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Trim a page to the part that actually contains specifications. */
 function extractSpecSection(text: string): string {
@@ -126,8 +145,53 @@ function detectConflicts(c: Candidate, pageText: string): SpecConflict[] {
         knowledgeBase: claimed,
         productPage: found.soc.name,
         ambiguous: found.ambiguous,
+        source: "merchant",
       });
     }
+  }
+  return out;
+}
+
+/** External record -> the pipeline's spec shape. */
+function toSpecs(g: GsmSpecs): Partial<Specs> {
+  const out: Partial<Specs> = {};
+  const set = <K extends keyof Specs>(k: K, v: Specs[K] | null) => {
+    if (v !== null && v !== undefined) out[k] = v;
+  };
+  if (g.socName) {
+    const soc = matchSocDetailed(g.socName);
+    set("socName", soc ? soc.soc.name : g.socName);
+    // Prefer a measured benchmark over the approximation in our own table.
+    set("antutu", g.antutu ?? soc?.soc.antutu ?? null);
+  }
+  set("batteryMah", g.batteryMah);
+  set("chargingW", g.chargingW);
+  set("panel", g.panel);
+  set("displayInches", g.inches);
+  set("refreshHz", g.refreshHz);
+  set("resolution", g.resolution);
+  set("mainCameraMp", g.mainCameraMp);
+  set("ipRating", g.ipRating);
+  set("nfc", g.nfc);
+  if (g.ois) set("ois", true);
+  return out;
+}
+
+/** Compare our hand-typed knowledge base against the external database. */
+function conflictsAgainstKb(c: Candidate, g: GsmSpecs): SpecConflict[] {
+  const out: SpecConflict[] = [];
+  if (
+    c.specs.socName && c.specSources.socName === "kb" && g.socName &&
+    matchSocDetailed(g.socName)?.soc.name !== c.specs.socName
+  ) {
+    out.push({
+      product: c.modelName,
+      field: "chipset",
+      knowledgeBase: c.specs.socName,
+      productPage: g.socName,
+      ambiguous: false,
+      source: "spec-db",
+    });
   }
   return out;
 }
@@ -150,6 +214,10 @@ export async function resolveSpecs(
   const result: ResolveResult = {
     text: new Map(),
     checkout: new Map(),
+    external: new Map(),
+    gsmMatched: 0,
+    gsmUnmatched: 0,
+    gsmRateLimited: false,
     fromCache: 0,
     fetchedDirect: 0,
     fetchedPaid: 0,
@@ -184,6 +252,65 @@ export async function resolveSpecs(
     }
     result.conflicts.push(...detectConflicts(c, section));
   };
+
+  // External spec database first — it is the highest-quality source and it
+  // corrects merchant pages rather than merely filling their gaps.
+  //
+  // Sequential and rate-limited on purpose. The first version fired ~70
+  // parallel requests with no cache and was promptly blocked, which showed up
+  // as "matched 19" on one run and "matched 0" on the next — an intermittent
+  // failure that would have been very unpleasant to debug later.
+  if (opts.useExternal !== false) {
+    const index = await loadIndex();
+    if (index.length > 0) {
+      let fetchedThisRun = 0;
+      for (const c of candidates) {
+        // Match on the model identity, not the display name: the latter
+        // carries a config suffix ("POCO M7 Pro 5G (6GB/128GB)") that no spec
+        // database will ever contain.
+        const lookupName = c.key.split("|")[0].split("#")[0].trim();
+        const hit = resolveModel(lookupName, c.brand, index);
+        if (!hit) {
+          result.gsmUnmatched++;
+          continue;
+        }
+        try {
+          const cacheKey = `gsm://${hit.slug}`;
+          let g: GsmSpecs | null = null;
+
+          const cached = store.get(cacheKey);
+          if (cached) {
+            g = JSON.parse(cached) as GsmSpecs;
+          } else {
+            // Be a guest on someone else's server.
+            if (fetchedThisRun > 0) await sleep(1100);
+            g = await fetchGsmSpecs(
+              hit,
+              lookupName,
+              allowPaid ? async (u) => await fetchPageMarkdown(u) : undefined,
+            );
+            fetchedThisRun++;
+            if (g) store.set(cacheKey, JSON.stringify(g), "direct");
+          }
+
+          if (!g) {
+            result.gsmUnmatched++;
+            continue;
+          }
+          const partial = toSpecs(g);
+          for (const l of c.listings) result.external.set(l.id, partial);
+          result.gsmMatched++;
+          result.conflicts.push(...conflictsAgainstKb(c, g));
+        } catch (err) {
+          if (err instanceof RateLimited) {
+            result.gsmRateLimited = true;
+            break; // every further request would fail identically
+          }
+          result.gsmUnmatched++;
+        }
+      }
+    }
+  }
 
   // Cache pass first — free, instant, and it shrinks the fetch queue.
   const needsFetch: Candidate[] = [];
@@ -239,12 +366,22 @@ export async function resolveSpecs(
 
 export function reportResolution(r: ResolveResult): void {
   const parts: string[] = [];
+  if (r.gsmMatched) parts.push(`${r.gsmMatched} from spec database`);
+  if (r.gsmRateLimited) parts.push("spec DB throttled");
   if (r.fromCache) parts.push(`${r.fromCache} cached`);
   if (r.fetchedDirect) parts.push(`${r.fetchedDirect} fetched free`);
   if (r.fetchedPaid) parts.push(`${r.fetchedPaid} via Web Unlocker`);
   if (r.skippedComplete) parts.push(`${r.skippedComplete} already complete`);
   if (r.failed) parts.push(`${r.failed} unavailable`);
   console.error(colors.dim(`  Specs: ${parts.join(", ") || "nothing to do"}`));
+
+  if (r.gsmRateLimited) {
+    console.error(
+      colors.yellow(
+        "  The spec database rate-limited this IP. Resolved models are cached\n  permanently, so re-running later continues where this left off.",
+      ),
+    );
+  }
 
   if (r.conflicts.length) {
     console.error(

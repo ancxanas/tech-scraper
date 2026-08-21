@@ -36,6 +36,11 @@ import { lookupModel, PHONE_MODELS } from "../src/knowledge/models.ts";
 import { hasCheckoutInfo, parseCheckout } from "../src/core/offers.ts";
 import { SpecStore } from "../src/core/specstore.ts";
 import { htmlToText, jsonStateText, pageToText } from "../src/lib/unlock.ts";
+import {
+  normaliseModel,
+  parseSpecPage,
+  resolveModel,
+} from "../src/knowledge/gsmarena.ts";
 import { buildPrompt, classifyFailure } from "../src/commands/heal.ts";
 
 const FIXTURE = "tests/fixtures/run-phones-15000";
@@ -1206,4 +1211,74 @@ Deno.test("JSON harvesting is bounded and survives malformed input", () => {
     '{"text":"filler value here"},'.repeat(5000)
   }</script>`;
   assert(jsonStateText(huge, 5_000).length <= 5_000);
+});
+
+// ------------------------------------------------ external spec database
+
+Deno.test("external spec pages parse into structured specs and benchmarks", async () => {
+  const text = await Deno.readTextFile(
+    "tests/fixtures/gsmarena/poco-m7-pro.txt",
+  );
+  const s = parseSpecPage(text, "https://example.test/poco.php")!;
+  assertExists(s);
+  assertEquals(s.socName, "Dimensity 7025 Ultra");
+  assertEquals(s.nm, 6);
+  assertEquals(s.antutu, 442015); // measured, not our approximation
+  assertEquals(s.geekbench, 2452);
+  assertEquals(s.batteryMah, 5110);
+  assertEquals(s.chargingW, 45);
+  assertEquals(s.panel, "AMOLED");
+  assertEquals(s.inches, 6.67);
+  assertEquals(s.refreshHz, 120);
+  assertEquals(s.resolution, "FHD+");
+  assertEquals(s.mainCameraMp, 50);
+  assertEquals(s.ois, true);
+  assertEquals(s.nfc, true);
+  assertEquals(s.ipRating, "IP64");
+});
+
+Deno.test("model resolution refuses near-misses", () => {
+  const index = [
+    {
+      name: "Redmi Note 14s",
+      brand: "Xiaomi",
+      slug: "xiaomi_redmi_note_14s-1.php",
+    },
+    {
+      name: "Poco M7 Pro",
+      brand: "Xiaomi",
+      slug: "xiaomi_poco_m7_pro_5g-2.php",
+    },
+    { name: "Poco M7", brand: "Xiaomi", slug: "xiaomi_poco_m7-3.php" },
+    { name: "Galaxy M07", brand: "Samsung", slug: "samsung_galaxy_m07-4.php" },
+  ];
+
+  // Exact matches resolve, including through the sub-brand mapping
+  // (POCO and Redmi are indexed under Xiaomi).
+  assertEquals(
+    resolveModel("poco m7 pro 5g", "POCO", index)?.slug,
+    "xiaomi_poco_m7_pro_5g-2.php",
+  );
+  assertEquals(
+    resolveModel("poco m7", "POCO", index)?.slug,
+    "xiaomi_poco_m7-3.php",
+  );
+  assertEquals(
+    resolveModel("samsung galaxy m07", "Samsung", index)?.slug,
+    "samsung_galaxy_m07-4.php",
+  );
+
+  // "Redmi Note 14 5G" is NOT "Redmi Note 14s" — one character apart, different
+  // chipset. An earlier prefix-matching version accepted it. Never again.
+  assertEquals(resolveModel("redmi note 14", "Xiaomi", index), null);
+  assertEquals(resolveModel("nonexistent phone 9000", "Xiaomi", index), null);
+});
+
+Deno.test("model names are normalised across marketplace and database spellings", () => {
+  // Flipkart writes "MOTOROLA g35 5G"; the database writes "Moto G35".
+  assertEquals(normaliseModel("MOTOROLA g35 5G"), normaliseModel("Moto G35"));
+  assertEquals(
+    normaliseModel("Samsung Galaxy M07 5G"),
+    normaliseModel("samsung galaxy m07"),
+  );
 });

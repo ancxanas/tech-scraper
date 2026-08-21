@@ -119,6 +119,7 @@ export const rankCommand = new Command()
           budgetTolerance: (options.budgetTolerance ?? 0) / 100,
           enrichText: resolved.text,
           checkoutInfo: resolved.checkout,
+          externalSpecs: resolved.external,
         });
       }
     }

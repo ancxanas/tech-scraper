@@ -78,7 +78,14 @@ export interface Specs {
   colour: string | null;
 }
 
-export type SpecSource = "title" | "slug" | "kb" | "enrich" | "inferred";
+/** Where a spec value came from, best evidence first. */
+export type SpecSource =
+  | "gsmarena"
+  | "enrich"
+  | "kb"
+  | "title"
+  | "slug"
+  | "inferred";
 
 export interface AnalyzedListing extends Listing {
   category: Category;
