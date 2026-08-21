@@ -18,12 +18,14 @@
  * Reads a saved run, so it costs no BrightData credit. Flipkart serves this
  * sandbox a reCAPTCHA, so it has to run from your machine.
  *
- *   deno task verify-prices runs/<dir>            first 6 cards
- *   deno task verify-prices runs/<dir> 12         first 12
+ *   deno task verify-prices runs/<dir>                 first 6 cards
+ *   deno task verify-prices runs/<dir> 12              first 12
+ *   deno task verify-prices runs/<dir> 12 --use-unlocker   when blocked
  */
 
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+import { fetchDirect } from "../src/lib/fetch-page.ts";
+
+const useUnlocker = Deno.args.includes("--use-unlocker");
 
 interface Card {
   product_name?: string;
@@ -44,16 +46,6 @@ const cards: Card[] = JSON.parse(
 );
 
 /** Keep the pid: on Flipkart it selects the colour and memory being priced. */
-function pidUrl(url: string): string | null {
-  try {
-    const u = new URL(url);
-    const pid = u.searchParams.get("pid");
-    if (!pid) return null;
-    return `${u.origin}${u.pathname}?pid=${pid}`;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Pull title, price and MRP out of the page.
@@ -105,21 +97,32 @@ console.log(`Checking ${withUrls.length} cards from ${dir}\n`);
 let titleMismatch = 0, mrpMismatch = 0, priceOnly = 0, agreed = 0, failed = 0;
 
 for (const c of withUrls) {
-  const url = pidUrl(c.product_url!);
-  if (!url) continue;
+  if (!c.product_url) continue;
   const cardPrice = c.selling_price!.value!;
   const cardMrp = c.original_price?.value ?? null;
 
   let html = "";
   try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": UA, "Accept-Language": "en-IN,en;q=0.9" },
-    });
-    html = await res.text();
+    html = await fetchDirect(c.product_url!, 20_000);
+    if (/recaptcha|are you a human/i.test(html) && useUnlocker) {
+      const { fetchPageMarkdown } = await import("../src/lib/fetch-page.ts");
+      html = await fetchPageMarkdown(c.product_url!);
+    }
   } catch (err) {
-    console.log(`✗ fetch failed: ${(err as Error).message}`);
-    failed++;
-    continue;
+    if (useUnlocker) {
+      try {
+        const { fetchPageMarkdown } = await import("../src/lib/fetch-page.ts");
+        html = await fetchPageMarkdown(c.product_url!);
+      } catch (e2) {
+        console.log(`  ✗ both transports failed: ${(e2 as Error).message}\n`);
+        failed++;
+        continue;
+      }
+    } else {
+      console.log(`  ✗ fetch failed: ${(err as Error).message}\n`);
+      failed++;
+      continue;
+    }
   }
 
   const page = parsePdp(html);
@@ -131,7 +134,11 @@ for (const c of withUrls) {
   );
 
   if (page.blocked) {
-    console.log(`  page:  BLOCKED — Flipkart served a captcha\n`);
+    console.log(
+      `  page:  BLOCKED — captcha${
+        useUnlocker ? "" : " (retry with --use-unlocker)"
+      }\n`,
+    );
     failed++;
   } else if (!page.price) {
     console.log(`  page:  could not parse a price (${html.length} bytes)\n`);
