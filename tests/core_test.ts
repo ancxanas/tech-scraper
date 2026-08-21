@@ -37,7 +37,7 @@ import { lookupModel, PHONE_MODELS } from "../src/knowledge/models.ts";
 import { hasCheckoutInfo, parseCheckout } from "../src/core/offers.ts";
 import { SpecStore } from "../src/core/specstore.ts";
 import { reviewsUrlFor, summariseReviews } from "../src/core/reviews.ts";
-import { buildUrls } from "../src/core/collect.ts";
+import { buildUrls, searchTerm } from "../src/core/collect.ts";
 import { htmlToText, jsonStateText, pageToText } from "../src/lib/unlock.ts";
 import {
   fetchSpecs as fetchGsmSpecs,
@@ -1561,4 +1561,88 @@ Deno.test("the budget filter is applied at the source, not just in ranking", () 
     const url = buildUrls(p, intent, 1)[0];
     assert(/15000/.test(url), `${p} did not carry the budget: ${url}`);
   }
+});
+
+// ------------------------------------------- live-run regressions (round 14)
+
+Deno.test("REGRESSION: the marketplace query keeps the user's words", () => {
+  // It used to send a bare category word — "best phones under 15000" became
+  // "mobile phone" — and marketplace relevance is driven by the phrase. A live
+  // run returned keypad phones and white-label listings while Redmi, realme,
+  // POCO and iQOO never appeared at all.
+  assertEquals(
+    searchTerm(parseIntentRules("best phones under 15000")),
+    "phones under 15000",
+  );
+  assertEquals(
+    searchTerm(parseIntentRules("best gaming phone under 30000")),
+    "gaming phone under 30000",
+  );
+  // The brand is already in the words; it must not be duplicated.
+  assertEquals(
+    searchTerm(parseIntentRules("redmi phones under 15000")),
+    "redmi phones under 15000",
+  );
+});
+
+Deno.test("REGRESSION: keypad phones are not smartphones", () => {
+  // A Rs 2,699 Nokia 150 reached #4 with a BATTERY KING badge.
+  for (
+    const t of [
+      "Nokia 150 Dual SIM Premium Keypad Mobile Phone with MP3 Player, Wireless FM Radio",
+      "Motorola A100 Keypad Mobile Phone with 2.4 inch display",
+      "Lava Hero Shakti 2026 Dual Sim Keypad Phone 1200mAh",
+    ]
+  ) {
+    assertEquals(classify(t).category, "featurephone", t.slice(0, 40));
+    assertEquals(categoryMatches("phone", classify(t).category), false);
+  }
+  // Real smartphones are unaffected.
+  assertEquals(
+    classify("POCO M7 Pro 5G (Olive Twilight, 128 GB) (6 GB RAM)").category,
+    "phone",
+  );
+});
+
+Deno.test("REGRESSION: impossible specs are rejected, not recorded", () => {
+  // The same Nokia was credited with 20,000 mAh, 8/128GB, 50MP OIS and 5G,
+  // all harvested from a "Similar products" carousel.
+  const contaminated =
+    "Nokia 150 Keypad Phone | 2.4 inch display | 1000 mAh | Similar products " +
+    "20000 mAh Power Bank 8GB 128GB 50MP OIS 120Hz 5G";
+  const { specs } = specsFromText(contaminated);
+  assertEquals(specs.batteryMah, undefined, "20000 mAh is a power bank");
+  assertEquals(
+    specs.displayInches,
+    undefined,
+    "2.4in is not a smartphone panel",
+  );
+  assertEquals(
+    specs.refreshHz,
+    undefined,
+    "dropped along with the tiny screen",
+  );
+  assertEquals(specs.has5g, undefined);
+  assertEquals(specs.ois, undefined);
+
+  // A genuine listing keeps everything.
+  const real = specsFromText(
+    "POCO M7 Pro 5G (Olive Twilight, 128 GB) (6 GB RAM) | 6.67 inch AMOLED 120Hz | 5110 mAh | 45W | 50MP OIS | 5G",
+  ).specs;
+  assertEquals(real.batteryMah, 5110);
+  assertEquals(real.refreshHz, 120);
+  assertEquals(real.displayInches, 6.67);
+  assertEquals(real.has5g, true);
+});
+
+Deno.test("implausible refresh rates are dropped rather than believed", () => {
+  // "240Hz" on a Flipkart page is the touch sampling rate.
+  assertEquals(
+    specsFromText("6.7 inch display 240Hz touch sampling").specs.refreshHz,
+    undefined,
+  );
+  assertEquals(
+    specsFromText("6.7 inch 120Hz AMOLED display").specs.refreshHz,
+    120,
+  );
 });

@@ -10,6 +10,7 @@
  */
 export type Category =
   | "phone"
+  | "featurephone"
   | "tablet"
   | "laptop"
   | "headphone"

@@ -343,6 +343,8 @@ export function specsFromText(text: string): {
     }
   }
 
+  plausible(specs);
+
   const soc = matchSoc(text);
   if (soc) {
     set("socName", soc.name, "title");
@@ -364,6 +366,62 @@ export interface AnalyzeOptions {
    * rate and a 25W charger as 45W.
    */
   externalSpecs?: Map<string, Partial<Specs>>;
+}
+
+/**
+ * Reject values that cannot describe a smartphone.
+ *
+ * Product pages carry recommendation carousels and cross-sell blocks, so a
+ * number matched anywhere on the page may belong to a power bank or another
+ * handset. A live run gave a Rs 2,699 keypad phone "20,000 mAh", "8/128GB",
+ * "50MP OIS" and "5G", then badged it BATTERY KING at #4.
+ *
+ * These bounds are deliberately generous — they exclude the impossible, not
+ * the merely unusual.
+ */
+function plausible(specs: Partial<Specs>): void {
+  const drop = <K extends keyof Specs>(k: K) => {
+    delete specs[k];
+  };
+
+  if (
+    specs.batteryMah != null &&
+    (specs.batteryMah < 1500 || specs.batteryMah > 12000)
+  ) {
+    drop("batteryMah");
+  }
+  if (
+    specs.chargingW != null && (specs.chargingW < 5 || specs.chargingW > 300)
+  ) {
+    drop("chargingW");
+  }
+  if (specs.ramGb != null && (specs.ramGb < 1 || specs.ramGb > 24)) {
+    drop("ramGb");
+  }
+  if (specs.storageGb != null && specs.storageGb < 8) drop("storageGb");
+  if (
+    specs.mainCameraMp != null &&
+    (specs.mainCameraMp < 2 || specs.mainCameraMp > 250)
+  ) {
+    drop("mainCameraMp");
+  }
+  if (
+    specs.refreshHz != null &&
+    ![60, 90, 120, 144, 165, 180].includes(specs.refreshHz)
+  ) {
+    drop("refreshHz");
+  }
+
+  // A screen under 4.5" is not a modern smartphone panel, so anything the
+  // extractor "found" alongside it came from elsewhere on the page.
+  if (specs.displayInches != null && specs.displayInches < 4.5) {
+    drop("displayInches");
+    drop("refreshHz");
+    drop("resolution");
+    drop("panel");
+    drop("has5g");
+    drop("ois");
+  }
 }
 
 const SPEC_FIELDS_FOR_COMPLETENESS: Array<keyof Specs> = [

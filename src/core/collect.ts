@@ -45,7 +45,7 @@ export interface CollectOptions {
 }
 
 const CATEGORY_HINT: Record<string, string> = {
-  phone: "mobile phone",
+  phone: "smartphone",
   earbuds: "earbuds",
   headphone: "headphones",
   laptop: "laptop",
@@ -56,13 +56,42 @@ const CATEGORY_HINT: Record<string, string> = {
 };
 
 /** The keyword string we actually send to a marketplace search box. */
+/**
+ * The keyword actually typed into the marketplace search box.
+ *
+ * This used to discard the query and send a bare category word: "best phones
+ * under 15000" became "mobile phone". Marketplace relevance ranking is driven
+ * by the phrase, so that generic term returned keypad feature phones, obscure
+ * white-label listings and accessories, while the popular value handsets
+ * (Redmi, realme, POCO, iQOO) never appeared at all. The budget facet on the
+ * URL cannot compensate — it filters what came back, it does not change what
+ * the site chose to return.
+ *
+ * The user's own words are the best query. Only the parts that mean nothing to
+ * a search box are stripped: superlatives like "best", and filler.
+ */
+const QUERY_NOISE =
+  /\b(best|top|good|nice|great|show|find|me|some|please|the|a|an|list|of|any|which|what|are)\b/gi;
+
 export function searchTerm(intent: RankIntent): string {
+  const cleaned = intent.raw
+    .replace(QUERY_NOISE, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Keep the budget in the phrase — "phones under 15000" is a query Indian
+  // marketplaces are well tuned for, and it steers relevance toward the
+  // segment rather than the long tail.
+  // No need to prepend the brand: intent.brands was derived from these very
+  // words, so it is already in the phrase. Prepending produced "Xiaomi redmi
+  // phones under 15000".
+  if (cleaned.length >= 3) return cleaned;
+
   const parts: string[] = [];
   if (intent.brands.length) parts.push(intent.brands.join(" "));
   parts.push(CATEGORY_HINT[intent.category] ?? intent.category);
   if (intent.modelHint) parts.push(intent.modelHint);
-  const term = parts.join(" ").trim();
-  return term || intent.raw;
+  return parts.join(" ").trim() || intent.raw;
 }
 
 function flipkartUrl(intent: RankIntent, page: number): string {

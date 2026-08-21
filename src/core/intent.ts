@@ -217,6 +217,7 @@ export function parseIntentRules(query: string): RankIntent {
 }
 
 const CATEGORY_LABEL: Partial<Record<Category, string>> = {
+  featurephone: "keypad phones",
   earbuds: "earbuds",
   headphone: "headphones",
   laptop: "laptops",

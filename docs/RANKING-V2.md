@@ -925,6 +925,61 @@ instead of 1-7.
 
 ---
 
+## Round 14: the first real multi-page run, and what it exposed
+
+A live `--pages 3` run pulled 425 cards across four platforms — the largest
+capture yet, and the first genuine test of the whole pipeline. The ranking it
+produced was not usable, and the reasons were all upstream of the ranker.
+
+```
+#4   Nokia 150 Dual SIM, Rs 2,699 — "20,000 mAh", "8/128GB", "50MP OIS", "5G",
+     on a 2.4-inch screen. Badged BATTERY KING.
+#13  Motorola A100 Keypad Mobile, Rs 979
+#15  Lava Hero Shakti, Rs 956 — badged CHEAPEST
+```
+
+No Redmi. No POCO. No realme, iQOO, vivo or OPPO — precisely the brands that
+define value in this segment.
+
+### The query was being thrown away
+
+`searchTerm()` discarded the user's words and sent a bare category term: **"best
+phones under 15000" became "mobile phone"**. Marketplace relevance is driven by
+the phrase, so a generic term returns the long tail — keypad phones, white-label
+listings, accessories — while the popular handsets never surface. The budget
+facet on the URL cannot compensate; it filters what came back, it does not
+change what the site chose to return.
+
+The user's own words are the better query. Only genuine noise is stripped now
+("best", "show me", "top"), so the phrase sent is `phones under 15000`, which is
+what the original v1 run used and why _it_ returned mainstream phones.
+
+### Feature phones are not smartphones
+
+Keypad phones match every signal a title can carry — "Mobile Phone", "Dual SIM",
+a familiar brand — so they sailed through the classifier. They are now their own
+category, recognised before the phone rule and rejected for phone queries.
+
+### Impossible specs are now rejected
+
+That Nokia's "20,000 mAh" and "50MP OIS" came from a _Similar products_ carousel
+— the same contamination class as the Apple A17 incident, which is now three
+separate occurrences. Beyond the earlier anchoring fixes, values are
+bounds-checked: battery outside 1,500-12,000 mAh, refresh rates that are not
+real panel rates, cameras beyond 250MP. And a screen under 4.5 inches
+invalidates the panel-related fields wholesale, because whatever was matched
+alongside it came from somewhere else on the page.
+
+### What the run got right
+
+Worth recording, because it was not all bad. Cross-platform matching finally
+fired — several products showed `+1 more` with offers on both Flipkart and
+Amazon. Availability caught real out-of-stock listings. Review mining ran on 128
+pages. The spec database resolved 48 models before throttling. Amazon returned
+235 cards against 168 from Flipkart, so the per-platform depth scaling worked.
+
+---
+
 ## What is still worth doing
 
 1. **Amazon PDPs need a transport.** Direct fetch gets a bot page, so Amazon

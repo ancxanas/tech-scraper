@@ -54,6 +54,25 @@ const RULES: Rule[] = [
     ],
   },
   {
+    // Keypad/feature phones. They match every smartphone signal a title can
+    // carry ("Mobile Phone", "Dual SIM", a brand name) but are a different
+    // product entirely: a live run put a Rs 2,699 Nokia 150 at #4 with a
+    // BATTERY KING badge. Listed before the phone rule so it wins the tie.
+    category: "featurephone",
+    strong: [
+      /\bkeypad\b/i,
+      /\bfeature\s*phone\b/i,
+      /\b(basic|senior\s*citizen)\s*phone\b/i,
+    ],
+    weak: [
+      /\bmp3\s*player\b/i,
+      /\bwireless\s*fm\b/i,
+      /\btorch\b/i,
+      /\b[12]\.\d\s*inch\b/i,
+    ],
+    veto: [/\b\d+\s*gb\s*ram\b/i, /\bandroid\b/i],
+  },
+  {
     category: "phone",
     strong: [
       /\b(smartphone|mobile\s*phone)\b/i,
@@ -69,6 +88,7 @@ const RULES: Rule[] = [
       /\b(poco|redmi|realme|narzo|iqoo|vivo|oppo|infinix|tecno|lava|motorola|moto|nothing\s*phone)\b/i,
     ],
     veto: [
+      /\bkeypad\b|\bfeature\s*phone\b/i,
       /\b(case|cover|tempered|screen\s*guard|protector|charger|cable|adapter|holder|mount|stand|pouch|skin|sticker|lens\s*protector|back\s*cover|flip\s*cover)\b/i,
       /\b(earphones?|earbuds?|headphones?|headset|neckband|tws|speaker|smart\s*watch|smartwatch|power\s*bank|powerbank|tablet|laptop)\b/i,
       /\bcompatible\s+with\b/i,
