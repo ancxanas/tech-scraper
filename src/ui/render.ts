@@ -569,9 +569,9 @@ export function renderFull(
   if (unverified >= 3) {
     parts.push(
       colors.yellow(
-        `  ${unverified} of ${result.ranked.length} results have unverified specs. Re-run with --enrich ${
+        `  ${unverified} of ${result.ranked.length} results have unverified specs. Re-rank the saved\n  run with --max-fetches ${
           Math.min(30, unverified + 5)
-        } to fetch\n  their spec sheets (free via direct fetch where the marketplace allows it).\n`,
+        } to fetch their spec sheets (free via direct\n  fetch where the marketplace allows it).\n`,
       ),
     );
   } else {

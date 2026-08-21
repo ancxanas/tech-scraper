@@ -30,6 +30,13 @@ export interface PriceStats {
   max: number;
   avg: number;
   observations: number;
+  /**
+   * Distinct runs behind those observations. One run that finds the same
+   * model on three marketplaces writes three observations at the same
+   * timestamp — that is breadth, not history, and must not be mistaken for
+   * a price trend.
+   */
+  runs: number;
   firstSeen: string;
   lastSeen: string;
   daysTracked: number;
@@ -126,6 +133,7 @@ function summarise(key: string, obs: PriceObservation[]): PriceStats | null {
     max,
     avg: Math.round(prices.reduce((a, b) => a + b, 0) / prices.length),
     observations: obs.length,
+    runs: new Set(obs.map((o) => o.timestamp)).size,
     firstSeen: first,
     lastSeen: last,
     daysTracked: days,

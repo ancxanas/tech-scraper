@@ -254,6 +254,8 @@ export interface PriceHistoryEntry {
   position: number;
   trend: "falling" | "rising" | "stable";
   observations: number;
+  /** Distinct runs behind those observations — see PriceStats.runs. */
+  runs: number;
   daysTracked: number;
 }
 
@@ -440,7 +442,10 @@ export function rankCandidates(
     // Recorded history beats a single snapshot's discount claim: a "50% off"
     // banner means nothing if the phone has sat at this price for six weeks.
     const hist = options.priceHistory?.get(c.key);
-    if (hist && hist.observations >= 2) {
+    // Two runs, not two observations: three marketplaces sampled once each in
+    // the same run say nothing about whether this price is a low point, and
+    // must not buy 20 deal points.
+    if (hist && hist.runs >= 2) {
       if (o.price <= hist.min) deal += 20;
       else if (hist.position <= 0.15) deal += 12;
       else if (hist.position >= 0.85) deal -= 12;
@@ -591,6 +596,13 @@ function annotate(
     a,
     b,
   ) => (b.score.performance > a.score.performance ? b : a));
+  // A superlative has to be a clear win. Two phones on the same chipset get
+  // the same benchmark and the same performance score, and `reduce` hands the
+  // badge to whichever the sort happened to put first — an arbitrary
+  // distinction the reader would take as a measured one.
+  const fastestIsClear = !pool.some((r) =>
+    r !== fastest && r.score.performance >= fastest.score.performance - 0.5
+  );
   const bestRated = pool
     .filter((r) => (r.ratingCount ?? 0) > 500)
     .reduce<RankedCandidate | null>(
@@ -601,6 +613,11 @@ function annotate(
     a,
     b,
   ) => (b.score.battery > a.score.battery ? b : a));
+  // Same tie problem: 5000mAh is the default in this segment, so BATTERY KING
+  // must go to a phone that actually leads, not to the first 5000mAh row.
+  const batteryIsClear = !pool.some((r) =>
+    r !== bestBattery && r.score.battery >= bestBattery.score.battery - 0.5
+  );
 
   for (const r of ranked) {
     const pros: string[] = [];
@@ -671,7 +688,11 @@ function annotate(
     }
 
     const hist = priceHistory?.get(r.key);
-    if (hist && hist.observations >= 2) {
+    // `runs`, not `observations`: a model sold on three marketplaces logs
+    // three prices in a single run, and "lowest of the three we just read"
+    // is not a price history. Two separate runs is the floor for any claim
+    // about movement over time.
+    if (hist && hist.runs >= 2) {
       if (r.best.price <= hist.min) {
         // Prepend: "cheapest we have ever seen it" outranks any spec bullet,
         // and pros are capped at five.
@@ -712,10 +733,15 @@ function annotate(
     if (anyMatch && !r.matchesRequestedModel) badges.push("ALTERNATIVE");
     if (r === bestValue && isVouchable(r)) badges.push("BEST VALUE");
     if (r === cheapest) badges.push("CHEAPEST");
-    if (r === fastest && (r.specs.antutu ?? 0) > 0 && isVouchable(r)) {
+    if (
+      r === fastest && fastestIsClear && (r.specs.antutu ?? 0) > 0 &&
+      isVouchable(r)
+    ) {
       badges.push("FASTEST");
     }
-    if (r === bestBattery && (r.specs.batteryMah ?? 0) > 0) {
+    if (
+      r === bestBattery && batteryIsClear && (r.specs.batteryMah ?? 0) > 0
+    ) {
       badges.push("BATTERY KING");
     }
     if (bestRated && r === bestRated) badges.push("BEST RATED");
@@ -726,7 +752,7 @@ function annotate(
     r.pros = pros.slice(0, 5);
     r.cons = cons.slice(0, 4);
     r.badges = badges;
-    r.verdict = buildVerdict(r, intent, med.price);
+    r.verdict = buildVerdict(r, intent, med.price, r === fastest);
   }
 }
 
@@ -734,6 +760,8 @@ function buildVerdict(
   r: RankedCandidate,
   intent: RankIntent,
   medPrice: number,
+  /** Nothing in the set is faster, so "compromises on raw speed" is a lie. */
+  leadsPerformance: boolean,
 ): string {
   const price = `₹${r.best.price.toLocaleString("en-IN")}`;
   const bits: string[] = [];
@@ -756,11 +784,16 @@ function buildVerdict(
   if (strengths.length) bits.push(`leads on ${strengths.join(" and ")}`);
 
   const weak: string[] = [];
-  if (r.score.performance < 40) weak.push("raw speed");
+  // Performance scores are absolute, so an entire budget set can sit under 40.
+  // Telling the fastest phone in the set that it compromises on speed — while
+  // badging it FASTEST — is the sort of contradiction that costs trust.
+  if (r.score.performance < 40 && !leadsPerformance) weak.push("raw speed");
   if (r.score.display < 45) weak.push("screen quality");
   if (r.score.battery < 45) weak.push("battery");
   if (weak.length) bits.push(`compromises on ${weak.join(" and ")}`);
 
+  // Kept even for the set leader: on a gaming query, "the best here is still
+  // not enough" is the single most useful thing we can say.
   if (intent.priorities.includes("performance") && r.score.performance < 50) {
     bits.push("not ideal for gaming");
   }

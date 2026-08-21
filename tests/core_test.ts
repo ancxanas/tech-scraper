@@ -592,6 +592,7 @@ Deno.test("recorded history sharpens the deal score", async () => {
     position: 0,
     trend: "stable" as const,
     observations: 3,
+    runs: 3,
     daysTracked: 30,
   }]]);
 
@@ -623,6 +624,7 @@ Deno.test("a price sitting at its recorded high is penalised and flagged", async
     position: 1,
     trend: "rising" as const,
     observations: 5,
+    runs: 5,
     daysTracked: 20,
   }]]);
 
@@ -646,6 +648,7 @@ Deno.test("a single observation is not treated as history", async () => {
     position: 0,
     trend: "stable" as const,
     observations: 1,
+    runs: 1,
     daysTracked: 0,
   }]]);
 
@@ -655,6 +658,80 @@ Deno.test("a single observation is not treated as history", async () => {
   const same = withHistory.ranked.find((r) => r.key === top.key)!;
   assertEquals(same.score.dealScore, top.score.dealScore);
   assert(!same.badges.includes("LOWEST YET"));
+});
+
+Deno.test("one run's breadth is not price history", async () => {
+  // Three marketplaces sampled once each in a single run write three
+  // observations at one timestamp. That is coverage, not a trend, and it must
+  // not earn LOWEST YET or the 20-point deal bonus.
+  const batches = await loadRun([FIXTURE]);
+  const intent = parseIntentRules("best phones under 15000");
+  const base = runPipeline("q", intent, batches);
+  const top = base.ranked[0];
+
+  const sameRunBreadth = new Map([[top.key, {
+    min: top.best.price,
+    max: Math.round(top.best.price * 1.2),
+    position: 0,
+    trend: "stable" as const,
+    observations: 3, // three offers…
+    runs: 1, // …all from one run
+    daysTracked: 0,
+  }]]);
+
+  const withBreadth = runPipeline("q", intent, batches, {
+    priceHistory: sameRunBreadth,
+  });
+  const same = withBreadth.ranked.find((r) => r.key === top.key)!;
+  assertEquals(same.score.dealScore, top.score.dealScore);
+  assert(!same.badges.includes("LOWEST YET"));
+});
+
+Deno.test("superlative badges require a clear win, not a tie", async () => {
+  // Two phones on the same chipset score identically; `reduce` would hand the
+  // badge to whichever came first, which reads as a measured distinction.
+  const batches = await loadRun([FIXTURE]);
+  const intent = parseIntentRules("best phones under 15000");
+  const result = runPipeline("q", intent, batches);
+
+  for (
+    const [badge, of] of [
+      ["FASTEST", (r: typeof result.ranked[number]) => r.score.performance],
+      ["BATTERY KING", (r: typeof result.ranked[number]) => r.score.battery],
+    ] as const
+  ) {
+    const holder = result.ranked.find((r) => r.badges.includes(badge));
+    if (!holder) continue;
+    const runnerUp = Math.max(
+      ...result.ranked.filter((r) => r !== holder).map(of),
+    );
+    assert(
+      of(holder) > runnerUp,
+      `${badge} went to a tie: ${of(holder)} vs runner-up ${runnerUp}`,
+    );
+  }
+});
+
+Deno.test("the set's fastest phone is never told it compromises on speed", async () => {
+  const batches = await loadRun([FIXTURE]);
+  const intent = parseIntentRules("best phones under 15000");
+  const result = runPipeline("q", intent, batches);
+
+  const best = result.ranked
+    .filter((r) => (r.specs.antutu ?? 0) > 0)
+    .reduce<typeof result.ranked[number] | null>(
+      (
+        a,
+        b,
+      ) => (a === null || b.score.performance > a.score.performance ? b : a),
+      null,
+    );
+  if (best) {
+    assert(
+      !best.verdict.includes("compromises on raw speed"),
+      `fastest phone's verdict contradicts itself: ${best.verdict}`,
+    );
+  }
 });
 
 // ------------------------------------------------------------ heal diagnosis
