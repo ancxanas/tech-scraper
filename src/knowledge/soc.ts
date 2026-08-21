@@ -832,6 +832,30 @@ export interface SocMatch {
 }
 
 /** Find a SoC mentioned anywhere in a blob of text, with match quality. */
+/**
+ * Resolve a chipset name that arrived in a STRUCTURED field, where the whole
+ * string is the chip and nothing else.
+ *
+ * `matchSoc` scans free text, so it requires a nearby context word before
+ * trusting a vendor-less alias — otherwise "Aulumu A17" reads as an Apple
+ * A17. That rule is right for page text and wrong here: a spec source that
+ * returns Processor = "T7250" has given us the chip with no room for a
+ * coincidence, and running it through the text matcher returned nothing,
+ * which surfaced as the nonsense conflict "KB says Unisoc T7250, page says
+ * T7250".
+ */
+export function matchSocExact(name: string): SocEntry | null {
+  const n = name.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!n) return null;
+  for (const soc of SOCS) {
+    if (soc.name.toLowerCase() === n) return soc;
+  }
+  for (const soc of SOCS) {
+    if (soc.aliases.some((a) => a === n)) return soc;
+  }
+  return null;
+}
+
 export function matchSocDetailed(text: string): SocMatch | null {
   const soc = matchSoc(text);
   if (!soc) return null;

@@ -39,7 +39,12 @@ import {
 import { toSpecs } from "../src/core/resolve.ts";
 import { loadRun } from "../src/core/replay.ts";
 import { buildCandidates, runPipeline } from "../src/core/pipeline.ts";
-import { matchSoc, matchSocDetailed, SOCS } from "../src/knowledge/soc.ts";
+import {
+  matchSoc,
+  matchSocDetailed,
+  matchSocExact,
+  SOCS,
+} from "../src/knowledge/soc.ts";
 import { lookupModel, PHONE_MODELS } from "../src/knowledge/models.ts";
 import { hasCheckoutInfo, parseCheckout } from "../src/core/checkout.ts";
 import { SpecStore } from "../src/core/spec-cache.ts";
@@ -740,6 +745,20 @@ Deno.test("the set's fastest phone is never told it compromises on speed", async
       `fastest phone's verdict contradicts itself: ${best.verdict}`,
     );
   }
+});
+
+Deno.test("a chip name from a structured field needs no context word", () => {
+  // Free-text matching requires context so that "Aulumu A17" is not read as
+  // an Apple A17. A spec source returning Processor = "T7250" has no such
+  // ambiguity, and running it through the text matcher produced the nonsense
+  // conflict "KB says Unisoc T7250, page says T7250".
+  assertEquals(matchSocExact("T7250")?.name, "Unisoc T7250");
+  assertEquals(matchSocExact("Unisoc T7250")?.name, "Unisoc T7250");
+  assertEquals(matchSocExact("Dimensity 6300")?.name, "Dimensity 6300");
+  // Still exact: a phrase is not a chip name.
+  assertEquals(matchSocExact("Aulumu A17 for iPhone 17 Pro Max Case"), null);
+  // And the free-text matcher keeps its guard.
+  assertEquals(matchSoc("Aulumu A17 for iPhone 17 Pro Max Case"), null);
 });
 
 // ---------------------------------------------------------- spec precedence

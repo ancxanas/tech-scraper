@@ -29,7 +29,7 @@ import {
   reviewsUrlFor,
   summariseReviews,
 } from "./reviews.ts";
-import { matchSocDetailed } from "../knowledge/soc.ts";
+import { matchSocDetailed, matchSocExact } from "../knowledge/soc.ts";
 import {
   fetchSpecs as fetchExternalSpecs,
   loadIndex,
@@ -189,7 +189,8 @@ export function toSpecs(g: ExternalSpecs): Partial<Specs> {
     if (v !== null && v !== undefined) out[k] = v;
   };
   if (g.socName) {
-    const soc = matchSocDetailed(g.socName);
+    const exact = matchSocExact(g.socName);
+    const soc = exact ? { soc: exact } : matchSocDetailed(g.socName);
     set("socName", soc ? soc.soc.name : g.socName);
     // Deliberately the per-chip table first, and a measured figure only when
     // the chip is unknown to us.
@@ -225,7 +226,10 @@ function conflictsAgainstKb(c: Candidate, g: ExternalSpecs): SpecConflict[] {
   const out: SpecConflict[] = [];
   if (
     c.specs.socName && c.specSources.socName === "kb" && g.socName &&
-    matchSocDetailed(g.socName)?.soc.name !== c.specs.socName
+    // Exact-match first: the value came from a structured field, so it needs
+    // no context word to be believed.
+    (matchSocExact(g.socName) ?? matchSocDetailed(g.socName)?.soc)?.name !==
+      c.specs.socName
   ) {
     out.push({
       product: c.modelName,
@@ -540,9 +544,14 @@ export function reportResolution(r: ResolveResult): void {
         ),
       );
     }
+    if (r.conflicts.length > 5) {
+      console.error(
+        colors.yellow(`    …and ${r.conflicts.length - 5} more`),
+      );
+    }
     console.error(
       colors.dim(
-        "    Unambiguous page values win automatically; abbreviated ones are kept\n    as-is pending a correction to src/knowledge/models.ts.",
+        "    A high-confidence knowledge-base entry wins and the page is ignored;\n    below that the page wins. Either way, correct the loser in\n    src/knowledge/models.ts.",
       ),
     );
   }
