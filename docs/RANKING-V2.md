@@ -716,6 +716,15 @@ The conclusion is not that a better source exists — it is that the good source
 needs a better **transport**. Web Unlocker bypasses both the 429 and the 403s,
 and because specs are cached permanently it costs one request per model, once.
 
+`--allow-paid` grants _permission to fall back_, not an instruction to spend.
+Free direct fetch is always attempted first, on both merchant pages and the spec
+database; the paid transport is reached only when the free one is blocked or
+throttled. The first implementation got this wrong for the spec database — it
+routed every lookup through Web Unlocker whenever the flag was present, billing
+for pages the free transport serves perfectly well. A test now pins the
+ordering, and the transport actually used is recorded per cache entry so the run
+report can say how many requests were paid for.
+
 `deno task specs` does that bulk work separately from ranking:
 
 ```bash

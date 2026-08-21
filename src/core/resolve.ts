@@ -286,13 +286,22 @@ export async function resolveSpecs(
           } else {
             // Be a guest on someone else's server.
             if (fetchedThisRun > 0) await sleep(opts.pace ?? 1100);
-            g = await fetchGsmSpecs(
-              hit,
-              lookupName,
-              allowPaid ? async (u) => await fetchPageMarkdown(u) : undefined,
-            );
+            // Free first, always. --allow-paid grants permission to fall back,
+            // it is not an instruction to spend: routing every lookup through
+            // the paid transport would bill for pages the free one serves.
+            let via: "direct" | "unlocker" = "direct";
+            g = await fetchGsmSpecs(hit, lookupName, async (u) => {
+              try {
+                return await fetchDirect(u, 15000);
+              } catch (err) {
+                if (!allowPaid) throw err;
+                via = "unlocker";
+                result.fetchedPaid++;
+                return await fetchPageMarkdown(u);
+              }
+            });
             fetchedThisRun++;
-            if (g) store.set(cacheKey, JSON.stringify(g), "direct");
+            if (g) store.set(cacheKey, JSON.stringify(g), via);
           }
 
           if (!g) {

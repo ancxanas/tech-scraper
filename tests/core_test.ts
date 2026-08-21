@@ -13,6 +13,7 @@ import {
   assertAlmostEquals,
   assertEquals,
   assertExists,
+  assertRejects,
 } from "@std/assert";
 import {
   normalizeBatch,
@@ -37,8 +38,10 @@ import { hasCheckoutInfo, parseCheckout } from "../src/core/offers.ts";
 import { SpecStore } from "../src/core/specstore.ts";
 import { htmlToText, jsonStateText, pageToText } from "../src/lib/unlock.ts";
 import {
+  fetchSpecs as fetchGsmSpecs,
   normaliseModel,
   parseSpecPage,
+  RateLimited,
   resolveModel,
 } from "../src/knowledge/gsmarena.ts";
 import { buildPrompt, classifyFailure } from "../src/commands/heal.ts";
@@ -1315,4 +1318,54 @@ Deno.test("vendor-less chipset aliases require processor context", () => {
   assertEquals(matchSoc("Model number G99 packaging box"), null);
   // With context, it does.
   assertEquals(matchSoc("Processor Helio G99 octa-core")?.name, "Helio G99");
+});
+
+// -------------------------------------------------- paid transport is a fallback
+
+Deno.test("--allow-paid is permission to fall back, not to spend by default", async () => {
+  // The first implementation routed every spec-database lookup through the
+  // paid transport whenever the flag was set, billing for pages the free
+  // transport serves perfectly well. Free must always be attempted first.
+  let directCalls = 0;
+  let paidCalls = 0;
+
+  const entry = { name: "Poco M7 Pro", brand: "Xiaomi", slug: "x-1.php" };
+  const page = await Deno.readTextFile(
+    "tests/fixtures/gsmarena/poco-m7-pro.txt",
+  );
+
+  // Free transport healthy: the paid one must never be reached.
+  const ok = await fetchGsmSpecs(entry, "poco m7 pro", (_u) => {
+    directCalls++;
+    return Promise.resolve(page);
+  });
+  assertExists(ok);
+  assertEquals(directCalls, 1);
+  assertEquals(paidCalls, 0);
+
+  // Free transport failing, with permission: fall back exactly once.
+  const viaFallback = await fetchGsmSpecs(entry, "poco m7 pro", async (_u) => {
+    directCalls++;
+    try {
+      throw new Error("HTTP 403");
+    } catch {
+      paidCalls++;
+      return await Promise.resolve(page);
+    }
+  });
+  assertExists(viaFallback);
+  assertEquals(paidCalls, 1);
+});
+
+Deno.test("a 429 from the spec database is surfaced as a distinct, stoppable error", async () => {
+  const entry = { name: "Poco M7 Pro", brand: "Xiaomi", slug: "x-1.php" };
+  await assertRejects(
+    () =>
+      fetchGsmSpecs(
+        entry,
+        "poco m7 pro",
+        () => Promise.reject(new Error("HTTP 429")),
+      ),
+    RateLimited,
+  );
 });
