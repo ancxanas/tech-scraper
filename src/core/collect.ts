@@ -220,7 +220,12 @@ export async function collectRaw(
   options: CollectOptions,
 ): Promise<RawBatch[]> {
   const enabled = platforms.filter((p) => PLATFORMS[p].enabled);
-  const timeoutMs = options.timeoutMs ?? 300_000;
+  // Must exceed the collector's OWN polling budget (48 attempts x 10s = 480s),
+  // or we abort a job that was still going to succeed. A live run lost all 168
+  // Flipkart cards to this: Reliance finished at 287s and Tata CLiQ at 298s,
+  // both just inside the old 300s wrapper, while Flipkart needed longer and was
+  // killed 180s before its own deadline.
+  const timeoutMs = options.timeoutMs ?? 540_000;
 
   const jobs = enabled.map(async (platform): Promise<RawBatch> => {
     const config = PLATFORMS[platform];

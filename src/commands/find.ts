@@ -77,6 +77,11 @@ export const findCommand = new Command()
     "Search depth per platform. Each step is one more collector request but ~12 more distinct models — the catalogue is not exhausted at 1. Try 2-3 for a real run.",
     { default: 1 },
   )
+  .option(
+    "--timeout <seconds:number>",
+    "Per-platform collector deadline. Must exceed the collector's own polling budget (~480s).",
+    { default: 540 },
+  )
   .option("-n, --top <n:number>", "Rows to show in the ranking table", {
     default: 15,
   })
@@ -149,6 +154,7 @@ export const findCommand = new Command()
 
     const batches = await collectRaw(platforms, intent, {
       pages: options.pages,
+      timeoutMs: (options.timeout ?? 540) * 1000,
     });
 
     let savedTo: string | null = null;
