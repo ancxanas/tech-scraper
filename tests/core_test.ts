@@ -2127,3 +2127,42 @@ Deno.test("no buy box and a sold-out offer still reads as out of stock", () => {
   }</script></head><body>Currently unavailable</body></html>`;
   assertEquals(parseCheckout(pageToText(html)).inStock, false);
 });
+
+Deno.test("the table shows one row per phone, not one per storage config", async () => {
+  const batches = await loadRun([FIXTURE]);
+  const intent = parseIntentRules("best phones under 15000");
+  const { ranked } = runPipeline("q", intent, batches);
+
+  const table = ranked.filter((r) => !r.variantOf);
+  const models = table.map((r) => r.key.split("|")[0]);
+  assertEquals(
+    models.length,
+    new Set(models).size,
+    `a phone appears twice in the table: ${models.join(", ")}`,
+  );
+  // The collapsed ones are still ranked, just folded into their sibling.
+  const folded = ranked.filter((r) => r.variantOf);
+  for (const f of folded) {
+    assert(f.variantOf!.length > 0);
+  }
+});
+
+Deno.test("a listing with nothing to verify is scored down, not hidden", async () => {
+  const batches = await loadRun([FIXTURE]);
+  const intent = parseIntentRules("best phones under 15000");
+  const { ranked } = runPipeline("q", intent, batches);
+  const junk = ranked.filter((r) => r.unvouchable);
+  for (const r of junk) {
+    assertEquals(r.specs.socName, null);
+    assert((r.ratingCount ?? 0) < 20);
+    assert(
+      r.cons.some((c) => c.includes("nothing to verify")),
+      `${r.modelName} was penalised without saying why`,
+    );
+  }
+  // Still ordered by the number the table prints.
+  for (let i = 1; i < ranked.length; i++) {
+    if (ranked[i - 1].best.inStock === false) break;
+    assert(ranked[i - 1].score.total >= ranked[i].score.total);
+  }
+});

@@ -162,7 +162,7 @@ export function rankTable(ranked: RankedCandidate[], limit: number): string {
       colors.bold("Where"),
     ])
     .body(
-      ranked.slice(0, limit).map((r) => [
+      shown(ranked, limit).map((r) => [
         r.rank === 1
           ? colors.green(colors.bold("1"))
           : colors.dim(String(r.rank)),
@@ -188,7 +188,7 @@ export function rankTable(ranked: RankedCandidate[], limit: number): string {
 
 export function detailCards(ranked: RankedCandidate[], count: number): string {
   const out: string[] = [];
-  for (const r of ranked.slice(0, count)) {
+  for (const r of shown(ranked, count)) {
     out.push("");
     out.push(rule(`#${r.rank}  ${r.modelName}`));
     out.push("");
@@ -518,6 +518,14 @@ function sortNote(ranked: RankedCandidate[]): string {
       badgeChip("ALTERNATIVE")
     }${colors.dim(" are different models that scored higher on value.")}`,
   );
+}
+
+/** The table shows one row per phone, not one per storage configuration. */
+function shown(
+  ranked: RankedCandidate[],
+  limit: number,
+): RankedCandidate[] {
+  return ranked.filter((r) => !r.variantOf).slice(0, limit);
 }
 
 export function renderFull(

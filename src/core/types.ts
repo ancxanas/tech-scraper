@@ -137,6 +137,10 @@ export interface ScoreBreakdown {
 export interface RankedCandidate extends Candidate {
   rank: number;
   priceBelowMarket?: boolean;
+  /** A cheaper/better-scoring config of the same phone already appears. */
+  variantOf?: string;
+  /** Nothing verifiable backs this listing: no chipset and almost no buyers. */
+  unvouchable?: boolean;
   matchesRequestedModel: boolean;
   score: ScoreBreakdown;
   pros: string[];

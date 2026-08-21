@@ -444,6 +444,15 @@ export function rankCandidates(
   // table, badged, because the price is still useful context; it just cannot
   // lead. Applied before score so no amount of value outranks availability.
   const unbuyable = (r: RankedCandidate) => Number(r.best.inStock === false);
+  // Nothing to go on: no chipset read from anywhere, and too few buyers for
+  // the rating to mean anything. A 1-star phone with one review and "SoC ?"
+  // was reaching the top ten on a fabricated discount. Scored down rather
+  // than sorted into a hidden tier, so the table stays ordered by the number
+  // it displays and the reason shows up in the row.
+  for (const r of ranked) {
+    r.unvouchable = !r.specs.socName && (r.ratingCount ?? 0) < 20;
+    if (r.unvouchable) r.score.total = clamp(r.score.total * 0.7);
+  }
   ranked.sort((a, b) =>
     (anyExactMatch
       ? Number(b.matchesRequestedModel) - Number(a.matchesRequestedModel)
@@ -453,6 +462,17 @@ export function rankCandidates(
     b.score.confidence - a.score.confidence ||
     a.best.price - b.best.price
   );
+  // One row per phone. Three storage variants of the same handset filling
+  // three of the top five is a list of configs, not a recommendation - and
+  // every row already carries its siblings under "Other configs".
+  const bestOfModel = new Map<string, RankedCandidate>();
+  for (const r of ranked) {
+    const model = r.key.split("|")[0];
+    const seen = bestOfModel.get(model);
+    if (seen) r.variantOf = seen.modelName;
+    else bestOfModel.set(model, r);
+  }
+
   ranked.forEach((r, i) => (r.rank = i + 1));
 
   annotate(ranked, intent, options.priceHistory);
@@ -596,6 +616,9 @@ function annotate(
     }
     if (r.rating !== null && r.rating < 3.9) {
       cons.push(`weak ${r.rating}★ rating`);
+    }
+    if (r.unvouchable) {
+      cons.unshift("no chipset found and almost no buyers — nothing to verify");
     }
     if ((r.ratingCount ?? 0) < 100) cons.push("very few reviews — unproven");
     if (r.best.inStock === false) {
