@@ -12,7 +12,7 @@ import { loadRun } from "../core/replay.ts";
 import { runPipeline } from "../core/pipeline.ts";
 import { parseIntentRules, unsupportedReason } from "../core/intent.ts";
 import { renderFull } from "../ui/render.ts";
-import { enrichTop } from "../core/enrich.ts";
+import { enrichTop, reportEnrichment } from "../core/enrich.ts";
 
 export const rankCommand = new Command()
   .description("Rank products from saved scrape data (no credits spent)")
@@ -37,6 +37,11 @@ export const rankCommand = new Command()
     "--budget-tolerance <pct:number>",
     "Allow N% over the stated budget",
     { default: 0 },
+  )
+  .option(
+    "--enrich-via <mode:string>",
+    "auto | direct | unlocker (auto tries the free direct fetch first)",
+    { default: "auto" },
   )
   .option(
     "--enrich <n:number>",
@@ -93,6 +98,7 @@ export const rankCommand = new Command()
       );
       const enriched = await enrichTop(result.ranked, options.enrich, {
         verbose: true,
+        mode: options.enrichVia as "auto" | "direct" | "unlocker",
       });
       if (enriched.text.size > 0) {
         result = runPipeline(query, intent, batches, {
@@ -101,11 +107,7 @@ export const rankCommand = new Command()
           enrichText: enriched.text,
         });
       }
-      console.error(
-        colors.dim(
-          `  enriched ${enriched.fetched}, skipped ${enriched.skipped} (already known), failed ${enriched.failed}\n`,
-        ),
-      );
+      reportEnrichment(enriched);
     }
 
     if (options.json) {

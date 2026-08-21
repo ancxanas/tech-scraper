@@ -490,8 +490,23 @@ export function renderFull(
   }
   parts.push(
     colors.dim(
-      `\n  Scores are 0–100 and relative to this result set. "conf" is data confidence:\n  low values mean specs were inferred rather than read. * marks a discount whose MRP looks inflated.\n`,
+      `\n  Scores are 0–100 and relative to this result set. "conf" is data confidence:\n  low values mean specs were inferred rather than read. * marks a discount whose MRP looks inflated.`,
     ),
   );
+
+  // If a lot of the table is guesswork, say so and point at the free fix.
+  const unverified =
+    result.ranked.filter((r) => r.score.confidence < 0.5).length;
+  if (unverified >= 3) {
+    parts.push(
+      colors.yellow(
+        `  ${unverified} of ${result.ranked.length} results have unverified specs. Re-run with --enrich ${
+          Math.min(30, unverified + 5)
+        } to fetch\n  their spec sheets (free via direct fetch where the marketplace allows it).\n`,
+      ),
+    );
+  } else {
+    parts.push("");
+  }
   return parts.filter(Boolean).join("\n");
 }

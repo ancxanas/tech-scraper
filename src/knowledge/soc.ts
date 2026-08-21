@@ -768,7 +768,17 @@ const ALIAS_INDEX: Array<{ alias: string; soc: SocEntry }> = SOCS
 /** Find a SoC mentioned anywhere in a blob of text. Longest alias wins. */
 export function matchSoc(text: string): SocEntry | null {
   if (!text) return null;
-  const hay = ` ${text.toLowerCase().replace(/[_/]+/g, " ")} `;
+  // Flipkart's highlight strings lose spaces when tags are stripped
+  // ("Snapdragon6 | Octa Core"), so re-separate vendor names from their digits.
+  const hay = ` ${
+    text
+      .toLowerCase()
+      .replace(/[_/]+/g, " ")
+      .replace(
+        /(snapdragon|dimensity|helio|exynos|unisoc|tensor)(\d)/g,
+        "$1 $2",
+      )
+  } `;
   for (const { alias, soc } of ALIAS_INDEX) {
     // Bare numeric aliases ("4 gen 2") need word boundaries to avoid false hits.
     const idx = hay.indexOf(alias);

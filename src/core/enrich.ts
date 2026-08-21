@@ -13,7 +13,7 @@
  */
 
 import { colors } from "@cliffy/ansi/colors";
-import { fetchPageMarkdown } from "../lib/unlock.ts";
+import { fetchDirect, fetchPageMarkdown, htmlToText } from "../lib/unlock.ts";
 import type { RankedCandidate } from "./types.ts";
 
 export interface EnrichResult {
@@ -22,6 +22,51 @@ export interface EnrichResult {
   fetched: number;
   failed: number;
   skipped: number;
+  /** How each successful fetch was obtained. */
+  viaDirect: number;
+  viaUnlocker: number;
+  /** First error per transport, for a useful failure message. */
+  errors: string[];
+}
+
+export type FetchMode = "auto" | "direct" | "unlocker";
+
+/**
+ * Try the free path first, then the paid one.
+ *
+ * Returns the page as plain text plus which transport worked, so the CLI can
+ * tell the user whether they need Web Unlocker at all.
+ */
+async function fetchPage(
+  url: string,
+  mode: FetchMode,
+): Promise<{ text: string; via: "direct" | "unlocker" }> {
+  const errors: string[] = [];
+
+  if (mode === "auto" || mode === "direct") {
+    try {
+      const html = await fetchDirect(url);
+      const text = htmlToText(html);
+      // A block page is short and specless; treat it as a failure so we fall
+      // through to the paid transport rather than "succeeding" with nothing.
+      if (text.length > 2000) return { text, via: "direct" };
+      errors.push(
+        `direct: page too short (${text.length} chars, likely blocked)`,
+      );
+    } catch (err) {
+      errors.push(`direct: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  if (mode === "auto" || mode === "unlocker") {
+    try {
+      return { text: await fetchPageMarkdown(url), via: "unlocker" };
+    } catch (err) {
+      errors.push(`unlocker: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  throw new Error(errors.join(" | "));
 }
 
 /** Trim a PDP to the part that actually contains specifications. */
@@ -52,26 +97,35 @@ function extractSpecSection(markdown: string): string {
 export async function enrichTop(
   ranked: RankedCandidate[],
   count: number,
-  opts: { concurrency?: number; verbose?: boolean } = {},
+  opts: { concurrency?: number; verbose?: boolean; mode?: FetchMode } = {},
 ): Promise<EnrichResult> {
+  const mode = opts.mode ?? "auto";
   const result: EnrichResult = {
     text: new Map(),
     fetched: 0,
     failed: 0,
     skipped: 0,
+    viaDirect: 0,
+    viaUnlocker: 0,
+    errors: [],
   };
   if (count <= 0) return result;
 
-  const targets = ranked
-    .slice(0, count)
-    // Nothing to gain from re-fetching a product whose specs we already know.
-    .filter((r) => {
-      if (r.specCompleteness >= 0.85 && r.kbConfidence === "high") {
-        result.skipped++;
-        return false;
-      }
-      return true;
-    });
+  // Filter BEFORE taking N, not after. The products worth enriching are the
+  // ones we know least about, and they sit below the well-documented flagships
+  // in the ranking — slicing first spent the whole budget on phones the KB
+  // already had, which is why the first run recovered nothing.
+  const needsEnrichment = ranked.filter((r) => {
+    if (r.specCompleteness >= 0.85 && r.kbConfidence === "high") {
+      result.skipped++;
+      return false;
+    }
+    return true;
+  });
+  // Least-known first, so a small budget buys the most information.
+  const targets = [...needsEnrichment]
+    .sort((a, b) => a.score.confidence - b.score.confidence)
+    .slice(0, count);
 
   const concurrency = opts.concurrency ?? 3;
   const queue = [...targets];
@@ -89,23 +143,25 @@ export async function enrichTop(
         continue;
       }
       try {
-        const md = await fetchPageMarkdown(listing.url);
-        const section = extractSpecSection(md);
+        const { text, via } = await fetchPage(listing.url, mode);
+        const section = extractSpecSection(text);
         // Attach to every listing in the group — they are the same product.
         for (const l of candidate.listings) result.text.set(l.id, section);
         result.fetched++;
+        if (via === "direct") result.viaDirect++;
+        else result.viaUnlocker++;
         if (opts.verbose) {
-          console.error(colors.dim(`    enriched: ${candidate.modelName}`));
+          console.error(
+            colors.dim(`    enriched via ${via}: ${candidate.modelName}`),
+          );
         }
       } catch (err) {
         result.failed++;
+        const msg = err instanceof Error ? err.message : String(err);
+        if (result.errors.length < 3) result.errors.push(msg);
         if (opts.verbose) {
           console.error(
-            colors.dim(
-              `    enrich failed: ${candidate.modelName} — ${
-                err instanceof Error ? err.message : err
-              }`,
-            ),
+            colors.dim(`    enrich failed: ${candidate.modelName} — ${msg}`),
           );
         }
       }
@@ -116,4 +172,28 @@ export async function enrichTop(
     Array.from({ length: Math.min(concurrency, targets.length) }, worker),
   );
   return result;
+}
+
+/** One-line summary that tells the user which transport actually worked. */
+export function reportEnrichment(r: EnrichResult): void {
+  const parts = [`enriched ${r.fetched}`];
+  if (r.viaDirect) parts.push(`${r.viaDirect} direct (free)`);
+  if (r.viaUnlocker) parts.push(`${r.viaUnlocker} via Web Unlocker`);
+  if (r.skipped) parts.push(`${r.skipped} skipped (already known)`);
+  if (r.failed) parts.push(`${r.failed} failed`);
+  console.error(colors.dim(`  ${parts.join(", ")}`));
+
+  if (r.fetched === 0 && r.failed > 0) {
+    console.error(
+      colors.yellow(
+        "  Nothing could be fetched. Marketplaces block datacenter IPs, and Web\n  Unlocker needs business KYC. Running this from a home connection in India\n  usually makes --enrich-via direct work.",
+      ),
+    );
+    for (const e of r.errors) console.error(colors.dim(`    ${e}`));
+  } else if (r.viaDirect > 0 && r.viaUnlocker === 0) {
+    console.error(
+      colors.green("  Direct fetch worked — no Web Unlocker credit needed."),
+    );
+  }
+  console.error("");
 }

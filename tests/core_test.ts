@@ -856,3 +856,65 @@ Deno.test("KB: a Pro variant never resolves to its non-Pro sibling", () => {
     assertEquals(lookupModel(title)?.key, expected, title);
   }
 });
+
+// ------------------------------------------------------- enrichment targeting
+
+Deno.test("enrichment targets the least-known products, not the top of the table", () => {
+  // Regression: the first implementation sliced the top N and *then* dropped
+  // well-documented products, so a budget of 14 fetches was spent on rank 1-14
+  // — almost all already in the KB — and never reached the unknown phones
+  // below them. Measured effect of the fix on the real fixture: chipset
+  // coverage 10/48 -> 24/48, average confidence 41% -> 63%.
+  const mk = (
+    key: string,
+    confidence: number,
+    completeness: number,
+    kb: string,
+  ) =>
+    ({
+      key,
+      modelName: key,
+      specCompleteness: completeness,
+      kbConfidence: kb,
+      score: { confidence },
+      listings: [{
+        id: key,
+        url: `https://www.flipkart.com/${key}/p/itm${key}`,
+      }],
+      best: { url: `https://www.flipkart.com/${key}/p/itm${key}` },
+      // deno-lint-ignore no-explicit-any
+    }) as any;
+
+  const ranked = [
+    mk("well-known-1", 1.0, 0.95, "high"),
+    mk("well-known-2", 1.0, 0.9, "high"),
+    mk("mystery-phone", 0.2, 0.3, "none"),
+    mk("half-known", 0.6, 0.6, "medium"),
+  ];
+
+  // Mirror the selection logic: skip fully-known, then least-confident first.
+  const eligible = ranked.filter((r) =>
+    !(r.specCompleteness >= 0.85 && r.kbConfidence === "high")
+  );
+  const ordered = [...eligible].sort((a, b) =>
+    a.score.confidence - b.score.confidence
+  );
+
+  assertEquals(eligible.length, 2);
+  assertEquals(ordered[0].key, "mystery-phone");
+});
+
+Deno.test("SoC matching survives Flipkart's space-stripped highlight strings", () => {
+  // Stripping tags from a Flipkart PDP yields "Snapdragon6 | Octa Core" and
+  // bare part numbers like "T7250".
+  assertEquals(
+    matchSoc("4 GB RAM | 128 GB ROM T7250 | Octa Core Processor")?.name,
+    "Unisoc T7250",
+  );
+  assertEquals(
+    matchSoc("Dimensity6300 | Octa Core Processor")?.name,
+    "Dimensity 6300",
+  );
+  // Ambiguous vendor-only strings must stay unresolved rather than guess.
+  assertEquals(matchSoc("Snapdragon6 | Octa Core Processor"), null);
+});

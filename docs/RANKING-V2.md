@@ -373,12 +373,64 @@ doing its job in the meantime by marking those results as unverified.
 
 ---
 
+## Round 5: enrichment works, and it is free
+
+Web Unlocker turned out to be unavailable (it requires business KYC), which
+looked like a dead end for the white-label phones the KB cannot cover. It was
+not. Marketplaces block _datacenter_ IPs; a normal connection is a different
+proposition, so `--enrich` now tries a plain direct fetch first and only falls
+back to Web Unlocker if that fails.
+
+Measured on the real sub-₹15,000 fixture:
+
+|                       | before        | after `--enrich 30` |
+| --------------------- | ------------- | ------------------- |
+| chipset known         | 10 / 48 (21%) | **24 / 48 (50%)**   |
+| average confidence    | 41%           | **63%**             |
+| Web Unlocker requests | —             | **0**               |
+
+28 of 30 pages fetched directly; the 2 failures were Amazon, which serves a bot
+page to unknown clients. Flipkart returns its "Product highlights" block in the
+initial HTML, and that block contains exactly what the ranker needs:
+
+```
+4 GB RAM | 128 GB ROM T7250 | Octa Core Processor | 1.8 GHz Clock Speed
+```
+
+Concrete outcome: `Ai+ Pulse 2` went from an unknown chipset at 23% confidence
+to Unisoc T7250 at 70–83%. `Alcatel V3 Classic 5G` and `Samsung Galaxy F16 5G`
+resolved to Dimensity 6300 at 83–85%.
+
+Two bugs had to be fixed to get there, and both are the kind that fail quietly:
+
+1. **Enrichment was aimed at the wrong products.** The implementation sliced the
+   top N and _then_ dropped well-documented models, so a budget of 14 fetches
+   was spent on ranks 1–14 — nearly all already in the KB — and never reached
+   the unknown phones below them. The first measured run recovered _nothing_.
+   Selection now filters first and orders least-confident first, so a small
+   budget buys the most information.
+2. **Stripped markup loses spaces.** Flipkart PDPs yield "Snapdragon6" and bare
+   "T7250" once tags are removed, which the SoC matcher did not recognise.
+   Vendor names are now re-separated from their digits. Note that "Snapdragon6"
+   stays _unresolved_ on purpose — without a generation it is ambiguous, and
+   guessing is worse than admitting ignorance.
+
+`ringme BOLD 17 PRO` still has no chipset after enrichment, because its product
+page genuinely does not state one. That is the correct outcome: it keeps a low
+confidence score and says so.
+
+The ranking table now also nudges you when it is guessing: if three or more
+results have sub-50% confidence it prints the exact `--enrich N` command to fix
+them.
+
+---
+
 ## What is still worth doing
 
-1. **Validate `--enrich` against real listings.** It is the only viable answer
-   for the white-label sub-₹15k phones the KB cannot cover, and it has never
-   been run against a live product page. Budget a handful of Unlocker requests
-   for the top 5 of one query.
+1. **Amazon PDPs need a transport.** Direct fetch gets a bot page, so Amazon
+   listings cannot be enriched. Options: reuse the DCA collector against product
+   URLs (same credit type already in use, no KYC), or accept that Amazon rows
+   keep lower confidence than Flipkart ones.
 2. **Capture a mid-range payload.** The 35 models added in round 4 target
    ₹15k–45k and are completely unexercised by the current fixtures. One
    `find "best phones under 30000"` run would prove or disprove the KB's value.

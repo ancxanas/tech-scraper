@@ -18,7 +18,7 @@ import {
 } from "../core/intent.ts";
 import { runDirFor, saveRun } from "../core/replay.ts";
 import { renderFull } from "../ui/render.ts";
-import { enrichTop } from "../core/enrich.ts";
+import { enrichTop, reportEnrichment } from "../core/enrich.ts";
 import { getStatsFor, savePrices } from "../kv.ts";
 import type { RankIntent } from "../core/types.ts";
 
@@ -75,6 +75,11 @@ export const findCommand = new Command()
   .option("--no-compare", "Skip the head-to-head matrix")
   .option("--no-diagnostics", "Skip the coverage/funnel tables")
   .option("--in-stock-only", "Drop items known to be out of stock")
+  .option(
+    "--enrich-via <mode:string>",
+    "auto | direct | unlocker (auto tries the free direct fetch first)",
+    { default: "auto" },
+  )
   .option(
     "--enrich <n:number>",
     "Fetch real spec sheets for the top N finalists (costs Unlocker credit)",
@@ -176,6 +181,7 @@ export const findCommand = new Command()
       }
       const enriched = await enrichTop(result.ranked, options.enrich, {
         verbose: !options.json,
+        mode: options.enrichVia as "auto" | "direct" | "unlocker",
       });
       if (enriched.text.size > 0) {
         result = runPipeline(query, intent, batches, {
@@ -185,11 +191,7 @@ export const findCommand = new Command()
         });
       }
       if (!options.json) {
-        console.error(
-          colors.dim(
-            `  ✓ enriched ${enriched.fetched}, skipped ${enriched.skipped} (already known), failed ${enriched.failed}`,
-          ),
-        );
+        reportEnrichment(enriched);
       }
     }
 
