@@ -10,6 +10,7 @@ import {
   parseCheckout,
 } from "./checkout.ts";
 import { SpecStore } from "./spec-cache.ts";
+import { canonicalUrl } from "./normalize.ts";
 import {
   type ReviewSummary,
   reviewsUrlFor,
@@ -231,12 +232,15 @@ export async function resolveSpecs(
 
   let budget = opts.limit ?? Number.POSITIVE_INFINITY;
 
-  const apply = (c: Candidate, text: string) => {
+  const apply = (c: Candidate, text: string, sourceUrl: string) => {
     const section = extractSpecSection(text);
     for (const l of c.listings) result.text.set(l.id, section);
     const checkout = parseCheckout(text);
     if (hasCheckoutInfo(checkout)) {
-      for (const l of c.listings) result.checkout.set(l.id, checkout);
+      const want = canonicalUrl(sourceUrl);
+      const from = c.listings.find((l) => canonicalUrl(l.url) === want) ??
+        c.listings[0];
+      result.checkout.set(from.id, checkout);
     }
     result.conflicts.push(...detectConflicts(c, section));
   };
@@ -354,7 +358,7 @@ export async function resolveSpecs(
   for (const c of queue) {
     const cached = store.get(c.best.url);
     if (cached) {
-      apply(c, cached);
+      apply(c, cached, c.best.url);
       result.fromCache++;
     } else {
       needsFetch.push(c);
@@ -374,7 +378,7 @@ export async function resolveSpecs(
       budget--;
       try {
         const { text, via } = await fetchPage(c.best.url, mode, allowPaid);
-        apply(c, text);
+        apply(c, text, c.best.url);
         store.set(c.best.url, extractSpecSection(text), via);
         if (via === "direct") result.fetchedDirect++;
         else result.fetchedPaid++;

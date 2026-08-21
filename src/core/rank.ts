@@ -538,7 +538,11 @@ function annotate(
     if (s.socName) {
       const tierWord = s.perfTier?.replace("-", " ") ?? "";
       if (med.antutu && s.antutu && s.antutu > med.antutu * 1.15) {
-        pros.push(`${s.socName} — faster than most here (${tierWord})`);
+        pros.push(
+          tierWord
+            ? `${s.socName} — faster than most here (${tierWord})`
+            : `${s.socName} — faster than most here`,
+        );
       } else if (med.antutu && s.antutu && s.antutu < med.antutu * 0.8) {
         cons.push(`${s.socName} is slower than the segment median`);
       }

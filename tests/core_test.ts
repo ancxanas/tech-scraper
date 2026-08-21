@@ -1861,3 +1861,40 @@ Deno.test("a card price contradicted by the page is replaced, not averaged", asy
   );
   assert(cardPrice !== 14499);
 });
+
+Deno.test("one platform's page price never becomes another platform's", () => {
+  const flipkart = normalizeBatch([
+    {
+      product_name: "realme Narzo 90x 5G (Flash Blue, 128 GB) (8 GB RAM)",
+      selling_price: 14134,
+      original_price: 17999,
+      product_url: "https://www.flipkart.com/realme-narzo-90x-5g/p/itm1?pid=A",
+    },
+  ], "flipkart");
+  const amazon = normalizeBatch([
+    {
+      title: "realme Narzo 90x 5G (8GB/128GB)",
+      final_price: 21499,
+      url: "https://www.amazon.in/dp/B0TEST123",
+    },
+  ], "amazon");
+
+  const page = parseCheckout("21% 17,999 ₹14,134 +₹109 Protect Promise Fee");
+  const checkout = new Map([[flipkart.listings[0].id, page]]);
+
+  const out = runPipeline(
+    "phones under 25000",
+    parseIntentRules("phones under 25000"),
+    [
+      {
+        platform: "flipkart",
+        platformName: "Flipkart",
+        items: [],
+        status: "ok",
+      },
+    ],
+    { checkoutInfo: checkout },
+  );
+  assertEquals(out.ranked.length, 0);
+  assert(!checkout.has(amazon.listings[0]?.id ?? "none"));
+});
