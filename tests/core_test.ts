@@ -45,6 +45,7 @@ import { hasCheckoutInfo, parseCheckout } from "../src/core/checkout.ts";
 import { SpecStore } from "../src/core/spec-cache.ts";
 import { reviewsUrlFor, summariseReviews } from "../src/core/reviews.ts";
 import { buildUrls, searchTerm } from "../src/core/collect.ts";
+import { canonicalUrl } from "../src/core/normalize.ts";
 import {
   htmlToText,
   jsonStateText,
@@ -739,6 +740,24 @@ Deno.test("the set's fastest phone is never told it compromises on speed", async
       `fastest phone's verdict contradicts itself: ${best.verdict}`,
     );
   }
+});
+
+// ------------------------------------------------------------------ rendered links
+
+Deno.test("a rendered product link is never truncated", () => {
+  // Clipping to terminal width turned "?pid=MOBHGU9DYEBQW6NW" into
+  // "?pid=MOBH". That is not a shorter link, it is a broken one, and on
+  // Flipkart the pid selects the colour and memory variant being priced — so
+  // a clipped link also lands on a different SKU than the row it came from.
+  const url =
+    "https://www.flipkart.com/samsung-galaxy-m17-5g-moonlight-silver-128-gb/p/itmc3b8f7b511eca" +
+    "?pid=MOBHGU9DYEBQW6NW&lid=LSTMOBHGU9DYEBQW6NWIWMUZV&marketplace=FLIPKART" +
+    "&q=phones+under+15000&srno=s_5_106&otracker=search&fm=organic";
+  const shown = canonicalUrl(url);
+  assert(shown.includes("pid=MOBHGU9DYEBQW6NW"), `pid was mangled: ${shown}`);
+  assert(!shown.includes("…"));
+  // The tracking tail is what made it overflow in the first place.
+  assert(!shown.includes("otracker") && !shown.includes("lid="));
 });
 
 // ------------------------------------------------------------ platform defaults

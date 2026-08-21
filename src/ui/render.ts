@@ -7,6 +7,7 @@
  */
 
 import { colors } from "@cliffy/ansi/colors";
+import { canonicalUrl } from "../core/normalize.ts";
 import { Table } from "@cliffy/table";
 import type {
   PipelineDiagnostics,
@@ -351,7 +352,14 @@ export function detailCards(ranked: RankedCandidate[], count: number): string {
     }
 
     out.push("");
-    out.push(colors.dim(`  ${r.best.url.slice(0, termWidth() - 6)}`));
+    // Never truncate a URL to fit the terminal. Cutting it to width turned
+    // "?pid=MOBHGU9DYEBQW6NW" into "?pid=MOBH", which is not a shorter link,
+    // it is a broken one — and on Flipkart the pid is what selects the colour
+    // and memory variant being priced, so a clipped link also lands on a
+    // different SKU than the row it came from. Canonicalising drops the
+    // tracking noise, which usually makes it fit anyway; if it still does not,
+    // it wraps.
+    out.push(colors.dim(`  ${canonicalUrl(r.best.url)}`));
   }
   return out.join("\n");
 }
