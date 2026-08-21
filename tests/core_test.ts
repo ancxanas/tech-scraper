@@ -777,20 +777,34 @@ Deno.test("a rendered product link is never truncated", () => {
   assert(!shown.includes("otracker") && !shown.includes("lid="));
 });
 
-Deno.test("the default platform set contains only marketplaces that return phones", () => {
-  assertEquals(ALL_ENABLED.sort(), ["amazon", "flipkart"]);
+Deno.test("all four marketplaces run, and the broken ones say why", () => {
+  // Breadth is the point for this tool, and two of these are hosted
+  // collectors we cannot repair from here. They stay in the default set; what
+  // they contribute is reported per run rather than hidden behind a count.
+  assertEquals(ALL_ENABLED.sort(), [
+    "amazon",
+    "flipkart",
+    "reliance",
+    "tatacliq",
+  ]);
   for (const p of ["reliance", "tatacliq"] as const) {
-    assert(!PLATFORMS[p].enabled);
+    assert(PLATFORMS[p].enabled);
     assert(
-      (PLATFORMS[p].disabledReason ?? "").length > 20,
-      `${p} is disabled without saying why`,
+      (PLATFORMS[p].knownIssue ?? "").length > 40,
+      `${p} has a known defect recorded without an explanation`,
     );
+  }
+  for (const p of ["amazon", "flipkart"] as const) {
+    assertEquals(PLATFORMS[p].knownIssue, undefined);
   }
 });
 
-Deno.test("asking for a disabled platform still runs it", () => {
-  const urls = buildUrls("reliance", parseIntentRules("phones under 15000"), 1);
-  assert(urls.length === 1 && urls[0].includes("reliancedigital.in/search"));
+Deno.test("every platform builds a seed URL for its own site", () => {
+  const intent = parseIntentRules("phones under 15000");
+  assert(buildUrls("reliance", intent, 1)[0].includes("reliancedigital.in"));
+  assert(buildUrls("tatacliq", intent, 1)[0].includes("tatacliq.com"));
+  assert(buildUrls("flipkart", intent, 1)[0].includes("flipkart.com"));
+  assert(buildUrls("amazon", intent, 1)[0].includes("amazon.in"));
 });
 
 Deno.test("every chip is on the same benchmark scale", () => {

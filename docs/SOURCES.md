@@ -42,12 +42,16 @@ the collector's selector, not ours. Reliance's seed URL is a correct search
 endpoint yet it returns earphones, so its collector appears to read an
 accessories rail instead of the product grid.
 
-Neither can be fixed from here. Repair them in the BrightData dashboard, then
-flip `enabled` in `src/config.ts`. Until then they are opt-in:
+Neither can be fixed from here — this repo supplies the seed URL and the
+extraction runs inside the collector. They stay in the default set anyway,
+because breadth is the point and the run reports what each one contributed:
 
-    deno task find "best phones under 15000" --platforms flipkart,amazon,reliance
+    Reliance Digital returned 11 cards and no phones — its collector returns
+    accessories rather than phones …
 
-which prints why the platform is off before running it.
+Narrow the set when you want a fast run:
+
+    deno task find "best phones under 15000" --platforms flipkart,amazon
 
 ## What each source is actually used for
 

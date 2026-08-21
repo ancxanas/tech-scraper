@@ -29,16 +29,6 @@ function parsePlatforms(raw?: string): Platform[] {
   const picked = valid.filter((p) => wanted.includes(p));
   if (!picked.length) return ALL_ENABLED;
 
-  for (const p of picked) {
-    const config = PLATFORMS[p];
-    if (!config.enabled && config.disabledReason) {
-      console.error(
-        colors.yellow(
-          `  ${config.name} is off by default: ${config.disabledReason}`,
-        ),
-      );
-    }
-  }
   return picked;
 }
 
@@ -279,6 +269,17 @@ export const findCommand = new Command()
           checkoutInfo: merged,
         });
       }
+    }
+
+    for (const d of result.diagnostics) {
+      const entry = Object.values(PLATFORMS).find((p) => p.name === d.platform);
+      if (!entry?.knownIssue) continue;
+      if (d.categoryMatched > 0) continue;
+      console.error(
+        colors.yellow(
+          `  ${d.platform} returned ${d.rawCards} cards and no phones — ${entry.knownIssue}`,
+        ),
+      );
     }
 
     if (options.json) {

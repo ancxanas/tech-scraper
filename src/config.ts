@@ -6,7 +6,11 @@ export interface PlatformConfig {
   name: string;
   tool: ToolType;
   enabled: boolean;
-  disabledReason?: string;
+  /**
+   * A defect we know about but cannot fix from this repo, reported after a
+   * run when the platform actually underdelivers rather than on every run.
+   */
+  knownIssue?: string;
   searchUrlTemplate: string;
   pagination: PaginationType;
   startIndex: number;
@@ -40,10 +44,11 @@ export const PLATFORMS: Record<Platform, PlatformConfig> = {
   reliance: {
     name: "Reliance Digital",
     tool: "scraper",
-    enabled: false,
-    disabledReason:
-      "returns accessories, not phones — 0 in-category products in every recorded run; " +
-      "the hosted collector's extraction needs fixing in BrightData",
+    enabled: true,
+    knownIssue:
+      "its collector returns accessories rather than phones — 22 cards in the " +
+      "reference run were all earphones and headphones. The extraction lives in " +
+      "the BrightData dashboard, not this repo.",
     searchUrlTemplate:
       "https://www.reliancedigital.in/search?q={q}&page_no={page}",
     pagination: "scroll",
@@ -54,10 +59,11 @@ export const PLATFORMS: Record<Platform, PlatformConfig> = {
   tatacliq: {
     name: "Tata CLiQ",
     tool: "scraper",
-    enabled: false,
-    disabledReason:
-      "its collector's product selector no longer matches the site — 1 usable product " +
-      "from 35 cards, after 276s; fix the selector in BrightData",
+    enabled: true,
+    knownIssue:
+      'its collector fails on its own selector (a[id^="ProductModule-"]), so it ' +
+      "times out or returns a near-empty grid — 1 usable product from 35 cards. " +
+      "The selector is configured in BrightData, not this repo.",
     searchUrlTemplate:
       "https://www.tatacliq.com/search/?searchCategory=all&text={q}",
     pagination: "scroll",
