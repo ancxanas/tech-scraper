@@ -18,6 +18,8 @@ ranked on value rather than on price alone:
 deno task find "best phones under 15000"                  # live scrape + rank
 deno task rank "best phones under 15000" --replay runs/…  # re-rank offline, free
 deno task snapshot sd_xxx --platform amazon --out runs/x  # re-download a paid snapshot
+deno task index                                           # once: build the spec-DB model index
+deno task specs "..." --replay runs/… --allow-paid        # once: populate the spec cache
 deno task doctor --query "phones under 15000"             # config + the exact URLs we'd call
 deno task heal reliance --dry-run                         # diagnose a broken collector
 deno task history                                         # price history across runs

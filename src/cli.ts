@@ -19,6 +19,7 @@ import { healCommand } from "./commands/heal.ts";
 import { doctorCommand } from "./commands/doctor.ts";
 import { historyCommand } from "./commands/history.ts";
 import { indexCommand } from "./commands/index_cmd.ts";
+import { specsCommand } from "./commands/specs.ts";
 
 export const cli = new Command()
   .name("tech-scraper")
@@ -35,4 +36,5 @@ export const cli = new Command()
   .command("heal", healCommand)
   .command("doctor", doctorCommand)
   .command("history", historyCommand)
-  .command("index", indexCommand);
+  .command("index", indexCommand)
+  .command("specs", specsCommand);

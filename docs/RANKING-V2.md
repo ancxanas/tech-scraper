@@ -698,6 +698,46 @@ would rather spend a few requests than wait.
 
 ---
 
+## Where correct specs actually come from
+
+Every candidate source was probed rather than assumed. Results:
+
+| source                                                        | result              | notes                                                                                    |
+| ------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------- |
+| GSMArena product pages                                        | **works**           | full specs plus _measured_ AnTuTu/GeekBench; HTTP 429 under load                         |
+| GSMArena search                                               | blocked             | Cloudflare Turnstile — hence the offline model index                                     |
+| Flipkart embedded JSON                                        | works, partly wrong | free and rich, but states touch sampling rate as refresh rate, and 45W for a 25W charger |
+| Samsung / Xiaomi official                                     | works               | authoritative for own models; needs a parser per brand; no white-label coverage          |
+| PhoneArena, 91mobiles, Gadgets360, Kimovil, Geekbench Browser | HTTP 403            | hard-blocked to unknown clients                                                          |
+| Wikidata                                                      | reachable           | effectively no coverage of Indian budget phones                                          |
+| Amazon product pages                                          | blocked direct      | bot page; resolves through Web Unlocker                                                  |
+
+The conclusion is not that a better source exists — it is that the good source
+needs a better **transport**. Web Unlocker bypasses both the 429 and the 403s,
+and because specs are cached permanently it costs one request per model, once.
+
+`deno task specs` does that bulk work separately from ranking:
+
+```bash
+deno task index                                   # once: build the model index
+deno task specs "best phones under 15000" \
+    --replay runs/latest --allow-paid             # once per catalogue
+deno task rank  "best phones under 15000" \
+    --replay runs/latest                          # instant thereafter
+```
+
+It is resumable: an interrupted or throttled run keeps everything it resolved,
+and re-running continues from there.
+
+### White-label phones have no authoritative source
+
+Peace, Maplin, ringme, Ai+ and similar appear in no spec database at all. For
+those the merchant page is the only source, and it is the least reliable one.
+The honest outcome is a low confidence score — which is what the pipeline
+reports, rather than inventing a plausible-looking spec sheet.
+
+---
+
 ## What is still worth doing
 
 1. **Amazon PDPs need a transport.** Direct fetch gets a bot page, so Amazon

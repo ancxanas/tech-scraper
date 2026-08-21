@@ -30,6 +30,8 @@ export type FetchMode = "auto" | "direct" | "unlocker" | "cache-only";
 
 export interface ResolveOptions {
   mode?: FetchMode;
+  /** Delay between spec-database requests, ms. */
+  pace?: number;
   /** Consult the external spec database (default true when an index exists). */
   useExternal?: boolean;
   /** Hard ceiling on network fetches. Cache hits never count against it. */
@@ -283,7 +285,7 @@ export async function resolveSpecs(
             g = JSON.parse(cached) as GsmSpecs;
           } else {
             // Be a guest on someone else's server.
-            if (fetchedThisRun > 0) await sleep(1100);
+            if (fetchedThisRun > 0) await sleep(opts.pace ?? 1100);
             g = await fetchGsmSpecs(
               hit,
               lookupName,
