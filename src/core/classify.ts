@@ -31,6 +31,11 @@ const RULES: Rule[] = [
       /\bbullets\s+z\d/i,
     ],
     weak: [/\bipx\d\b/i, /playtime/i, /\bearphones?\b/i],
+    veto: [
+      /\\b(case|cover|pouch|ear\\s*pads?|ear\\s*cushions?|ear\\s*tips?|hinge|protector|stand|holder|replacement|spare)\\b/i,
+      /\\bcompatible\\s+with\\b/i,
+      /\\bfor\\s+(?:sony|bose|jbl|sennheiser|marshall|boat|noise|apple|samsung)\\b/i,
+    ],
   },
   {
     category: "headphone",
@@ -41,7 +46,12 @@ const RULES: Rule[] = [
       /\bwh-\d{4}|\bqc\d{2}\b|quietcomfort/i,
     ],
     weak: [/\banc\b|noise\s*cancell/i, /\bdriver\b/i],
-    veto: [/\bearbuds?\b|\btws\b/i],
+    veto: [
+      /\bearbuds?\b|\btws\b/i,
+      /\b(case|cover|pouch|ear\s*pads?|ear\s*cushions?|hinge|protector|stand|holder|replacement|spare)\b/i,
+      /\bcompatible\s+with\b/i,
+      /\bfor\s+(?:sony|bose|jbl|sennheiser|marshall|boat|noise|apple|samsung)\b/i,
+    ],
   },
   {
     category: "phone",
@@ -96,8 +106,13 @@ const RULES: Rule[] = [
     category: "accessory",
     strong: [
       /\b(back\s*cover|flip\s*cover|tempered\s*glass|screen\s*(guard|protector)|charging\s*cable|usb\s*cable|charger|adapter|power\s*bank|powerbank|car\s*mount|mobile\s*holder|selfie\s*stick|stylus|memory\s*card|sim\s*ejector)\b/i,
+      // Audio accessories and spare parts — a silicone case for a WH-1000XM5
+      // is not a competitor to the WH-1000XM5.
+      /\b(carrying\s*case|hard\s*case|silicone\s*case|travel\s*case|headphone\s*case|headphones\s*case)\b/i,
+      /\b(ear\s*pads?|ear\s*cushions?|earpads?|ear\s*tips?|eartips?|headband\s*(cover|pad)|ear\s*cups?\s*protector)\b/i,
+      /\b(hinge|replacement\s*part|spare\s*part|repair\s*kit)\b/i,
       /\bcompatible\s+with\b/i,
-      /\bfor\s+(?:apple|samsung|oneplus|xiaomi|redmi|poco|realme|vivo|oppo|iqoo)\b/i,
+      /\bfor\s+(?:apple|samsung|oneplus|xiaomi|redmi|poco|realme|vivo|oppo|iqoo|sony|bose|jbl|sennheiser|marshall|boat|noise)\b/i,
     ],
   },
 ];
@@ -108,16 +123,35 @@ export interface Classification {
   evidence: string[];
 }
 
+/**
+ * Amazon titles are "<product> | <feature> | <feature> | …".
+ *
+ * Vetoes must only look at the product-noun head, never the feature tail:
+ * "Itel Zeno 200 (…) | … | Charger in Box" is a phone, not a charger, and
+ * "realme NARZO 90x 5G | … | 400% Ultra Boom Speaker" is a phone, not a
+ * speaker. Matching vetoes against the whole string silently deleted four
+ * genuine phones from a 16-card Amazon payload.
+ */
+function productHead(title: string): string {
+  const head = title.split("|")[0];
+  // Fall back to a character window when the title uses no pipe separators.
+  return (head.length >= 12 ? head : title).slice(0, 90);
+}
+
 export function classify(title: string, url = ""): Classification {
   const text = `${title} ${url.replace(/[-/]/g, " ")}`;
+  const head = productHead(title);
   const scores = new Map<Category, { score: number; evidence: string[] }>();
 
   for (const rule of RULES) {
-    if (rule.veto?.some((r) => r.test(text))) continue;
+    // Vetoes are evaluated on the head only; positive signals may come from
+    // anywhere, since feature text is legitimate evidence of what a thing is.
+    if (rule.veto?.some((r) => r.test(head))) continue;
     let score = 0;
     const evidence: string[] = [];
+    const strongText = rule.category === "accessory" ? head : text;
     for (const r of rule.strong ?? []) {
-      const m = text.match(r);
+      const m = strongText.match(r);
       if (m) {
         score += 3;
         evidence.push(m[0].trim());

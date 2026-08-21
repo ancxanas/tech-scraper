@@ -58,6 +58,17 @@ function parsePercent(v: unknown): number | null {
   return n > 0 && n <= 100 ? n : null;
 }
 
+/** BrightData emits some booleans as the strings "true"/"false". */
+function parseBool(v: unknown): boolean | null {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") {
+    const t = v.trim().toLowerCase();
+    if (t === "true" || t === "yes" || t === "1") return true;
+    if (t === "false" || t === "no" || t === "0") return false;
+  }
+  return null;
+}
+
 function parseRating(v: unknown): number | null {
   const n = typeof v === "number" ? v : Number.parseFloat(String(v ?? ""));
   if (!Number.isFinite(n)) return null;
@@ -170,8 +181,15 @@ export function titleFromUrl(url: string): string | null {
 
 function detectPlatform(raw: Raw, hint?: PlatformId): PlatformId {
   if (hint && hint !== "unknown") return hint;
+  const label = String(raw.platform ?? "").toLowerCase();
+  if (label.includes("flipkart")) return "flipkart";
+  if (label.includes("amazon")) return "amazon";
+  if (label.includes("reliance")) return "reliance";
+  if (label.includes("cliq")) return "tatacliq";
+
   const url = String(
-    raw.product_url ?? raw.product_page_url ?? raw.url ?? raw.link ?? "",
+    raw.product_url ?? raw.product_page_url ?? raw.productUrl ?? raw.url ??
+      raw.link ?? "",
   );
   if (url.includes("flipkart.")) return "flipkart";
   if (url.includes("amazon.")) return "amazon";
@@ -248,7 +266,8 @@ export function normalizeBatch(
 
     const platform = detectPlatform(raw, platformHint);
     const url = String(
-      raw.product_url ?? raw.product_page_url ?? raw.url ?? raw.link ?? "",
+      raw.product_url ?? raw.product_page_url ?? raw.productUrl ?? raw.url ??
+        raw.link ?? "",
     );
 
     let title = firstString(raw, [
@@ -279,11 +298,17 @@ export function normalizeBatch(
         raw.offer_price ?? raw.discounted_price,
     );
     const mrpRaw = parseMoney(
-      raw.original_price ?? raw.initial_price ?? raw.mrp ?? raw.list_price ??
-        raw.strike_price,
+      raw.original_price ?? raw.initial_price ?? raw.originalPrice ?? raw.mrp ??
+        raw.list_price ?? raw.strike_price,
     );
     // An "MRP" below the selling price is a parse artefact, not a discount.
-    const mrp = mrpRaw && price && mrpRaw <= price ? null : mrpRaw;
+    // An MRP more than 5x the price is likewise bad data (one Amazon card
+    // claimed ₹1,59,994 MRP on an ₹8,899 phone), so it is discarded rather
+    // than rewarded with a 94% discount.
+    let mrp = mrpRaw;
+    if (mrp !== null && price !== null && (mrp <= price || mrp > price * 5)) {
+      mrp = null;
+    }
 
     let discountPct = parsePercent(
       raw.discount_percentage ?? raw.discount ?? raw.discount_text,
@@ -298,7 +323,8 @@ export function normalizeBatch(
       "in_stock_text",
     ]);
     let inStock: boolean | null = null;
-    if (typeof raw.in_stock === "boolean") inStock = raw.in_stock;
+    const rawInStock = parseBool(raw.in_stock ?? raw.inStock);
+    if (rawInStock !== null) inStock = rawInStock;
     else if (availability) {
       const a = availability.toLowerCase();
       if (/out of stock|sold out|unavailable|currently unavailable/.test(a)) {
@@ -324,19 +350,30 @@ export function normalizeBatch(
       title,
       titleSource,
       url: url || "",
-      imageUrl: firstString(raw, ["image_url", "image", "main_image", "img"]),
+      imageUrl: firstString(raw, [
+        "image_url",
+        "image",
+        "main_image",
+        "imageUrl",
+        "img",
+      ]),
       price,
       mrp,
       discountPct,
       rating: parseRating(raw.rating ?? raw.product_rating ?? raw.stars),
       ratingCount: parseCount(
-        raw.review_count ?? raw.reviews_count ?? raw.num_ratings ??
-          raw.ratings_count ?? raw.reviews,
+        raw.review_count ?? raw.reviews_count ?? raw.reviewsCount ??
+          raw.num_ratings ?? raw.ratings_count ?? raw.reviews,
       ),
       availability,
       inStock,
-      sponsored: raw.sponsored === true || raw.is_sponsored === true,
-      sourceRank: typeof raw.position === "number" ? raw.position : null,
+      sponsored: parseBool(raw.sponsored) === true ||
+        parseBool(raw.is_sponsored) === true,
+      sourceRank: typeof raw.position === "number"
+        ? raw.position
+        : typeof raw.rank_on_page === "number"
+        ? raw.rank_on_page
+        : null,
       scrapedAt,
       missing,
       raw,

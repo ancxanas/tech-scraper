@@ -52,21 +52,52 @@ function fieldFill(listings: AnalyzedListing[]): number {
   return hits / (listings.length * fields.length);
 }
 
+/**
+ * When the query names a product but no category ("sony wh-1000xm5"), infer the
+ * category from what actually came back. Without this the ranker falls through
+ * to phone scoring and grades headphones on chipset and camera.
+ */
+function inferCategory(listings: AnalyzedListing[]): RankIntent["category"] {
+  const tally = new Map<string, number>();
+  for (const l of listings) {
+    if (l.category === "unknown" || l.category === "accessory") continue;
+    tally.set(l.category, (tally.get(l.category) ?? 0) + l.categoryConfidence);
+  }
+  if (tally.size === 0) return "unknown";
+  const [top] = [...tally.entries()].sort((a, b) => b[1] - a[1]);
+  return top[0] as RankIntent["category"];
+}
+
 export function runPipeline(
   query: string,
-  intent: RankIntent,
+  intentIn: RankIntent,
   batches: RawBatch[],
   options: PipelineOptions = {},
 ): PipelineResult {
   const diagnostics: PipelineDiagnostics[] = [];
   const allAnalyzed: AnalyzedListing[] = [];
+  let intent = intentIn;
 
-  for (const batch of batches) {
+  // First pass: normalise + analyse everything, so category inference has
+  // evidence to work from before any gating happens.
+  const analyzedByBatch = batches.map((batch) => {
     const { listings, stats } = normalizeBatch(batch.items, batch.platform);
-    const analyzed = listings.map((l) =>
-      analyze(l, { enrichText: options.enrichText })
-    );
+    return {
+      batch,
+      stats,
+      listings,
+      analyzed: listings.map((l) =>
+        analyze(l, { enrichText: options.enrichText })
+      ),
+    };
+  });
 
+  if (intent.category === "unknown") {
+    const inferred = inferCategory(analyzedByBatch.flatMap((b) => b.analyzed));
+    if (inferred !== "unknown") intent = { ...intent, category: inferred };
+  }
+
+  for (const { batch, stats, listings, analyzed } of analyzedByBatch) {
     const rejectionReasons: Record<string, number> = {};
     let categoryMatched = 0;
     let inBudget = 0;

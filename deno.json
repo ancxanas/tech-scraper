@@ -6,7 +6,8 @@
     "lint": "deno lint",
     "check": "deno fmt --check && deno lint && deno check main.ts && deno test --allow-env --allow-read --allow-write tests/",
     "find": "deno run --unstable-kv --allow-net --allow-env --allow-read --allow-write main.ts find",
-    "rank": "deno run --allow-env --allow-read --allow-write main.ts rank"
+    "rank": "deno run --allow-env --allow-read --allow-write main.ts rank",
+    "snapshot": "deno run --allow-net --allow-env --allow-read --allow-write main.ts snapshot"
   },
   "imports": {
     "@cliffy/command": "jsr:@cliffy/command@^1.2",

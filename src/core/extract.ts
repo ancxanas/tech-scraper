@@ -9,6 +9,7 @@
 import type { AnalyzedListing, Listing, Specs, SpecSource } from "./types.ts";
 import { classify } from "./classify.ts";
 import { lookupModel } from "../knowledge/models.ts";
+import { type AudioModel, lookupAudioModel } from "../knowledge/audio.ts";
 import { matchSoc, perfTier } from "../knowledge/soc.ts";
 
 const EMPTY_SPECS: Specs = {
@@ -31,6 +32,15 @@ const EMPTY_SPECS: Specs = {
   osUpgrades: null,
   releaseYear: null,
   colour: null,
+  ancType: null,
+  batteryHours: null,
+  driverMm: null,
+  codecs: null,
+  bluetoothVersion: null,
+  formFactor: null,
+  weightG: null,
+  multipoint: null,
+  soundGrade: null,
 };
 
 export const BRANDS: Array<[RegExp, string]> = [
@@ -328,6 +338,70 @@ export function specsFromText(text: string): {
   );
   if (colour) set("colour", colour[1].trim(), "title");
 
+  // ---- audio specs ----
+  if (/\b(hybrid\s*anc|dual\s*anc)\b/i.test(text)) {
+    set("ancType", "hybrid-anc", "title");
+  } else if (/\b(anc|active\s*noise\s*cancell)/i.test(text)) {
+    set("ancType", "anc", "title");
+  } else if (/\b(enc|environmental\s*noise)/i.test(text)) {
+    set("ancType", "enc", "title");
+  }
+
+  const hours = text.match(
+    /(\d{1,3})\s*(?:h|hrs?|hours?)\s*(?:of\s*)?(?:playback|playtime|play\s*time|battery|music|total)/i,
+  ) ?? text.match(/(?:up\s*to\s*)(\d{1,3})\s*(?:h|hrs?|hours?)\b/i);
+  set("batteryHours", num(hours), "title");
+
+  set(
+    "driverMm",
+    num(text.match(/(\d{1,2}(?:\.\d)?)\s*mm\s*(?:dynamic\s*)?driver/i)),
+    "title",
+  );
+  set(
+    "bluetoothVersion",
+    num(text.match(/bluetooth\s*(?:v)?(\d\.\d)/i)),
+    "title",
+  );
+  set("weightG", num(text.match(/(\d{2,3})\s*(?:g|gm|grams?)\b/i)), "title");
+  if (
+    /\bmulti\s*-?\s*point\b|\bdual\s*(?:device\s*)?(?:pairing|connect)\b/i.test(
+      text,
+    )
+  ) {
+    set("multipoint", true, "title");
+  }
+
+  const codecs = [
+    ...text.matchAll(
+      /\b(ldac|aptx(?:\s*adaptive|\s*hd)?|aac|sbc|lhdc|lc3)\b/gi,
+    ),
+  ]
+    .map((m) => m[1].toUpperCase().replace("APTX", "aptX"));
+  if (codecs.length) set("codecs", [...new Set(codecs)], "title");
+
+  if (/\btrue\s*wireless\b|\btws\b|\bearbuds?\b|\bairdopes\b/i.test(text)) {
+    set("formFactor", "tws", "title");
+  } else if (/\bneckband\b/i.test(text)) set("formFactor", "neckband", "title");
+  else if (/\bover[-\s]?ear\b/i.test(text)) {
+    set("formFactor", "over-ear", "title");
+  } else if (/\bon[-\s]?ear\b/i.test(text)) {
+    set("formFactor", "on-ear", "title");
+  } else if (/\bin[-\s]?ear\b/i.test(text)) {
+    set("formFactor", "in-ear", "title");
+  }
+
+  // Some listings state the benchmark directly: "AnTuTu 623K+".
+  const antutuClaim = text.match(/antutu\s*:?\s*(\d{2,4})\s*k\b/i) ??
+    text.match(/antutu\s*:?\s*(\d{5,7})\b/i);
+  if (antutuClaim) {
+    const raw = Number.parseInt(antutuClaim[1]);
+    const value = raw < 10000 ? raw * 1000 : raw;
+    if (value > 50_000 && value < 3_000_000) {
+      set("antutu", value, "title");
+      set("perfTier", perfTier(value), "title");
+    }
+  }
+
   const soc = matchSoc(text);
   if (soc) {
     set("socName", soc.name, "title");
@@ -342,6 +416,45 @@ export function specsFromText(text: string): {
 export interface AnalyzeOptions {
   /** Extra text per listing id from PDP enrichment. */
   enrichText?: Map<string, string>;
+}
+
+const AUDIO_FIELDS_FOR_COMPLETENESS: Array<keyof Specs> = [
+  "ancType",
+  "batteryHours",
+  "driverMm",
+  "codecs",
+  "bluetoothVersion",
+  "formFactor",
+  "soundGrade",
+];
+
+/** Audio KB has top precedence below live enrichment, same as the phone KB. */
+function applyAudioKb(
+  kb: AudioModel,
+  specs: Specs,
+  sources: Partial<Record<keyof Specs, SpecSource>>,
+): void {
+  const fields: Partial<Specs> = {
+    formFactor: kb.formFactor,
+    ancType: kb.ancType ?? null,
+    batteryHours: kb.batteryHours ?? null,
+    driverMm: kb.driverMm ?? null,
+    codecs: kb.codecs ?? null,
+    bluetoothVersion: kb.bluetoothVersion ?? null,
+    weightG: kb.weightG ?? null,
+    multipoint: kb.multipoint ?? null,
+    ipRating: kb.ipRating ?? null,
+    soundGrade: kb.soundGrade ?? null,
+    releaseYear: kb.releaseYear ?? null,
+  };
+  for (
+    const [k, v] of Object.entries(fields) as Array<[keyof Specs, unknown]>
+  ) {
+    if (v === null || v === undefined || specs[k] !== null) continue;
+    // deno-lint-ignore no-explicit-any
+    (specs as any)[k] = v;
+    sources[k] = "kb";
+  }
 }
 
 const SPEC_FIELDS_FOR_COMPLETENESS: Array<keyof Specs> = [
@@ -398,7 +511,13 @@ export function analyze(
 
   // 2. Knowledge base for the resolved model.
   const modelKey = deriveModelKey(listing.title);
-  const kb = lookupModel(listing.title) ?? lookupModel(slugText);
+  const audioKb = cls.category === "headphone" || cls.category === "earbuds"
+    ? (lookupAudioModel(listing.title) ?? lookupAudioModel(slugText))
+    : null;
+  if (audioKb) applyAudioKb(audioKb, specs, sources);
+  const kb = audioKb
+    ? null
+    : (lookupModel(listing.title) ?? lookupModel(slugText));
   if (kb) {
     const kbSpecs: Partial<Specs> = {
       panel: kb.panel ?? null,
@@ -443,8 +562,12 @@ export function analyze(
     sources.has5g = "title";
   }
 
-  const known = SPEC_FIELDS_FOR_COMPLETENESS.filter((f) => specs[f] !== null);
-  const specCompleteness = known.length / SPEC_FIELDS_FOR_COMPLETENESS.length;
+  const completenessFields =
+    cls.category === "headphone" || cls.category === "earbuds"
+      ? AUDIO_FIELDS_FOR_COMPLETENESS
+      : SPEC_FIELDS_FOR_COMPLETENESS;
+  const known = completenessFields.filter((f) => specs[f] !== null);
+  const specCompleteness = known.length / completenessFields.length;
 
   const brand = detectBrand(baseText);
   const configKey = `${specs.ramGb ?? "?"}r-${specs.storageGb ?? "?"}s`;
@@ -460,7 +583,7 @@ export function analyze(
     specs,
     specSources: sources,
     specCompleteness: Math.round(specCompleteness * 100) / 100,
-    kbConfidence: kb?.confidence ?? "none",
+    kbConfidence: audioKb?.confidence ?? kb?.confidence ?? "none",
     rejected: [],
   };
 }

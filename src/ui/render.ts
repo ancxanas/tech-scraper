@@ -99,7 +99,26 @@ export function header(result: PipelineResult): string {
   return lines.join("\n");
 }
 
+const AUDIO = new Set(["headphone", "earbuds"]);
+
+function audioSummary(r: RankedCandidate): string {
+  const s = r.specs;
+  const bits: string[] = [];
+  if (s.ancType) {
+    bits.push(
+      s.ancType === "hybrid-anc" ? "Hybrid ANC" : s.ancType.toUpperCase(),
+    );
+  } else bits.push(colors.dim("ANC ?"));
+  if (s.batteryHours) bits.push(`${s.batteryHours}h`);
+  if (s.driverMm) bits.push(`${s.driverMm}mm`);
+  const hiRes = s.codecs?.find((c) => /ldac|lhdc|aptx/i.test(c));
+  if (hiRes) bits.push(hiRes);
+  if (s.formFactor) bits.push(s.formFactor);
+  return bits.join(" · ");
+}
+
 function specSummary(r: RankedCandidate): string {
+  if (AUDIO.has(r.category)) return audioSummary(r);
   const s = r.specs;
   const bits: string[] = [];
   if (s.socName) {
@@ -218,14 +237,22 @@ export function detailCards(ranked: RankedCandidate[], count: number): string {
     out.push("");
 
     // Score bars
-    const dims: Array<[string, number]> = [
-      ["Performance", r.score.performance],
-      ["Display", r.score.display],
-      ["Battery", r.score.battery],
-      ["Camera", r.score.camera],
-      ["Memory", r.score.memory],
-      ["Extras", r.score.extras],
-    ];
+    const dims: Array<[string, number]> = AUDIO.has(r.category)
+      ? [
+        ["Sound", r.score.performance],
+        ["Noise cxl", r.score.display],
+        ["Battery", r.score.battery],
+        ["Comfort", r.score.camera],
+        ["Features", r.score.extras],
+      ]
+      : [
+        ["Performance", r.score.performance],
+        ["Display", r.score.display],
+        ["Battery", r.score.battery],
+        ["Camera", r.score.camera],
+        ["Memory", r.score.memory],
+        ["Extras", r.score.extras],
+      ];
     const half = Math.ceil(dims.length / 2);
     for (let i = 0; i < half; i++) {
       const left = dims[i];
@@ -302,66 +329,104 @@ export function comparisonMatrix(ranked: RankedCandidate[], count = 5): string {
   }
   if (top.length < 2) return "";
 
-  const rows: Array<[string, (r: RankedCandidate) => string]> = [
-    ["Price", (r) => rupees(r.best.price)],
-    ["Chipset", (r) => r.specs.socName ?? dimUnknown()],
-    [
-      "AnTuTu ≈",
-      (
-        r,
-      ) => (r.specs.antutu
-        ? r.specs.antutu.toLocaleString("en-IN")
-        : dimUnknown()),
-    ],
-    [
-      "RAM / Storage",
-      (r) =>
-        r.specs.ramGb || r.specs.storageGb
-          ? `${r.specs.ramGb ?? "?"}GB / ${r.specs.storageGb ?? "?"}GB`
-          : dimUnknown(),
-    ],
-    ["Display", (r) =>
-      [
-        r.specs.displayInches ? `${r.specs.displayInches}"` : null,
-        r.specs.panel,
-        r.specs.refreshHz ? `${r.specs.refreshHz}Hz` : null,
-        r.specs.resolution,
-      ].filter(Boolean).join(" ") || dimUnknown()],
-    [
-      "Battery",
-      (r) =>
-        r.specs.batteryMah
-          ? `${r.specs.batteryMah}mAh${
-            r.specs.chargingW ? ` / ${r.specs.chargingW}W` : ""
-          }`
-          : dimUnknown(),
-    ],
-    [
-      "Camera",
-      (r) =>
-        r.specs.mainCameraMp
-          ? `${r.specs.mainCameraMp}MP${r.specs.ois ? " OIS" : ""}`
-          : dimUnknown(),
-    ],
-    [
-      "5G",
-      (r) =>
-        r.specs.has5g === null
+  const audioMatrix = AUDIO.has(top[0].category);
+  const rows: Array<[string, (r: RankedCandidate) => string]> = audioMatrix
+    ? [
+      ["Price", (r) => rupees(r.best.price)],
+      ["Type", (r) => r.specs.formFactor ?? dimUnknown()],
+      ["Noise cxl", (r) =>
+        r.specs.ancType
+          ? (r.specs.ancType === "hybrid-anc"
+            ? "Hybrid ANC"
+            : r.specs.ancType.toUpperCase())
+          : dimUnknown()],
+      ["Battery", (r) =>
+        r.specs.batteryHours ? `${r.specs.batteryHours}h` : dimUnknown()],
+      ["Drivers", (r) =>
+        r.specs.driverMm ? `${r.specs.driverMm}mm` : dimUnknown()],
+      ["Codecs", (r) =>
+        r.specs.codecs?.join(", ") ?? dimUnknown()],
+      ["Bluetooth", (r) =>
+        r.specs.bluetoothVersion
+          ? `v${r.specs.bluetoothVersion}`
+          : dimUnknown()],
+      ["Multipoint", (r) =>
+        r.specs.multipoint === null
           ? dimUnknown()
-          : r.specs.has5g
+          : r.specs.multipoint
           ? colors.green("yes")
-          : colors.red("no"),
-    ],
-    [
-      "Rating",
-      (r) =>
+          : colors.red("no")],
+      ["Weight", (r) =>
+        r.specs.weightG ? `${r.specs.weightG}g` : dimUnknown()],
+      ["Rating", (r) =>
         r.rating
           ? `${r.rating}★ (${formatCount(r.ratingCount ?? 0)})`
-          : dimUnknown(),
-    ],
-    ["Score", (r) => colors.bold(r.score.total.toFixed(1))],
-    ["Confidence", (r) => `${Math.round(r.score.confidence * 100)}%`],
-  ];
+          : dimUnknown()],
+      ["Score", (r) =>
+        colors.bold(r.score.total.toFixed(1))],
+      ["Confidence", (r) =>
+        `${Math.round(r.score.confidence * 100)}%`],
+    ]
+    : [
+      ["Price", (r) => rupees(r.best.price)],
+      ["Chipset", (r) => r.specs.socName ?? dimUnknown()],
+      [
+        "AnTuTu ≈",
+        (
+          r,
+        ) => (r.specs.antutu
+          ? r.specs.antutu.toLocaleString("en-IN")
+          : dimUnknown()),
+      ],
+      [
+        "RAM / Storage",
+        (r) =>
+          r.specs.ramGb || r.specs.storageGb
+            ? `${r.specs.ramGb ?? "?"}GB / ${r.specs.storageGb ?? "?"}GB`
+            : dimUnknown(),
+      ],
+      ["Display", (r) =>
+        [
+          r.specs.displayInches ? `${r.specs.displayInches}"` : null,
+          r.specs.panel,
+          r.specs.refreshHz ? `${r.specs.refreshHz}Hz` : null,
+          r.specs.resolution,
+        ].filter(Boolean).join(" ") || dimUnknown()],
+      [
+        "Battery",
+        (r) =>
+          r.specs.batteryMah
+            ? `${r.specs.batteryMah}mAh${
+              r.specs.chargingW ? ` / ${r.specs.chargingW}W` : ""
+            }`
+            : dimUnknown(),
+      ],
+      [
+        "Camera",
+        (r) =>
+          r.specs.mainCameraMp
+            ? `${r.specs.mainCameraMp}MP${r.specs.ois ? " OIS" : ""}`
+            : dimUnknown(),
+      ],
+      [
+        "5G",
+        (r) =>
+          r.specs.has5g === null
+            ? dimUnknown()
+            : r.specs.has5g
+            ? colors.green("yes")
+            : colors.red("no"),
+      ],
+      [
+        "Rating",
+        (r) =>
+          r.rating
+            ? `${r.rating}★ (${formatCount(r.ratingCount ?? 0)})`
+            : dimUnknown(),
+      ],
+      ["Score", (r) => colors.bold(r.score.total.toFixed(1))],
+      ["Confidence", (r) => `${Math.round(r.score.confidence * 100)}%`],
+    ];
 
   const table = new Table()
     .header([
@@ -449,6 +514,21 @@ export function rejectionSummary(result: PipelineResult, limit = 8): string {
   return `\n${rule("FILTERED OUT")}\n\n${lines.join("\n")}\n`;
 }
 
+/** Explain the one case where the table is not in descending score order. */
+function sortNote(ranked: RankedCandidate[]): string {
+  const matched = ranked.filter((r) => r.matchesRequestedModel);
+  if (matched.length === 0 || matched.length === ranked.length) return "";
+  const outscored = ranked.some((r) =>
+    !r.matchesRequestedModel && r.score.total > matched[0].score.total
+  );
+  if (!outscored) return "";
+  return colors.dim(
+    `\n  You named a specific model, so it is listed first. Items marked ${
+      badgeChip("ALTERNATIVE")
+    }${colors.dim(" are different models that scored higher on value.")}`,
+  );
+}
+
 export function renderFull(
   result: PipelineResult,
   opts: {
@@ -458,7 +538,11 @@ export function renderFull(
     diagnostics: boolean;
   },
 ): string {
-  const parts = [header(result), rankTable(result.ranked, opts.limit)];
+  const parts = [
+    header(result),
+    rankTable(result.ranked, opts.limit),
+    sortNote(result.ranked),
+  ];
   if (opts.compare) {
     parts.push(comparisonMatrix(result.ranked, Math.min(5, opts.limit)));
   }

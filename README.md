@@ -14,8 +14,9 @@ is understood, products are classified and spec-matched, variants are grouped,
 and results are ranked on value rather than on price alone:
 
 ```bash
-deno task find "best phones under 15000"                 # live scrape + rank
+deno task find "best phones under 15000"                  # live scrape + rank
 deno task rank "best phones under 15000" --replay runs/…  # re-rank offline, free
+deno task snapshot sd_xxx --platform amazon --out runs/x  # re-download a paid snapshot
 ```
 
 - **Hard relevance gating** — a phone query returns phones. Category is decided

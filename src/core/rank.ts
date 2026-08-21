@@ -149,17 +149,117 @@ function extrasScore(s: Specs): number | null {
   return (score / known) * 100;
 }
 
+// ----------------------------------------------------------------- audio
+
+const ANC_SCORE: Record<string, number> = {
+  "hybrid-anc": 100,
+  anc: 75,
+  enc: 40,
+  passive: 20,
+};
+
+function ancScore(s: Specs): number | null {
+  if (!s.ancType) return null;
+  return ANC_SCORE[s.ancType] ?? 40;
+}
+
+function audioBatteryScore(s: Specs): number | null {
+  if (s.batteryHours === null) return null;
+  // TWS and over-ear live on different scales — 8h of buds ≈ 30h of a headset.
+  const tws = s.formFactor === "tws" || s.formFactor === "in-ear";
+  return tws
+    ? curve(s.batteryHours, [[3, 15], [5, 40], [6, 55], [8, 75], [10, 90], [
+      12,
+      100,
+    ]])
+    : curve(s.batteryHours, [[10, 15], [20, 45], [30, 70], [40, 85], [
+      60,
+      100,
+    ]]);
+}
+
+/** Sound quality: reviewer-grade if we know it, else codec/driver proxies. */
+function soundScore(s: Specs): number | null {
+  if (s.soundGrade !== null) return s.soundGrade;
+  const parts: Array<[number, number]> = [];
+  if (s.codecs?.length) {
+    const best = s.codecs.some((c) =>
+        /ldac|lhdc|aptx\s*adaptive|aptx\s*hd/i.test(c)
+      )
+      ? 100
+      : s.codecs.some((c) => /aptx/i.test(c))
+      ? 80
+      : s.codecs.some((c) => /aac/i.test(c))
+      ? 60
+      : 40;
+    parts.push([best, 0.6]);
+  }
+  if (s.driverMm !== null) {
+    const tws = s.formFactor === "tws" || s.formFactor === "in-ear";
+    parts.push([
+      tws
+        ? curve(s.driverMm, [[6, 40], [8, 60], [10, 75], [12, 90]])
+        : curve(s.driverMm, [[30, 55], [40, 80], [50, 95]]),
+      0.4,
+    ]);
+  }
+  if (parts.length === 0) return null;
+  const w = parts.reduce((sum, [, weight]) => sum + weight, 0);
+  return parts.reduce((sum, [v, weight]) => sum + v * weight, 0) / w;
+}
+
+/** Comfort/portability: weight matters a lot on over-ear, not at all on TWS. */
+function comfortScore(s: Specs): number | null {
+  if (s.formFactor === "tws" || s.formFactor === "in-ear") {
+    return s.ipRating ? 80 : null;
+  }
+  if (s.weightG === null) return null;
+  return curve(s.weightG, [[150, 100], [200, 85], [250, 65], [300, 40], [
+    400,
+    15,
+  ]]);
+}
+
+function audioExtrasScore(s: Specs): number | null {
+  let known = 0;
+  let score = 0;
+  const add = (has: boolean | null, weight: number) => {
+    if (has === null) return;
+    known += weight;
+    if (has) score += weight;
+  };
+  add(s.multipoint, 40);
+  add(s.ipRating !== null ? true : null, 30);
+  if (s.bluetoothVersion !== null) {
+    known += 30;
+    score += curve(s.bluetoothVersion, [[4.2, 10], [5.0, 20], [5.2, 26], [
+      5.4,
+      30,
+    ]]);
+  }
+  if (known === 0) return null;
+  return (score / known) * 100;
+}
+
+const AUDIO_CATEGORIES = new Set(["headphone", "earbuds"]);
+
+export function isAudio(category: string): boolean {
+  return AUDIO_CATEGORIES.has(category);
+}
+
 /** Category-specific weights, then nudged by what the user said they care about. */
 function specWeights(intent: RankIntent): Record<string, number> {
-  const base: Record<string, number> = intent.category === "earbuds" ||
-      intent.category === "headphone"
+  // The component set differs by category: scoring a headphone on "camera" and
+  // "chipset" is meaningless, so audio gets its own dimensions entirely. These
+  // keys MUST match the ones produced in rankCandidates(), or every score
+  // silently becomes NaN.
+  const base: Record<string, number> = isAudio(intent.category)
     ? {
-      performance: 0.05,
-      memory: 0.05,
-      display: 0.05,
-      battery: 0.4,
-      camera: 0,
-      extras: 0.45,
+      sound: 0.34,
+      anc: 0.24,
+      battery: 0.18,
+      comfort: 0.12,
+      extras: 0.12,
     }
     : {
       performance: 0.3,
@@ -170,12 +270,20 @@ function specWeights(intent: RankIntent): Record<string, number> {
       extras: 0.08,
     };
 
-  const boost: Record<string, string> = {
-    performance: "performance",
-    camera: "camera",
-    battery: "battery",
-    display: "display",
-  };
+  const boost: Record<string, string> = isAudio(intent.category)
+    ? {
+      performance: "sound",
+      battery: "battery",
+      // "premium" shoppers in audio are usually buying noise cancellation.
+      premium: "anc",
+      compact: "comfort",
+    }
+    : {
+      performance: "performance",
+      camera: "camera",
+      battery: "battery",
+      display: "display",
+    };
   for (const p of intent.priorities) {
     const key = boost[p];
     if (key && base[key] !== undefined) base[key] += 0.15;
@@ -222,6 +330,27 @@ function percentileRank(value: number, sorted: number[]): number {
   let below = 0;
   for (const v of sorted) if (v < value) below++;
   return (below / (sorted.length - 1)) * 100;
+}
+
+/** "WH-1000XM5" / "wh 1000xm5" / "wh1000xm5" all collapse to "wh1000xm5". */
+function modelToken(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Did the user name a specific model, and is this it?
+ *
+ * Searching "sony wh-1000xm5" and getting the WH-CH520 first because it is
+ * cheaper is a failure, however good the value maths is. Exact model matches
+ * are floated above everything else; the rest are kept, but as alternatives.
+ */
+function matchesModel(hint: string | null, name: string, key: string): boolean {
+  if (!hint) return false;
+  const h = modelToken(hint);
+  // A hint needs a digit to be specific — "phone" or "pro" must not gate.
+  if (h.length < 4 || !/\d/.test(h)) return false;
+  const hay = modelToken(`${name} ${key}`);
+  return hay.includes(h);
 }
 
 export interface RankOptions {
@@ -305,26 +434,30 @@ export function rankCandidates(
 
   // -------------------------------------------------- peer stats for imputation
   const weights = specWeights(intent);
-  const rawComponents = survivors.map((c) => ({
-    performance: perfScore(c.specs.antutu),
-    memory: memoryScore(c.specs),
-    display: displayScore(c.specs),
-    battery: batteryScore(c.specs),
-    camera: cameraScore(c.specs),
-    extras: extrasScore(c.specs),
-  }));
+  const audio = isAudio(intent.category);
+  const rawComponents: Array<Record<string, number | null>> = survivors.map((
+    c,
+  ): Record<string, number | null> =>
+    audio
+      ? {
+        sound: soundScore(c.specs),
+        anc: ancScore(c.specs),
+        battery: audioBatteryScore(c.specs),
+        comfort: comfortScore(c.specs),
+        extras: audioExtrasScore(c.specs),
+      }
+      : {
+        performance: perfScore(c.specs.antutu),
+        memory: memoryScore(c.specs),
+        display: displayScore(c.specs),
+        battery: batteryScore(c.specs),
+        camera: cameraScore(c.specs),
+        extras: extrasScore(c.specs),
+      }
+  );
 
   const peerMedian: Record<string, number> = {};
-  for (
-    const key of [
-      "performance",
-      "memory",
-      "display",
-      "battery",
-      "camera",
-      "extras",
-    ]
-  ) {
+  for (const key of Object.keys(weights)) {
     const vals = rawComponents
       .map((r) => (r as Record<string, number | null>)[key])
       .filter((v): v is number => v !== null);
@@ -420,13 +553,17 @@ export function rankCandidates(
     // battery and panel are all unknown is a gamble, and the score says so.
     const total = clamp(totalRaw * (0.7 + 0.3 * confidence));
 
+    const pick = (k: string) => Math.round(comp[k] ?? peerMedian[k] ?? 45);
     const score: ScoreBreakdown = {
-      performance: Math.round(comp.performance ?? peerMedian.performance),
-      display: Math.round(comp.display ?? peerMedian.display),
-      battery: Math.round(comp.battery ?? peerMedian.battery),
-      camera: Math.round(comp.camera ?? peerMedian.camera),
-      memory: Math.round(comp.memory ?? peerMedian.memory),
-      extras: Math.round(comp.extras ?? peerMedian.extras),
+      // For audio, the six phone dimensions are reused as generic slots so the
+      // UI can stay one code path: sound->performance, anc->display,
+      // comfort->camera, battery->battery, extras->extras.
+      performance: audio ? pick("sound") : pick("performance"),
+      display: audio ? pick("anc") : pick("display"),
+      battery: pick("battery"),
+      camera: audio ? pick("comfort") : pick("camera"),
+      memory: audio ? pick("extras") : pick("memory"),
+      extras: pick("extras"),
       specScore: Math.round(spec.total),
       valueScore: Math.round(valueScore),
       trustScore: Math.round(trust ?? 45),
@@ -438,6 +575,7 @@ export function rankCandidates(
     return {
       ...c,
       rank: 0,
+      matchesRequestedModel: matchesModel(intent.modelHint, c.modelName, c.key),
       score,
       pros: [],
       cons: [],
@@ -446,7 +584,12 @@ export function rankCandidates(
     };
   });
 
+  // If the query named a specific model and we found it, it leads — always.
+  const anyExactMatch = ranked.some((r) => r.matchesRequestedModel);
   ranked.sort((a, b) =>
+    (anyExactMatch
+      ? Number(b.matchesRequestedModel) - Number(a.matchesRequestedModel)
+      : 0) ||
     b.score.total - a.score.total ||
     b.score.confidence - a.score.confidence ||
     a.best.price - b.best.price
@@ -461,6 +604,8 @@ export function rankCandidates(
 
 function annotate(ranked: RankedCandidate[], intent: RankIntent): void {
   if (ranked.length === 0) return;
+  const audio = isAudio(intent.category);
+  const anyMatch = ranked.some((r) => r.matchesRequestedModel);
 
   const med = {
     price: median(ranked.map((r) => r.best.price)) ?? 0,
@@ -512,7 +657,34 @@ function annotate(ranked: RankedCandidate[], intent: RankIntent): void {
     const cons: string[] = [];
     const s = r.specs;
 
-    if (s.socName) {
+    if (audio) {
+      if (s.ancType === "hybrid-anc") {
+        pros.push("hybrid active noise cancellation");
+      } else if (s.ancType === "anc") pros.push("active noise cancellation");
+      else if (s.ancType === "enc") {
+        cons.push("ENC only — no true ANC for the listener");
+      } else if (s.ancType === "passive") {
+        cons.push("no active noise cancellation");
+      } else cons.push("noise cancellation not stated");
+
+      if (s.batteryHours) {
+        const tws = s.formFactor === "tws" || s.formFactor === "in-ear";
+        if (s.batteryHours >= (tws ? 8 : 30)) {
+          pros.push(`${s.batteryHours}h battery`);
+        } else if (s.batteryHours <= (tws ? 5 : 20)) {
+          cons.push(`only ${s.batteryHours}h battery`);
+        }
+      }
+      const hiRes = s.codecs?.filter((c) => /ldac|lhdc|aptx/i.test(c)) ?? [];
+      if (hiRes.length) pros.push(`${hiRes.join("/")} codec support`);
+      else if (s.codecs?.length) cons.push("SBC/AAC only — no hi-res codec");
+      if (s.multipoint) pros.push("multipoint pairing");
+      if (s.driverMm) pros.push(`${s.driverMm}mm drivers`);
+      if (s.weightG && s.weightG > 280) cons.push(`heavy at ${s.weightG}g`);
+      if (s.soundGrade === null && !s.codecs?.length) {
+        cons.push("sound quality not verifiable from the listing");
+      }
+    } else if (s.socName) {
       const tierWord = s.perfTier?.replace("-", " ") ?? "";
       if (med.antutu && s.antutu && s.antutu > med.antutu * 1.15) {
         pros.push(`${s.socName} — faster than most here (${tierWord})`);
@@ -523,27 +695,33 @@ function annotate(ranked: RankedCandidate[], intent: RankIntent): void {
       cons.push("chipset unknown — performance not verified");
     }
 
-    if (s.panel && /oled/i.test(s.panel)) pros.push(`${s.panel} panel`);
-    else if (s.panel) cons.push(`${s.panel} panel (no OLED)`);
+    if (!audio && s.panel && /oled/i.test(s.panel)) {
+      pros.push(`${s.panel} panel`);
+    } else if (!audio && s.panel) cons.push(`${s.panel} panel (no OLED)`);
     if (s.refreshHz && s.refreshHz >= 120) {
       pros.push(`${s.refreshHz}Hz display`);
     } else if (s.refreshHz && s.refreshHz <= 60) cons.push("60Hz display");
     if (s.resolution === "HD+") cons.push("HD+ resolution only");
 
-    if (s.batteryMah && med.battery && s.batteryMah >= med.battery * 1.1) {
+    if (
+      !audio && s.batteryMah && med.battery && s.batteryMah >= med.battery * 1.1
+    ) {
       pros.push(`${s.batteryMah}mAh battery`);
     }
-    if (s.chargingW && s.chargingW >= 33) pros.push(`${s.chargingW}W charging`);
-    else if (s.chargingW && s.chargingW <= 15) {
+    if (!audio && s.chargingW && s.chargingW >= 33) {
+      pros.push(`${s.chargingW}W charging`);
+    } else if (s.chargingW && s.chargingW <= 15) {
       cons.push(`slow ${s.chargingW}W charging`);
     }
 
-    if (s.ramGb && med.ram && s.ramGb > med.ram) pros.push(`${s.ramGb}GB RAM`);
-    if (s.storageGb && med.storage && s.storageGb < med.storage) {
+    if (!audio && s.ramGb && med.ram && s.ramGb > med.ram) {
+      pros.push(`${s.ramGb}GB RAM`);
+    }
+    if (!audio && s.storageGb && med.storage && s.storageGb < med.storage) {
       cons.push(`only ${s.storageGb}GB storage`);
     }
-    if (s.has5g === false) cons.push("4G only");
-    if (s.ois) pros.push("OIS on main camera");
+    if (!audio && s.has5g === false) cons.push("4G only");
+    if (!audio && s.ois) pros.push("OIS on main camera");
     if (s.ipRating) pros.push(`${s.ipRating} rated`);
 
     if (r.best.price < med.price * 0.85) {
@@ -584,6 +762,7 @@ function annotate(ranked: RankedCandidate[], intent: RankIntent): void {
     }
 
     const badges: string[] = [];
+    if (anyMatch && !r.matchesRequestedModel) badges.push("ALTERNATIVE");
     if (r === bestValue) badges.push("BEST VALUE");
     if (r === cheapest) badges.push("CHEAPEST");
     if (r === fastest && (r.specs.antutu ?? 0) > 0) badges.push("FASTEST");

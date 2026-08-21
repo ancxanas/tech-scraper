@@ -150,9 +150,18 @@ export function parseIntentRules(query: string): RankIntent {
   }
 
   // A specific model mention ("redmi note 14", "wh-1000xm5") tightens matching.
-  const modelHint = lower.match(
-    /\b([a-z]+\s*[-]?\s*\d{2,4}[a-z]*(?:\s*(?:pro|plus|ultra|lite|max|5g))?)\b/i,
-  )?.[1] ?? null;
+  // Model codes come in two shapes: alphanumeric part numbers ("wh-1000xm5",
+  // "wf-c710n") and word+number names ("note 14 5g", "narzo 80 lite"). The old
+  // pattern required the code to end on a word boundary after optional letters,
+  // so "wh-1000xm5" never matched — the single most common way users name a
+  // specific product.
+  const partNumber = lower.match(
+    /\b([a-z]{1,4}[-\s]?\d{2,4}[a-z]{0,3}\d{0,2})\b/i,
+  )?.[1];
+  const wordModel = lower.match(
+    /\b([a-z]+\s+\d{1,4}[a-z]*(?:\s*(?:pro|plus|ultra|lite|max|5g))?)\b/i,
+  )?.[1];
+  const modelHint = partNumber ?? wordModel ?? null;
 
   return {
     raw: q,

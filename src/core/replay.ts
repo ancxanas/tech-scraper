@@ -88,8 +88,14 @@ export function inferPlatform(items: unknown[]): PlatformId {
   for (const item of items.slice(0, 20)) {
     if (!item || typeof item !== "object") continue;
     const o = item as Record<string, unknown>;
+    const label = String(o.platform ?? "").toLowerCase();
+    if (label.includes("flipkart")) return "flipkart";
+    if (label.includes("amazon")) return "amazon";
+    if (label.includes("reliance")) return "reliance";
+    if (label.includes("cliq")) return "tatacliq";
+
     const url = String(
-      o.product_url ?? o.product_page_url ?? o.url ??
+      o.product_url ?? o.product_page_url ?? o.productUrl ?? o.url ??
         (o.input as Record<string, unknown> | undefined)?.url ?? "",
     );
     if (url.includes("flipkart.")) return "flipkart";

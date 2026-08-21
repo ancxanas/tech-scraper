@@ -29,6 +29,7 @@ import { describeIntent, parseIntent } from "./lib/llm-intent.ts";
 import type { ParsedIntent, SearchResult } from "./types.ts";
 import { findCommand } from "./commands/find.ts";
 import { rankCommand } from "./commands/rank.ts";
+import { snapshotCommand } from "./commands/snapshot.ts";
 
 function parsePlatforms(input: string | undefined): Platform[] {
   if (!input) return [...ALL_ENABLED];
@@ -209,6 +210,7 @@ export const cli = new Command()
   // v2 pipeline: spec-aware ranking, variant grouping, replayable runs.
   .command("find", findCommand)
   .command("rank", rankCommand)
+  .command("snapshot", snapshotCommand)
   .command(
     "search",
     new Command()

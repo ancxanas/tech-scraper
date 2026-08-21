@@ -65,6 +65,22 @@ export interface Specs {
   osUpgrades: number | null;
   releaseYear: number | null;
   colour: string | null;
+
+  // ---- audio (headphones / earbuds) ----
+  /** "hybrid-anc" | "anc" | "enc" | "passive" */
+  ancType: string | null;
+  /** Rated playback hours, ANC on where the vendor states it. */
+  batteryHours: number | null;
+  driverMm: number | null;
+  /** LDAC, aptX, AAC, SBC, LHDC... */
+  codecs: string[] | null;
+  bluetoothVersion: number | null;
+  /** "over-ear" | "on-ear" | "in-ear" | "tws" | "neckband" */
+  formFactor: string | null;
+  weightG: number | null;
+  multipoint: boolean | null;
+  /** Vendor/reviewer-grade sound signature note, when known. */
+  soundGrade: number | null;
 }
 
 export type SpecSource = "title" | "slug" | "kb" | "enrich" | "inferred";
@@ -144,6 +160,8 @@ export interface ScoreBreakdown {
 
 export interface RankedCandidate extends Candidate {
   rank: number;
+  /** True when the query named a specific model and this is that model. */
+  matchesRequestedModel: boolean;
   score: ScoreBreakdown;
   pros: string[];
   cons: string[];

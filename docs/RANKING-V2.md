@@ -182,13 +182,94 @@ deno task check     # fmt + lint + type-check + 106 tests
 
 ---
 
+## Round 2: what the real Amazon payload taught us
+
+The first pass was built against a Flipkart + Reliance capture. Replaying an
+actual Amazon snapshot (`sd_mt2gj3m12b2l7r2jy9`, "phones under 15000") broke
+four more assumptions — all of them silently, which is the dangerous kind.
+
+**Amazon titles are marketing strings, not product names.** They look like
+`<product> | <feature> | <feature> | …`, and the accessory veto was matching
+against the whole string. Result: _"Itel Zeno 200 (…) | … | Charger in Box"_ was
+classified as a charger, _"Samsung Galaxy M06 5G | … | Without Charger"_
+likewise, and _"realme NARZO 90x 5G | … | 400% Ultra Boom Speaker"_ became a
+speaker. Four of sixteen Amazon phones were being deleted. Vetoes now apply only
+to the product-noun head (before the first `|`); positive signals may still come
+from anywhere, since feature text is legitimate evidence.
+
+**Booleans arrive as strings.** `sponsored: "false"` is truthy in JavaScript.
+Every Amazon listing would have been marked sponsored.
+
+**MRPs can be nonsense.** One card claimed ₹1,59,994 MRP on an ₹8,899 phone — a
+94% "discount" that would have topped the deal score. Any MRP above 5× the
+selling price is now discarded as bad data.
+
+**Those long titles are also a spec goldmine.** Amazon states the chipset,
+charging wattage, refresh rate, camera and sometimes the benchmark outright
+(`AnTuTu 623K+`, now parsed directly). Amazon has the highest field-fill of any
+platform in the fixture at 87%.
+
+One more thing the snapshot revealed: the old code appended the budget to the
+_keyword_ rather than using Amazon's price filter, so the search term was
+literally `"phones under 15000 under 15000"`. `searchTerm()` now builds a clean
+category keyword and the budget is enforced as a hard gate at ranking time.
+
+## Round 2: audio is a first-class category
+
+Replaying the saved `sony wh-1000xm5` runs showed the pipeline ranking a ₹1,000
+silicone case at #1 and the WH-1000XM5 itself last — the same failure mode as
+the earphones bug, in a different category. Three fixes:
+
+1. **Audio accessories are gated.** Cases, ear pads, headband covers, hinges and
+   "replacement for <brand>" parts no longer classify as headphones.
+2. **Audio has its own scoring dimensions.** Grading a headphone on chipset and
+   camera is meaningless. Audio is scored on sound (codecs, drivers, or a
+   reviewer-grade figure from the KB), noise cancellation (hybrid ANC > ANC >
+   ENC > passive), battery (on a TWS-aware scale — 8h of buds ≈ 30h of a
+   headset), comfort and features. `src/knowledge/audio.ts` seeds ~16 models.
+3. **Category is inferred when the query omits it.** "sony wh-1000xm5" names no
+   category, so intent parsing returned `unknown` and the ranker fell through to
+   phone scoring. The category is now inferred from what actually came back.
+
+## Round 2: naming a specific model
+
+Searching "sony wh-1000xm5" and being shown a WH-CH520 first because it is
+better value is a failure, however good the value maths. The intent parser now
+recognises alphanumeric part numbers (the old regex could not match `wh-1000xm5`
+at all), and an exact model match is floated to the top. Other models are still
+shown — they are often the better buy — but badged `ALTERNATIVE`, with a note
+explaining why the table is not in score order.
+
+## Testing without spending credit
+
+Three ways, cheapest first:
+
+```bash
+# 1. Replay anything already on disk — run dirs, loose exports, v1 outputs.
+deno task rank "best phones under 15000" --replay tests/fixtures/run-phones-15000
+
+# 2. Re-download a snapshot you already paid for (a download, not a crawl).
+deno task snapshot sd_mt2gj3m12b2l7r2jy9 --platform amazon --out runs/phones
+
+# 3. Only then, a live scrape.
+deno task find "best phones under 15000" --pages 1
+```
+
+The replay loader accepts run directories, individual JSON files, raw BrightData
+exports and the v1 `{query, products[]}` output format, inferring the platform
+from the records themselves.
+
+---
+
 ## What is still worth doing
 
-1. **Grow the model KB.** It currently covers ~30 models well. Everything else
-   ranks with `conf < 50%` and says so. This is the single highest-leverage
-   improvement and costs nothing but data entry.
-2. **Amazon coverage.** The fixture had no Amazon payload, so that path is
-   verified only by unit tests, not against real data.
+1. **Grow the model KBs.** `src/knowledge/models.ts` covers ~30 phones and
+   `audio.ts` ~16 audio models. Everything else ranks with `conf < 50%` and says
+   so. Highest-leverage improvement available, and it costs nothing but data
+   entry.
+2. **Reliance and Tata CLiQ still have no verified payload.** Their URL builders
+   are fixed but unproven; Reliance's captured data is accessories and Tata
+   CLiQ's is a crawler error. One live run each would confirm them.
 3. **Price history.** Deno KV is wired but unused by v2 ranking — "cheapest in
    30 days" would make the deal score much stronger.
 4. **Reliance/Tata CLiQ collectors.** The URL fixes are in; the collectors
