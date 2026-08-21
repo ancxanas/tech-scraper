@@ -12,6 +12,7 @@ import { loadRun } from "../core/replay.ts";
 import { runPipeline } from "../core/pipeline.ts";
 import { parseIntentRules, unsupportedReason } from "../core/intent.ts";
 import { renderFull } from "../ui/render.ts";
+import { enrichTop } from "../core/enrich.ts";
 
 export const rankCommand = new Command()
   .description("Rank products from saved scrape data (no credits spent)")
@@ -35,6 +36,11 @@ export const rankCommand = new Command()
   .option(
     "--budget-tolerance <pct:number>",
     "Allow N% over the stated budget",
+    { default: 0 },
+  )
+  .option(
+    "--enrich <n:number>",
+    "Fetch real spec sheets for the top N (Web Unlocker credit, no re-scrape)",
     { default: 0 },
   )
   .option("--json", "Emit JSON instead of the terminal report", {
@@ -72,11 +78,35 @@ export const rankCommand = new Command()
       Deno.exit(2);
     }
 
-    const result = runPipeline(query, intent, batches, {
+    let result = runPipeline(query, intent, batches, {
       inStockOnly: options.inStockOnly,
       budgetTolerance: (options.budgetTolerance ?? 0) / 100,
       keepRejected: false,
     });
+
+    // Enrichment against saved data: the finalists' product pages are fetched
+    // live, but nothing is re-scraped. This is the cheap way to test whether
+    // enrichment actually rescues the white-label phones the KB cannot cover.
+    if (options.enrich > 0 && result.ranked.length > 0) {
+      console.error(
+        colors.dim(`  Fetching spec sheets for the top ${options.enrich}…`),
+      );
+      const enriched = await enrichTop(result.ranked, options.enrich, {
+        verbose: true,
+      });
+      if (enriched.text.size > 0) {
+        result = runPipeline(query, intent, batches, {
+          inStockOnly: options.inStockOnly,
+          budgetTolerance: (options.budgetTolerance ?? 0) / 100,
+          enrichText: enriched.text,
+        });
+      }
+      console.error(
+        colors.dim(
+          `  enriched ${enriched.fetched}, skipped ${enriched.skipped} (already known), failed ${enriched.failed}\n`,
+        ),
+      );
+    }
 
     if (options.json) {
       console.log(
