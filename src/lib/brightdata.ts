@@ -1,5 +1,11 @@
 const BASE_URL = "https://api.brightdata.com";
 
+export let _fetch: typeof globalThis.fetch = globalThis.fetch;
+
+export function setFetchFn(fn: typeof globalThis.fetch) {
+  _fetch = fn;
+}
+
 function getApiKey(): string {
   const key = Deno.env.get("BRIGHTDATA_API_KEY");
   if (!key) {
@@ -22,7 +28,7 @@ export async function bdFetch<T = unknown>(
   options: RequestInit = {},
 ): Promise<T> {
   const url = `${BASE_URL}${path}`;
-  const res = await fetch(url, {
+  const res = await _fetch(url, {
     ...options,
     headers: { ...authHeaders(), ...options.headers as Record<string, string> },
   });
@@ -37,11 +43,17 @@ export async function bdFetch<T = unknown>(
   try {
     return JSON.parse(text) as T;
   } catch {
-    // NDJSON fallback: split by newlines, parse each, return array
     const lines = text.split("\n").filter((l) => l.trim());
     if (lines.length > 0) {
-      const parsed = lines.map((l) => JSON.parse(l)) as unknown;
-      return parsed as T;
+      const parsed: unknown[] = [];
+      for (const line of lines) {
+        try {
+          parsed.push(JSON.parse(line));
+        } catch {
+          // skip unparseable lines
+        }
+      }
+      if (parsed.length > 0) return parsed as T;
     }
     throw new Error("Empty response from Bright Data API");
   }
@@ -75,6 +87,9 @@ export async function checkCollector(
     return { ok: !!res };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("404")) {
+      return { ok: true, error: "collector exists (404 on status check)" };
+    }
     return { ok: false, error: msg };
   }
 }

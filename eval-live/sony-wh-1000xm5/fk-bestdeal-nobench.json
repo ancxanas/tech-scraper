@@ -1,0 +1,28 @@
+{
+  "query": "sony wh-1000xm5",
+  "best": {
+    "id": "flipkart:itm21bed7f050a96",
+    "name": "Techpunch On-Ear Wireless Bluetooth 5.0 White Headphone...",
+    "price": 298,
+    "originalPrice": 999,
+    "discount": 70,
+    "currency": "INR",
+    "productUrl": "https://www.flipkart.com/techpunch-on-ear-wireless-bluetooth-5-0-white-headphones-compatible-all-phones-wired/p/itm21bed7f050a96?pid=ACCHJGFDCYDTHYT5&lid=LSTACCHJGFDCYDTHYT5K7IPIL&marketplace=FLIPKART&q=wireless%2Bheadphones&store=0pm%2Ffcn%2Fgc3&srno=s_4_125&otracker=search&fm=organic&iid=97203764-38d4-4cbf-b470-9f8ca1002487.ACCHJGFDCYDTHYT5.SEARCH&ppt=None&ppn=None&ssid=uyaoqh71og0000001787151953249&qH=d959ab5271d535df&ov_redirect=true&ov_redirect=true",
+    "imageUrl": "https://rukminim2.flixcart.com/image/612/612/xif0q/headphone/q/v/x/on-ear-wireless-bluetooth-5-0-white-headphones-compatible-with-original-imahjgfdtygxmfxd.jpeg?q=70",
+    "platform": "Flipkart",
+    "scrapedAt": "2026-08-19T15:06:30.879Z",
+    "extras": {
+      "input": {
+        "url": "https://www.flipkart.com/search?q=sony%20wh-1000xm5&page=2"
+      }
+    },
+    "brand": "Techpunch",
+    "rating": 3.6,
+    "reviewsCount": 19,
+    "availability": "In Stock",
+    "inStock": true,
+    "listingPosition": 216,
+    "score": 0.59,
+    "reason": "70% off + in stock"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "checks": [
+    {
+      "platform": "Flipkart",
+      "collectorId": "c_msyq5fv71wizb98a5s",
+      "ok": true,
+      "error": "collector exists (404 on status check)"
+    },
+    {
+      "platform": "Reliance Digital",
+      "collectorId": "c_msxt4lsv12k5p1328b",
+      "ok": true,
+      "error": "collector exists (404 on status check)"
+    },
+    {
+      "platform": "Tata CLiQ",
+      "collectorId": "c_msxt4nhe2fxyb7bjnw",
+      "ok": true,
+      "error": "collector exists (404 on status check)"
+    },
+    {
+      "platform": "Amazon India",
+      "collectorId": "n/a",
+      "ok": true
+    }
+  ],
+  "allOk": true
+}

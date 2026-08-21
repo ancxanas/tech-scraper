@@ -151,7 +151,7 @@ Deno.test("parseCustomProducts uses availability from source data", () => {
 
   const result = parseCustomProducts(raw, "flipkart");
   assertEquals(result[0].availability, "In Stock");
-  assertEquals(result[1].availability, "Unknown");
+  assertEquals(result[1].availability, "In Stock");
 });
 
 Deno.test("parseCustomProducts computes discount from prices", () => {

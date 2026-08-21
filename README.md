@@ -13,6 +13,11 @@ using Bright Data Scraper Studio.
   Tata CLiQ, Amazon India
 - Discovers deals on Google Shopping via SERP API
 - Fetches any page via Web Unlocker (screenshots + markdown)
+- **Smart comparison engine** with spec extraction, benchmark scores, and
+  category-specific ranking (phones: RAM/storage/battery/camera, headphones:
+  ANC/battery/sound, earbuds: battery/ANC/driver)
+- **Query understanding** — detects intent (specific product vs category+price
+  range) and builds optimal search queries
 - Scores and ranks results using price, discount, rating, and query relevance
 - Tracks price history over time with Deno KV
 - Self-heals broken scrapers when target sites change their layout
@@ -96,6 +101,10 @@ deno task dev best-deal "iphone 15"
 # Compare prices across platforms
 deno task dev compare "headphones" -p amazon,flipkart,reliance,tatacliq
 
+# Smart comparison with specs and benchmarks
+deno task dev compare "best mobile phones under 15000"
+deno task dev compare "best sony headphones under 5000"
+
 # View price history
 deno task dev history "wireless headphones"
 
@@ -163,6 +172,9 @@ src/
     serp.ts                   SERP API client (Google Shopping discovery)
     prescrapers.ts            Pre-built scrapers (Amazon India dataset)
     unlock.ts                 Web Unlocker client (screenshots + markdown)
+    query-parser.ts           Query intent detection (specific/category/generic)
+    specs.ts                  Spec extraction, benchmarks, comparison scoring
+    compare.ts                Comparison engine (category-specific ranking)
   tools/
     scraper.ts                Scraper Studio batch runner (trigger + poll + parse)
     healer.ts                 Self-healing API wrapper (trigger + poll + approve)
@@ -170,20 +182,28 @@ tests/
   cli_test.ts                 URL template and validation tests
   score_test.ts               Scoring, dedup, and relevance tests
   scraper_test.ts             Parser and field extraction tests
+  query_parser_test.ts        Query intent detection tests
+  specs_test.ts               Spec extraction and benchmark tests
 ```
 
 ### Data flow
 
 ```
 User query
+  → parseQuery() detects intent (specific/category/generic)
+  → buildSearchQueries() generates search URLs
   → scrapeProducts() runs platforms in parallel
     → Scraper Studio: runCollector() → pollUntil() → parseCustomProducts()
     → Pre-built: searchAmazonPreBuilt() (Amazon only)
     → On empty results: auto-heal → re-run same collector
   → savePrices() stores in Deno KV BEFORE dedup
-  → deduplicate() by product ID (keeps cross-platform rows)
-  → scoreAndRank() applies weighted scoring + relevance gate
-  → Display (formatted table with coverage footer or JSON)
+  → deduplicate() by product ID (keeps cross-platform rows + variations)
+  → compareProducts() applies category-specific scoring:
+      - Phone: RAM, storage, battery, camera, processor, 5G
+      - Headphone: ANC, battery life, driver, weight, type
+      - Earbuds: ANC, battery, driver, weight
+      - Benchmark database for known models
+  → Recommendation + ranked comparison table
 ```
 
 ## How Bright Data is used
@@ -198,8 +218,7 @@ Used for Flipkart, Reliance Digital, and Tata CLiQ.
 
 Uses Bright Data's pre-built Amazon India scraper (`gd_lwdb4vjm1ehb499uxs`) via
 `/datasets/v3/trigger`. Returns product data: name, price, MRP, discount,
-rating, reviews, brand, images. Can be switched to a custom Amazon collector via
-`AMAZON_COLLECTOR_ID` env var.
+rating, reviews, brand, images.
 
 ### SERP API (deal discovery)
 
@@ -217,7 +236,9 @@ The `refactor_template` API analyzes broken selectors and proposes code fixes
 using AI. Full flow: trigger → poll → preview → approve → verify. Auto-heal runs
 when a platform returns empty results or field fill rate < 50%.
 
-## Scoring
+## Scoring & Comparison
+
+### Basic scoring (`search` / `best-deal`)
 
 Products are scored using a weighted formula with a relevance gate:
 
@@ -226,6 +247,23 @@ Products are scored using a weighted formula with a relevance gate:
 - **Rating** (20%): Products with 4+ stars get a boost
 - **Availability** (10%): In-stock products get a bonus
 - **Relevance gate**: Products must match search query tokens in their name
+
+### Smart comparison (`compare`)
+
+The comparison engine uses query intent detection + category-specific scoring:
+
+- **Query parsing**: Detects intent (specific product, category+price range, or
+  generic search). Extracts brand, model, max price, and product category.
+- **Spec extraction**: Parses RAM, storage, battery, camera from product names
+  using regex patterns.
+- **Benchmark database**: Local database of benchmark scores for ~30 popular
+  Indian market products (phones: AnTuTu/Geekbench, headphones: ANC/battery).
+- **Category-specific scoring**:
+  - Phones: processor, RAM, storage, battery, camera, display, 5G
+  - Headphones: ANC type, battery life, driver size, weight, form factor
+  - Earbuds: ANC, battery, driver, weight
+- **Brand matching**: +30 points for matching query brand, -20 for mismatch. -30
+  for third-party accessories ("for Sony" products).
 
 Deduplication by product ID preserves cross-platform rows by default. Use
 `--dedup-cheapest` to keep only the cheapest across platforms.
@@ -241,11 +279,12 @@ Deduplication by product ID preserves cross-platform rows by default. Use
 
 The project uses custom Scraper Studio collectors:
 
-| Platform         | Collector ID           | Target URL pattern                  |
-| ---------------- | ---------------------- | ----------------------------------- |
-| Flipkart         | `c_msyq5fv71wizb98a5s` | `flipkart.com/search?q=...`         |
-| Reliance Digital | `c_msxt4lsv12k5p1328b` | `reliancedigital.in/products?q=...` |
-| Tata CLiQ        | `c_msxt4nhe2fxyb7bjnw` | `tatacliq.com/search/?text=...`     |
+| Platform         | Collector ID                       | Target URL pattern                  |
+| ---------------- | ---------------------------------- | ----------------------------------- |
+| Flipkart         | `c_mt1bpy5nvn2i7o1r7`              | `flipkart.com/search?q=...`         |
+| Reliance Digital | `c_msxt4lsv12k5p1328b`             | `reliancedigital.in/products?q=...` |
+| Tata CLiQ        | `c_mt0oxjk82pao8tyc4u`             | `tatacliq.com/search/?text=...`     |
+| Amazon India     | Prebuilt (`gd_lwdb4vjm1ehb499uxs`) | `amazon.in/s?k=...`                 |
 
 ### Recreating collectors
 

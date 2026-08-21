@@ -1,0 +1,21 @@
+{
+  "query": "sony wh-1000xm5",
+  "best": {
+    "id": "amazon:B0FL2J62PK",
+    "name": "Silicone Case for Sony WH-1000XM5 Headphones, Xm5 Headband Cover & Ear Cups Protector - Navy Blue",
+    "price": 1000,
+    "originalPrice": 2000,
+    "discount": 50,
+    "currency": "INR",
+    "productUrl": "https://www.amazon.in/SOULWIT-Silicone-WH-1000XM5-Headphones-Protector/dp/B0FL2J62PK/ref=sr_1_27?dib=eyJ2IjoiMSJ9.uU-7S8Y5B0yxJuZbDVfjjmFh_5OoCjh0Mwwpjss9RN1Jvu0RbxD29pVxmYoQAMvrA3RxnERr5zFCx9uJk6N95cujVs1KTAD1LJpIA326yyUnlI1phFmxGl_FrMws5lnou1HOmrIzONW4_Li6tvt70DqidYCnJlORnnGj6aOrd_48dSQf6okLt7mT-BtRgE5Uc3fxz0xKxiBYVj0crMOXey6xiu9uQ9Ndmv30RcCo5Do.x0HuIiCt9JHKfULWbVbtSNnsr73rZa-1qiLE4u5EsJg&dib_tag=se&keywords=sony%2Bwh-1000xm5&nsdOptOutParam=true&qid=1787142769&sr=8-27&xpid=tjo_vrbEiRPnY",
+    "imageUrl": "https://m.media-amazon.com/images/I/51ZfGr11mvL._AC_UY218_.jpg",
+    "platform": "Amazon India",
+    "scrapedAt": "2026-08-19T12:33:03.863Z",
+    "brand": "SOULWIT",
+    "rating": 4.7,
+    "reviewsCount": 4,
+    "availability": "Unknown",
+    "score": 0.92,
+    "reason": "matches query + 50% off + 4.7★"
+  }
+}

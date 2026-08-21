@@ -1,0 +1,55 @@
+{
+  "query": "sony wh-1000xm5",
+  "count": 0,
+  "products": [],
+  "platforms": [
+    {
+      "name": "Flipkart",
+      "status": "ok",
+      "count": 509,
+      "rawCount": 968,
+      "parsedCount": 509,
+      "fieldFillRate": 79,
+      "heal": {
+        "attempted": false,
+        "success": false
+      }
+    },
+    {
+      "name": "Reliance Digital",
+      "status": "ok",
+      "count": 18,
+      "rawCount": 18,
+      "parsedCount": 18,
+      "fieldFillRate": 60,
+      "heal": {
+        "attempted": false,
+        "success": false
+      }
+    },
+    {
+      "name": "Tata CLiQ",
+      "status": "ok",
+      "count": 37,
+      "rawCount": 40,
+      "parsedCount": 37,
+      "fieldFillRate": 70,
+      "heal": {
+        "attempted": false,
+        "success": false
+      }
+    },
+    {
+      "name": "Amazon India",
+      "status": "empty",
+      "count": 0,
+      "rawCount": 0,
+      "parsedCount": 0,
+      "fieldFillRate": 0,
+      "heal": {
+        "attempted": false,
+        "success": false
+      }
+    }
+  ]
+}

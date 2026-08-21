@@ -1,0 +1,108 @@
+{
+  "query": "sony wh-1000xm5",
+  "count": 4,
+  "products": [
+    {
+      "id": "reliance:sony-wh-ch520-wireless-on-ear-bluetooth-headphones-with-mic-white-ljmwxn",
+      "name": "Sony WH-CH520, Wireless On-Ear Bluetooth Headphones with Mic, Up to 50 Hours of Playtime, Quick charging, Multipoint Connectivity, Fast Charge, White",
+      "price": 4490,
+      "originalPrice": 5990,
+      "discount": 25,
+      "currency": "INR",
+      "productUrl": "https://www.reliancedigital.in/product/sony-wh-ch520-wireless-on-ear-bluetooth-headphones-with-mic-white-ljmwxn",
+      "imageUrl": "https://cdn.jiostore.online/v2/jmd-asp/jdprod/wrkr/products/pictures/item/free/resize-w:450/sony/493841804/0/bf5qQUN6X9-9maMAEPo1O-Sony-BT-HP-WH-CH520-White-493841804-i-1-1200Wx1200H.jpeg",
+      "platform": "Reliance Digital",
+      "scrapedAt": "2026-08-19T15:19:32.499Z",
+      "extras": {
+        "input": {
+          "url": "https://www.reliancedigital.in/products?q=sony%20wh-1000xm5"
+        }
+      },
+      "availability": "Please enter a pincode.",
+      "inStock": true,
+      "listingPosition": 1,
+      "score": 0.29,
+      "reason": "25% off + in stock"
+    },
+    {
+      "id": "reliance:sony-wh-ch520-wireless-on-ear-bluetooth-headphones-with-mic-black-ljmwxn",
+      "name": "Sony WH-CH520, Wireless On-Ear Bluetooth Headphones with Mic, Up to 50 Hours of Playtime, Quick charging, Multipoint Connectivity, Fast Charge, Black",
+      "price": 4490,
+      "originalPrice": 5990,
+      "discount": 25,
+      "currency": "INR",
+      "productUrl": "https://www.reliancedigital.in/product/sony-wh-ch520-wireless-on-ear-bluetooth-headphones-with-mic-black-ljmwxn",
+      "imageUrl": "https://cdn.jiostore.online/v2/jmd-asp/jdprod/wrkr/products/pictures/item/free/resize-w:450/sony/493841803/0/qMD4TaB2-N-FsybOSKVEB-Sony-TWS-WF-C700N-Blackk-493841803-i-1-1200Wx1200H.jpeg",
+      "platform": "Reliance Digital",
+      "scrapedAt": "2026-08-19T15:19:32.499Z",
+      "extras": {
+        "input": {
+          "url": "https://www.reliancedigital.in/products?q=sony%20wh-1000xm5"
+        }
+      },
+      "availability": "Please enter a pincode.",
+      "inStock": true,
+      "listingPosition": 4,
+      "score": 0.29,
+      "reason": "25% off + in stock"
+    },
+    {
+      "id": "reliance:sony-wh-ch520-wireless-on-ear-bluetooth-headphones-with-mic-taupe-ljmwxn",
+      "name": "Sony WH-CH520, Wireless On-Ear Bluetooth Headphones with Mic, Up to 50 Hours of Playtime, Quick charging, Multipoint Connectivity, Fast Charge, Taupe",
+      "price": 4490,
+      "originalPrice": 5990,
+      "discount": 25,
+      "currency": "INR",
+      "productUrl": "https://www.reliancedigital.in/product/sony-wh-ch520-wireless-on-ear-bluetooth-headphones-with-mic-taupe-ljmwxn",
+      "imageUrl": "https://cdn.jiostore.online/v2/jmd-asp/jdprod/wrkr/products/pictures/item/free/resize-w:450/sony/493841806/0/ngKJpZ5llx-EO9jgQPvDx-Sony-CH520-Headphone-493841806-i-1-1200Wx1200H.jpeg",
+      "platform": "Reliance Digital",
+      "scrapedAt": "2026-08-19T15:19:32.499Z",
+      "extras": {
+        "input": {
+          "url": "https://www.reliancedigital.in/products?q=sony%20wh-1000xm5"
+        }
+      },
+      "availability": "Please enter a pincode.",
+      "inStock": true,
+      "listingPosition": 6,
+      "score": 0.29,
+      "reason": "25% off + in stock"
+    },
+    {
+      "id": "reliance:sony-wh-ch520-wireless-on-ear-bluetooth-headphones-with-mic-blue-ljmwxn",
+      "name": "Sony WH-CH520, Wireless On-Ear Bluetooth Headphones with Mic, Up to 50 Hours of Playtime, Quick charging, Multipoint Connectivity, Fast Charge, Blue",
+      "price": 4490,
+      "originalPrice": 5990,
+      "discount": 25,
+      "currency": "INR",
+      "productUrl": "https://www.reliancedigital.in/product/sony-wh-ch520-wireless-on-ear-bluetooth-headphones-with-mic-blue-ljmwxn",
+      "imageUrl": "https://cdn.jiostore.online/v2/jmd-asp/jdprod/wrkr/products/pictures/item/free/resize-w:450/sony/493841805/0/ALu_88EAox-l9YJNm9fiq-Sony-TWS-WF-C700N-Bluee-493841805-i-1-1200Wx1200H.jpeg",
+      "platform": "Reliance Digital",
+      "scrapedAt": "2026-08-19T15:19:32.499Z",
+      "extras": {
+        "input": {
+          "url": "https://www.reliancedigital.in/products?q=sony%20wh-1000xm5"
+        }
+      },
+      "availability": "Please enter a pincode.",
+      "inStock": true,
+      "listingPosition": 8,
+      "score": 0.29,
+      "reason": "25% off + in stock"
+    }
+  ],
+  "platforms": [
+    {
+      "name": "Reliance Digital",
+      "status": "ok",
+      "count": 18,
+      "rawCount": 18,
+      "parsedCount": 18,
+      "fieldFillRate": 60,
+      "heal": {
+        "attempted": false,
+        "success": false
+      }
+    }
+  ]
+}

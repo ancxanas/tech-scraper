@@ -23,7 +23,10 @@ import { searchGoogleShopping } from "./lib/serp.ts";
 import { getAvailablePreScrapers } from "./lib/prescrapers.ts";
 import { fetchPageMarkdown, takeScreenshot } from "./lib/unlock.ts";
 import { checkCollector } from "./lib/brightdata.ts";
-import type { SearchResult } from "./types.ts";
+import { compareProducts, type ComparisonResult } from "./lib/compare.ts";
+import { generateDealReport } from "./lib/intelligence.ts";
+import { describeIntent, parseIntent } from "./lib/llm-intent.ts";
+import type { ParsedIntent, SearchResult } from "./types.ts";
 
 function parsePlatforms(input: string | undefined): Platform[] {
   if (!input) return [...ALL_ENABLED];
@@ -110,6 +113,69 @@ function printCoverage(results: SearchResult[]) {
   console.log("");
 }
 
+function printComparison(comparison: ComparisonResult) {
+  if (comparison.comparisons.length === 0) {
+    console.log(colors.dim("\nNo products found.\n"));
+    return;
+  }
+
+  if (comparison.recommendation) {
+    const rec = comparison.recommendation;
+    console.log(colors.green.bold("\n  RECOMMENDATION"));
+    console.log(colors.bold(`  ${rec.product.name}`));
+    console.log(
+      colors.green.bold(`  Price: ${formatPrice(rec.product.price)}`),
+    );
+    if (rec.product.originalPrice > rec.product.price) {
+      console.log(
+        colors.dim(`  Was: ${formatPrice(rec.product.originalPrice)}`),
+      );
+    }
+    console.log(colors.cyan(`  Platform: ${rec.product.platform}`));
+    console.log(colors.cyan(`  Score: ${rec.score.toFixed(1)}/100`));
+    console.log(colors.green(`  Why: ${rec.reason}`));
+    if (rec.pricePerSpec !== "N/A") {
+      console.log(colors.dim(`  Value: ${rec.pricePerSpec}`));
+    }
+    if (Object.keys(rec.specValues).length > 0) {
+      console.log(colors.dim("  Specs:"));
+      for (const [k, v] of Object.entries(rec.specValues)) {
+        console.log(colors.dim(`    ${k}: ${v}`));
+      }
+    }
+    console.log();
+  }
+
+  console.log(
+    colors.bold(`  All ${comparison.comparisons.length} products:\n`),
+  );
+  const table = new Table()
+    .header(["#", "Product", "Price", "Off", "Score", "Specs", "Platform"])
+    .border(true);
+
+  for (const [i, c] of comparison.comparisons.slice(0, 15).entries()) {
+    const specSummary = Object.values(c.specValues).slice(0, 3).join(", ");
+    table.push([
+      String(i + 1),
+      c.product.name.length > 40
+        ? c.product.name.slice(0, 37) + "..."
+        : c.product.name,
+      colors.green(formatPrice(c.product.price)),
+      c.product.discount > 0 ? colors.yellow(`${c.product.discount}%`) : "-",
+      c.score >= 70
+        ? colors.green.bold(c.score.toFixed(0))
+        : c.score >= 40
+        ? colors.yellow(c.score.toFixed(0))
+        : colors.red(c.score.toFixed(0)),
+      colors.dim(specSummary || "-"),
+      colors.cyan(c.product.platform),
+    ]);
+  }
+  console.log("");
+  table.render();
+  console.log("");
+}
+
 function printJson(data: unknown) {
   console.log(JSON.stringify(data, null, 2));
 }
@@ -120,13 +186,13 @@ function isJson(options: { json?: boolean }): boolean {
 
 function buildScrapeOptions(options: {
   pages?: number;
-  noHeal?: boolean;
+  heal?: boolean;
   enrich?: number;
   max?: number;
 }): ScrapeOptions {
   return {
     pages: options.pages ?? PAGES_TO_SCRAPE,
-    noHeal: options.noHeal ?? false,
+    noHeal: options.heal !== true,
     enrichCount: options.enrich ?? MAX_ENRICH,
   };
 }
@@ -149,14 +215,14 @@ export const cli = new Command()
       .option("--pages <pages:number>", "Pages per platform", {
         default: PAGES_TO_SCRAPE,
       })
-      .option("--enrich <n:number>", "PDP enrich top N products", {
-        default: MAX_ENRICH,
+      .option("--enrich <n:number>", "PDP enrich top N products (0 = off)", {
+        default: 0,
       })
       .option("--max <n:number>", "Hard cap on total products", {
         default: MAX_PRODUCTS_HARD_CAP,
       })
       .option("--no-dedup", "Skip deduplication")
-      .option("--no-heal", "Skip auto-heal on empty results")
+      .option("--heal", "Enable auto-heal on empty results (off by default)")
       .option("--dedup-cheapest", "Keep only cheapest cross-platform")
       .option("--in-stock-only", "Filter out-of-stock products")
       .option("--no-save", "Skip saving price history")
@@ -165,15 +231,49 @@ export const cli = new Command()
         const platforms = parsePlatforms(options.platforms);
         const scrapeOpts = buildScrapeOptions(options);
 
-        if (!json) {
-          console.log(colors.bold(`\nSearching for "${query}"...\n`));
+        let intent: ParsedIntent;
+        try {
+          intent = await parseIntent(query);
+        } catch (err) {
+          console.error(
+            colors.red(
+              `\n  Intent parsing failed: ${
+                err instanceof Error ? err.message : err
+              }\n`,
+            ),
+          );
+          Deno.exit(1);
         }
 
-        const results = await scrapeProducts(query, platforms, scrapeOpts);
+        const searchQuery = intent.searchQueries[0] ?? query;
+
+        if (!json) {
+          console.log(colors.bold(`\nSearching for "${searchQuery}"...\n`));
+          console.log(
+            colors.dim(`  Intent: ${describeIntent(intent)}\n`),
+          );
+        }
+
+        const results = await scrapeProducts(
+          searchQuery,
+          platforms,
+          scrapeOpts,
+          intent,
+        );
 
         let allProducts = results.flatMap((r) => r.products);
 
-        await savePrices(allProducts, query);
+        if (options.save !== false) {
+          try {
+            await savePrices(allProducts, query);
+          } catch (err) {
+            console.error(
+              `  Price history save failed: ${
+                err instanceof Error ? err.message : err
+              }`,
+            );
+          }
+        }
 
         if (options.dedup !== false) {
           allProducts = deduplicate(allProducts);
@@ -187,6 +287,7 @@ export const cli = new Command()
         const ranked = scoreAndRank(allProducts, query, {
           dedupCheapest: options.dedupCheapest,
           inStockOnly: options.inStockOnly,
+          category: intent.category,
         });
 
         if (json) {
@@ -226,7 +327,7 @@ export const cli = new Command()
       .option("--pages <pages:number>", "Pages per platform", {
         default: PAGES_TO_SCRAPE,
       })
-      .option("--no-heal", "Skip auto-heal on empty results")
+      .option("--heal", "Enable auto-heal on empty results (off by default)")
       .option("--dedup-cheapest", "Keep only cheapest cross-platform")
       .option("--in-stock-only", "Filter out-of-stock products")
       .option("--no-save", "Skip saving price history")
@@ -235,19 +336,56 @@ export const cli = new Command()
         const platforms = parsePlatforms(options.platforms);
         const scrapeOpts = buildScrapeOptions(options);
 
-        if (!json) {
-          console.log(colors.bold(`\nFinding best deal for "${query}"...\n`));
+        let intent: ParsedIntent;
+        try {
+          intent = await parseIntent(query);
+        } catch (err) {
+          console.error(
+            colors.red(
+              `\n  Intent parsing failed: ${
+                err instanceof Error ? err.message : err
+              }\n`,
+            ),
+          );
+          Deno.exit(1);
         }
 
-        const results = await scrapeProducts(query, platforms, scrapeOpts);
+        const searchQuery = intent.searchQueries[0] ?? query;
+
+        if (!json) {
+          console.log(
+            colors.bold(`\nFinding best deal for "${searchQuery}"...\n`),
+          );
+          console.log(
+            colors.dim(`  Intent: ${describeIntent(intent)}\n`),
+          );
+        }
+
+        const results = await scrapeProducts(
+          searchQuery,
+          platforms,
+          scrapeOpts,
+          intent,
+        );
         let allProducts = results.flatMap((r) => r.products);
 
-        await savePrices(allProducts, query);
+        if (options.save !== false) {
+          try {
+            await savePrices(allProducts, query);
+          } catch (err) {
+            console.error(
+              `  Price history save failed: ${
+                err instanceof Error ? err.message : err
+              }`,
+            );
+          }
+        }
 
         allProducts = deduplicate(allProducts);
         const ranked = scoreAndRank(allProducts, query, {
           dedupCheapest: options.dedupCheapest,
           inStockOnly: options.inStockOnly,
+          category: intent.category,
         });
 
         if (ranked.length === 0) {
@@ -295,84 +433,112 @@ export const cli = new Command()
   .command(
     "compare",
     new Command()
-      .description("Compare prices from specific platforms")
+      .description("Smart comparison with specs, benchmarks, and ranking")
       .arguments("<query:string>")
       .option("--json", "Output raw JSON", { default: false })
       .option("-p, --platforms <platforms:string>", "Comma-separated platforms")
       .option("--pages <pages:number>", "Pages per platform", {
         default: PAGES_TO_SCRAPE,
       })
-      .option("--no-heal", "Skip auto-heal on empty results")
+      .option("--heal", "Enable auto-heal on empty results (off by default)")
       .option("--no-save", "Skip saving price history")
       .action(async (options, query) => {
         const json = isJson(options);
         const platforms = parsePlatforms(options.platforms);
-        const enabledCount = platforms.filter((p) =>
-          PLATFORMS[p].enabled
-        ).length;
 
-        if (enabledCount < 2) {
+        let intent: ParsedIntent;
+        try {
+          intent = await parseIntent(query);
+        } catch (err) {
           console.error(
             colors.red(
-              `Compare needs 2+ enabled platforms. Only ${enabledCount} enabled.`,
+              `\n  Intent parsing failed: ${
+                err instanceof Error ? err.message : err
+              }\n`,
             ),
           );
           Deno.exit(1);
         }
 
-        const scrapeOpts = buildScrapeOptions(options);
+        const searchQuery = intent.searchQueries[0] ?? query;
 
         if (!json) {
           console.log(
-            colors.bold(
-              `\nComparing "${query}" across ${enabledCount} platforms...\n`,
-            ),
+            colors.bold(`\nAnalyzing "${searchQuery}"...\n`),
+          );
+          console.log(
+            colors.dim(`  Intent: ${describeIntent(intent)}\n`),
           );
         }
 
-        const results = await scrapeProducts(query, platforms, scrapeOpts);
+        const scrapeOpts = buildScrapeOptions(options);
+        const results = await scrapeProducts(
+          searchQuery,
+          platforms,
+          scrapeOpts,
+          intent,
+        );
         let allProducts = results.flatMap((r) => r.products);
 
-        await savePrices(allProducts, query);
+        if (options.save !== false) {
+          try {
+            await savePrices(allProducts, query);
+          } catch (err) {
+            console.error(
+              `  Price history save failed: ${
+                err instanceof Error ? err.message : err
+              }`,
+            );
+          }
+        }
 
         allProducts = deduplicate(allProducts);
-        const ranked = scoreAndRank(allProducts, query);
+
+        const comparison = compareProducts(intent, allProducts);
 
         if (json) {
           printJson({
-            query,
+            query: searchQuery,
+            intent: comparison.intent,
+            category: comparison.category,
+            totalProducts: comparison.totalProducts,
+            specFields: comparison.specFields,
+            recommendation: comparison.recommendation
+              ? {
+                name: comparison.recommendation.product.name,
+                price: comparison.recommendation.product.price,
+                platform: comparison.recommendation.product.platform,
+                score: comparison.recommendation.score,
+                reason: comparison.recommendation.reason,
+                specs: comparison.recommendation.specValues,
+                pricePerSpec: comparison.recommendation.pricePerSpec,
+              }
+              : null,
+            comparisons: comparison.comparisons.map((c) => ({
+              name: c.product.name,
+              price: c.product.price,
+              originalPrice: c.product.originalPrice,
+              discount: c.product.discount,
+              platform: c.product.platform,
+              brand: c.product.brand,
+              rating: c.product.rating,
+              reviewsCount: c.product.reviewsCount,
+              score: c.score,
+              reason: c.reason,
+              specs: c.specValues,
+              pricePerSpec: c.pricePerSpec,
+              productUrl: c.product.productUrl,
+              imageUrl: c.product.imageUrl,
+            })),
             platforms: results.map((r) => ({
               name: r.platform,
               status: r.status,
-              count: r.products.length,
-              rawCount: r.rawCount,
-              parsedCount: r.parsedCount,
-              fieldFillRate: Math.round(r.coverage.fieldFillRate * 100),
-              heal: { attempted: r.healAttempted, success: r.healSuccess },
+              count: r.parsedCount,
               error: r.error,
-              priceRange: r.products.length > 0
-                ? {
-                  min: Math.min(...r.products.map((p) => p.price)),
-                  max: Math.max(...r.products.map((p) => p.price)),
-                }
-                : null,
             })),
-            all: allProducts,
           });
         } else {
-          for (const result of results) {
-            const count = colors.bold(String(result.products.length));
-            console.log(`${result.platform}: ${count} products`);
-            if (result.products.length > 0) {
-              const prices = result.products.map((p) => p.price);
-              console.log(
-                `  Price range: ${
-                  colors.green(formatPrice(Math.min(...prices)))
-                } - ${colors.green(formatPrice(Math.max(...prices)))}`,
-              );
-            }
-          }
-          printTable(ranked, 15);
+          printComparison(comparison);
           printCoverage(results);
         }
       }),
@@ -778,5 +944,260 @@ export const cli = new Command()
         } else {
           console.log(markdown);
         }
+      }),
+  )
+  .command(
+    "verdict",
+    new Command()
+      .description("AI-powered deal verdict with intelligence report")
+      .arguments("<query:string>")
+      .option("--json", "Output raw JSON", { default: false })
+      .option("-p, --platforms <platforms:string>", "Comma-separated platforms")
+      .option("--pages <pages:number>", "Pages per platform", {
+        default: PAGES_TO_SCRAPE,
+      })
+      .option("--heal", "Enable auto-heal on empty results (off by default)")
+      .option("--no-save", "Skip saving price history")
+      .action(async (options, query) => {
+        const json = isJson(options);
+        const platforms = parsePlatforms(options.platforms);
+
+        let intent: ParsedIntent;
+        try {
+          intent = await parseIntent(query);
+        } catch (err) {
+          console.error(
+            colors.red(
+              `\n  Intent parsing failed: ${
+                err instanceof Error ? err.message : err
+              }\n`,
+            ),
+          );
+          Deno.exit(1);
+        }
+
+        const searchQuery = intent.searchQueries[0] ?? query;
+
+        if (!json) {
+          console.log(
+            colors.bold(`\nGenerating verdict for "${searchQuery}"...\n`),
+          );
+          console.log(
+            colors.dim(`  Intent: ${describeIntent(intent)}\n`),
+          );
+        }
+
+        const scrapeOpts = buildScrapeOptions(options);
+        const results = await scrapeProducts(
+          searchQuery,
+          platforms,
+          scrapeOpts,
+          intent,
+        );
+        let allProducts = results.flatMap((r) => r.products);
+
+        if (options.save !== false) {
+          try {
+            await savePrices(allProducts, searchQuery);
+          } catch (err) {
+            console.error(
+              `  Price history save failed: ${
+                err instanceof Error ? err.message : err
+              }`,
+            );
+          }
+        }
+
+        allProducts = deduplicate(allProducts);
+
+        const scored = scoreAndRank(allProducts, intent.rawQuery, {
+          dedupCheapest: false,
+          inStockOnly: true,
+          category: intent.category,
+        });
+
+        const top3 = scored.slice(0, 3);
+
+        if (json) {
+          printJson({
+            query: searchQuery,
+            intent,
+            totalProducts: scored.length,
+            top3,
+          });
+          return;
+        }
+
+        if (top3.length === 0) {
+          console.log(colors.dim("\n  No products found.\n"));
+          printCoverage(results);
+          Deno.exit(1);
+        }
+
+        const best = top3[0];
+        const category = intent.category !== "generic"
+          ? intent.category
+          : "generic";
+
+        const report = generateDealReport(
+          best,
+          allProducts,
+          intent,
+          category,
+        );
+
+        if (json) {
+          printJson({
+            query: searchQuery,
+            intent,
+            totalProducts: scored.length,
+            top3,
+            report,
+          });
+          return;
+        }
+
+        console.log(colors.green.bold("\n  VERDICT\n"));
+        console.log(
+          colors.green.bold(`  ${report.verdict}`),
+        );
+        console.log(colors.bold(`  ${best.name}`));
+        console.log(
+          colors.green.bold(`  Price:     ${formatPrice(best.price)}`),
+        );
+        if (best.originalPrice > best.price) {
+          console.log(
+            colors.dim(`  Was:       ${formatPrice(best.originalPrice)}`),
+          );
+          console.log(
+            colors.yellow(
+              `  Savings:   ${
+                formatPrice(best.originalPrice - best.price)
+              } (${best.discount}% off)`,
+            ),
+          );
+        }
+        console.log(colors.cyan(`  Platform:  ${best.platform}`));
+        console.log(colors.cyan(`  Score:     ${best.score.toFixed(2)}`));
+
+        console.log(
+          colors.dim(`\n  ${report.verdictSummary}`),
+        );
+
+        if (intent.budget) {
+          const withinBudget = best.price <= intent.budget;
+          console.log(
+            withinBudget
+              ? colors.green(
+                `\n  Budget:    ${formatPrice(intent.budget)} — WITHIN BUDGET`,
+              )
+              : colors.red(
+                `\n  Budget:    ${formatPrice(intent.budget)} — OVER by ${
+                  formatPrice(best.price - intent.budget)
+                }`,
+              ),
+          );
+        }
+
+        if (report.priceIntelligence) {
+          const pi = report.priceIntelligence;
+          console.log(colors.bold("\n  PRICE INTELLIGENCE\n"));
+          console.log(`  Position:  ${pi.position}`);
+          console.log(`  Trend:     ${pi.trend}`);
+          const adviceColor = pi.buyAdvice.includes("GREAT") ||
+              pi.buyAdvice.includes("GOOD")
+            ? colors.green
+            : pi.buyAdvice.includes("WAIT")
+            ? colors.yellow
+            : colors.dim;
+          console.log(adviceColor(`  Advice:    ${pi.buyAdvice}`));
+        }
+
+        if (report.whyThisOne.length > 0) {
+          console.log(colors.bold("\n  WHY THIS ONE\n"));
+          for (const reason of report.whyThisOne) {
+            console.log(`  ${colors.green("✓")} ${reason}`);
+          }
+        }
+
+        if (report.effectivePrice.totalSavings > 0) {
+          const ep = report.effectivePrice;
+          console.log(colors.bold("\n  EFFECTIVE PRICE\n"));
+          console.log(`  Listed:          ${formatPrice(ep.listed)}`);
+          for (const bank of ep.bankOffers) {
+            console.log(
+              colors.green(
+                `  Bank offer:      -${
+                  formatPrice(bank.savings)
+                } (${bank.text})`,
+              ),
+            );
+          }
+          if (ep.exchangeBonus > 0) {
+            console.log(
+              colors.green(
+                `  Exchange bonus:  -${formatPrice(ep.exchangeBonus)}`,
+              ),
+            );
+          }
+          for (const coupon of ep.coupons) {
+            console.log(
+              colors.green(
+                `  Coupon ${coupon.code}: -${formatPrice(coupon.savings)}`,
+              ),
+            );
+          }
+          console.log(
+            colors.green.bold(
+              `  Effective:       ${formatPrice(ep.effectivePrice)} (save ${
+                formatPrice(ep.totalSavings)
+              })`,
+            ),
+          );
+        }
+
+        if (report.specBreakdown.length > 0) {
+          console.log(colors.bold("\n  SPEC BREAKDOWN\n"));
+          for (const spec of report.specBreakdown) {
+            console.log(
+              `  ${spec.stars}  ${spec.name.padEnd(16)} ${spec.text}`,
+            );
+          }
+        }
+
+        if (report.alternatives.length > 0) {
+          console.log(colors.bold("\n  ALTERNATIVES\n"));
+          for (const alt of report.alternatives) {
+            const tag = alt.type === "cheaper"
+              ? colors.green("CHEAPER")
+              : alt.type === "pricier"
+              ? colors.yellow("UPGRADE")
+              : colors.cyan("ALSO CONSIDER");
+            console.log(
+              `  ${tag}  ${
+                formatPrice(alt.productPrice)
+              } — ${alt.productName} ${colors.dim(`[${alt.platform}]`)}`,
+            );
+            console.log(
+              colors.dim(`              ${alt.comparison}`),
+            );
+          }
+        }
+
+        if (report.watchOut.length > 0) {
+          console.log(colors.bold("\n  WATCH OUT\n"));
+          for (const item of report.watchOut) {
+            console.log(`  ${colors.yellow("⚠")} ${item}`);
+          }
+        }
+
+        if (report.temporalAdvice) {
+          console.log(
+            colors.dim(`\n  ${report.temporalAdvice}`),
+          );
+        }
+
+        console.log("");
+        printCoverage(results);
       }),
   );

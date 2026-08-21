@@ -1,0 +1,86 @@
+{
+  "head": "5ea0118 + prescrapers fix",
+  "timestamp": "2026-08-19T00:00:00Z",
+  "deno": "2.9.5",
+  "tests": { "total": 61, "passed": 61, "failed": 0 },
+  "gates": [
+    { "id": "G1", "status": "PASS", "evidence": "61/61 tests" },
+    {
+      "id": "G2",
+      "status": "FAIL",
+      "evidence": "Flipkart/Reliance/Tata CLiQ 404 on /dca/collectors/"
+    },
+    { "id": "G3", "status": "PASS", "evidence": "Flipkart raw=968 parsed=968" },
+    { "id": "G4", "status": "SKIP", "evidence": "Flipkart collector queued" },
+    {
+      "id": "G5",
+      "status": "PASS",
+      "evidence": "Reliance URLs contain /product/"
+    },
+    { "id": "G6", "status": "SKIP", "evidence": "Tata CLiQ timeout" },
+    {
+      "id": "G7",
+      "status": "PASS",
+      "evidence": "Amazon parsed=32 asin_ids=9/9"
+    },
+    { "id": "G8", "status": "PASS", "evidence": "Required fields >= 85%" },
+    {
+      "id": "G9",
+      "status": "PASS",
+      "evidence": "Sony on Flipkart+Amazon, not collapsed"
+    },
+    { "id": "G10", "status": "SKIP", "evidence": "best-deal 0 ranked" },
+    {
+      "id": "G11",
+      "status": "PASS",
+      "evidence": "Q3 Amazon 18/18 contain case"
+    },
+    { "id": "G12", "status": "FAIL", "evidence": "enrichCount never used" },
+    { "id": "G13", "status": "FAIL", "evidence": "savePrices always called" },
+    {
+      "id": "G14",
+      "status": "SKIP",
+      "evidence": "No empty results during test"
+    },
+    { "id": "G15", "status": "PASS", "evidence": "No secrets in JSON" }
+  ],
+  "platforms": {
+    "flipkart": { "status": "ok", "raw": 968, "parsed": 968, "ranked": 5 },
+    "reliance": { "status": "ok", "raw": 24, "parsed": 24, "ranked": 4 },
+    "amazon": {
+      "status": "ok",
+      "raw": 38,
+      "parsed": 32,
+      "ranked": 9,
+      "fix_applied": "snapshot endpoint"
+    },
+    "tatacliq": {
+      "status": "timeout",
+      "raw": null,
+      "parsed": null,
+      "ranked": null
+    }
+  },
+  "bugs_found": [
+    {
+      "severity": "P0",
+      "description": "prescrapers.ts reads progress.data (undefined) instead of /datasets/v3/snapshot/{id}",
+      "fixed": true
+    },
+    {
+      "severity": "P0",
+      "description": "--no-save flag ignored: savePrices always called",
+      "fixed": false
+    },
+    {
+      "severity": "P1",
+      "description": "--enrich flag does nothing: enrichCount never used",
+      "fixed": false
+    },
+    {
+      "severity": "P2",
+      "description": "checkCollector 404s on all custom collectors",
+      "fixed": false
+    }
+  ]
+}

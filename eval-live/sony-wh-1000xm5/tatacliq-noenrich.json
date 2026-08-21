@@ -1,0 +1,372 @@
+{
+  "query": "sony wh-1000xm5",
+  "count": 16,
+  "products": [
+    {
+      "id": "tatacliq:v253pl",
+      "name": "Sony Wf-C510 Truly Wireless Bluetooth Earbuds with Mic| Tws| Up To 22 Hours Battery | White",
+      "price": 4299,
+      "originalPrice": 8990,
+      "discount": 52,
+      "currency": "INR",
+      "productUrl": "https://www.tatacliq.com/sony-wfc510-truly-wireless-bluetooth-earbuds-with-mic-tws-up-to-22-hours-battery-white/p-mp000000025829200",
+      "imageUrl": "https://img.tatacliq.com/images/i23//437Wx649H/MP000000025829200_437Wx649H_202503271131501.jpeg",
+      "platform": "Tata CLiQ",
+      "scrapedAt": "2026-08-19T13:06:45.776Z",
+      "extras": {
+        "input": {
+          "url": "https://www.tatacliq.com/search/?searchCategory=all&text=sony%20wh-1000xm5"
+        }
+      },
+      "brand": "Sony",
+      "availability": "Unknown",
+      "listingPosition": 4,
+      "score": 0.53,
+      "reason": "52% off + in stock"
+    },
+    {
+      "id": "tatacliq:o5dcdi",
+      "name": "Sony WF-C710N in Ear Wireless Bluetooth Earbuds with Dual Noise Cancellation & 40Hrs Battery (White)",
+      "price": 7999,
+      "originalPrice": 12990,
+      "discount": 38,
+      "currency": "INR",
+      "productUrl": "https://www.tatacliq.com/sony-wfc710n-in-ear-wireless-bluetooth-earbuds-with-dual-noise-cancellation-40hrs-battery-white/p-mp000000028564754",
+      "imageUrl": "https://img.tatacliq.com/images/i27//437Wx649H/MP000000028564754_437Wx649H_202509292226591.jpeg",
+      "platform": "Tata CLiQ",
+      "scrapedAt": "2026-08-19T13:06:45.776Z",
+      "extras": {
+        "input": {
+          "url": "https://www.tatacliq.com/search/?searchCategory=all&text=sony%20wh-1000xm5"
+        }
+      },
+      "brand": "Sony",
+      "availability": "Unknown",
+      "listingPosition": 19,
+      "score": 0.47,
+      "reason": "38% off + in stock"
+    },
+    {
+      "id": "tatacliq:ssyy69",
+      "name": "Sony Wf-1000Xm5 Best Active Noise Cancelling Wireless Bluetooth In Ear Earbuds with Mic| Tws",
+      "price": 21885,
+      "originalPrice": 29999,
+      "discount": 27,
+      "currency": "INR",
+      "productUrl": "https://www.tatacliq.com/sony-wf1000xm5-best-active-noise-cancelling-wireless-bluetooth-in-ear-earbuds-with-mic-tws/p-mp000000025829209",
+      "imageUrl": "https://img.tatacliq.com/images/i23//437Wx649H/MP000000025829209_437Wx649H_202503271131371.jpeg",
+      "platform": "Tata CLiQ",
+      "scrapedAt": "2026-08-19T13:06:45.776Z",
+      "extras": {
+        "input": {
+          "url": "https://www.tatacliq.com/search/?searchCategory=all&text=sony%20wh-1000xm5"
+        }
+      },
+      "brand": "Sony",
+      "availability": "Unknown",
+      "listingPosition": 12,
+      "score": 0.33,
+      "reason": "27% off + in stock"
+    },
+    {
+      "id": "tatacliq:5b9q0r",
+      "name": "Sony WF-1000XM5 In Ear BT Earbuds with Noise Cancelling and Multi-Point (Silver, True Wireless)",
+      "price": 22999,
+      "originalPrice": 29999,
+      "discount": 23,
+      "currency": "INR",
+      "productUrl": "https://www.tatacliq.com/sony-wf1000xm5-in-ear-bt-earbuds-with-noise-cancelling-and-multipoint-silver-true-wireless/p-mp000000019529649",
+      "imageUrl": "https://img.tatacliq.com/images/i13/437Wx649H/MP000000019529649_437Wx649H_202310020057531.jpeg",
+      "platform": "Tata CLiQ",
+      "scrapedAt": "2026-08-19T13:06:45.776Z",
+      "extras": {
+        "input": {
+          "url": "https://www.tatacliq.com/search/?searchCategory=all&text=sony%20wh-1000xm5"
+        }
+      },
+      "brand": "Sony",
+      "availability": "Unknown",
+      "listingPosition": 23,
+      "score": 0.31,
+      "reason": "23% off + in stock"
+    },
+    {
+      "id": "tatacliq:b8zquy",
+      "name": "Sony WF-1000XM5 In Ear BT Earbuds with Noise Cancelling and Multi-Point (Black, True Wireless)",
+      "price": 22999,
+      "originalPrice": 29999,
+      "discount": 23,
+      "currency": "INR",
+      "productUrl": "https://www.tatacliq.com/sony-wf1000xm5-in-ear-bt-earbuds-with-noise-cancelling-and-multipoint-black-true-wireless/p-mp000000019529664",
+      "imageUrl": "https://img.tatacliq.com/images/i13/437Wx649H/MP000000019529664_437Wx649H_202310020058211.jpeg",
+      "platform": "Tata CLiQ",
+      "scrapedAt": "2026-08-19T13:06:45.776Z",
+      "extras": {
+        "input": {
+          "url": "https://www.tatacliq.com/search/?searchCategory=all&text=sony%20wh-1000xm5"
+        }
+      },
+      "brand": "Sony",
+      "availability": "Unknown",
+      "listingPosition": 26,
+      "score": 0.31,
+      "reason": "23% off + in stock"
+    },
+    {
+      "id": "tatacliq:pdq6w8",
+      "name": "Sony WI-C100 Wireless Neckband with Customizable Equalizer for Deep Bass & 25 Hours Battery (Black)",
+      "price": 1699,
+      "originalPrice": 2790,
+      "discount": 39,
+      "currency": "INR",
+      "productUrl": "https://www.tatacliq.com/sony-wic100-wireless-neckband-with-customizable-equalizer-for-deep-bass-25-hours-battery-black/p-mp000000016239584",
+      "imageUrl": "https://img.tatacliq.com/images/i9/437Wx649H/MP000000016239584_437Wx649H_202302071201551.jpeg",
+      "platform": "Tata CLiQ",
+      "scrapedAt": "2026-08-19T13:06:45.776Z",
+      "extras": {
+        "input": {
+          "url": "https://www.tatacliq.com/search/?searchCategory=all&text=sony%20wh-1000xm5"
+        }
+      },
+      "brand": "Sony",
+      "availability": "Unknown",
+      "listingPosition": 1,
+      "score": 0.26,
+      "reason": "39% off + in stock"
+    },
+    {
+      "id": "tatacliq:tdvkfa",
+      "name": "realme Buds T200x Wireless Bluetooth Earbuds with 25 dB ANC & Upto 48 Hrs Playback (Moonlight White)",
+      "price": 1549,
+      "originalPrice": 2499,
+      "discount": 38,
+      "currency": "INR",
+      "productUrl": "https://www.tatacliq.com/realme-buds-t200x-wireless-bluetooth-earbuds-with-25-db-anc-upto-48-hrs-playback-moonlight-white/p-mp000000028564818",
+      "imageUrl": "https://img.tatacliq.com/images/i27//437Wx649H/MP000000028564818_437Wx649H_202509292230431.jpeg",
+      "platform": "Tata CLiQ",
+      "scrapedAt": "2026-08-19T13:06:45.776Z",
+      "extras": {
+        "input": {
+          "url": "https://www.tatacliq.com/search/?searchCategory=all&text=sony%20wh-1000xm5"
+        }
+      },
+      "brand": "realme",
+      "availability": "Unknown",
+      "listingPosition": 3,
+      "score": 0.26,
+      "reason": "38% off + in stock"
+    },
+    {
+      "id": "tatacliq:laddyv",
+      "name": "Sony Wf-C510 Truly Wireless Bluetooth Earbuds with Mic| Tws| Up To 22 Hours Battery | Black",
+      "price": 4399,
+      "originalPrice": 8990,
+      "discount": 51,
+      "currency": "INR",
+      "productUrl": "https://www.tatacliq.com/sony-wfc510-truly-wireless-bluetooth-earbuds-with-mic-tws-up-to-22-hours-battery-black/p-mp000000025829185",
+      "imageUrl": "https://img.tatacliq.com/images/i23//437Wx649H/MP000000025829185_437Wx649H_202503271130211.jpeg",
+      "platform": "Tata CLiQ",
+      "scrapedAt": "2026-08-19T13:06:45.776Z",
+      "extras": {
+        "input": {
+          "url": "https://www.tatacliq.com/search/?searchCategory=all&text=sony%20wh-1000xm5"
+        }
+      },
+      "brand": "Sony",
+      "availability": "Unknown",
+      "listingPosition": 8,
+      "score": 0.26,
+      "reason": "51% off + in stock"
+    },
+    {
+      "id": "tatacliq:rad0z5",
+      "name": "Sony Wf-C510 Truly Wireless Bluetooth Earbuds with Mic| Tws| In Ear| Up To 22 Hours Battery",
+      "price": 4399,
+      "originalPrice": 8990,
+      "discount": 51,
+      "currency": "INR",
+      "productUrl": "https://www.tatacliq.com/sony-wfc510-truly-wireless-bluetooth-earbuds-with-mic-tws-in-ear-up-to-22-hours-battery/p-mp000000025829195",
+      "imageUrl": "https://img.tatacliq.com/images/i23//437Wx649H/MP000000025829195_437Wx649H_202503271131071.jpeg",
+      "platform": "Tata CLiQ",
+      "scrapedAt": "2026-08-19T13:06:45.776Z",
+      "extras": {
+        "input": {
+          "url": "https://www.tatacliq.com/search/?searchCategory=all&text=sony%20wh-1000xm5"
+        }
+      },
+      "brand": "Sony",
+      "availability": "Unknown",
+      "listingPosition": 9,
+      "score": 0.26,
+      "reason": "51% off + in stock"
+    },
+    {
+      "id": "tatacliq:l18noy",
+      "name": "Sony Wf-C510 Truly Wireless Bluetooth Earbuds with Mic| Tws| Up To 22 Hours Battery | Yellow",
+      "price": 4399,
+      "originalPrice": 8990,
+      "discount": 51,
+      "currency": "INR",
+      "productUrl": "https://www.tatacliq.com/sony-wfc510-truly-wireless-bluetooth-earbuds-with-mic-tws-up-to-22-hours-battery-yellow/p-mp000000025829194",
+      "imageUrl": "https://img.tatacliq.com/images/i23//437Wx649H/MP000000025829194_437Wx649H_202503271130481.jpeg",
+      "platform": "Tata CLiQ",
+      "scrapedAt": "2026-08-19T13:06:45.776Z",
+      "extras": {
+        "input": {
+          "url": "https://www.tatacliq.com/search/?searchCategory=all&text=sony%20wh-1000xm5"
+        }
+      },
+      "brand": "Sony",
+      "availability": "Unknown",
+      "listingPosition": 13,
+      "score": 0.26,
+      "reason": "51% off + in stock"
+    },
+    {
+      "id": "tatacliq:v478zx",
+      "name": "Sony Wf-C710N | Dual Noise Cancellation Wireless Bluetooth In Ear Earbuds",
+      "price": 7999,
+      "originalPrice": 12990,
+      "discount": 38,
+      "currency": "INR",
+      "productUrl": "https://www.tatacliq.com/sony-wfc710n-dual-noise-cancellation-wireless-bluetooth-in-ear-earbuds/p-mp000000028990540",
+      "imageUrl": "https://img.tatacliq.com/images/i28//437Wx649H/MP000000028990540_437Wx649H_202510311550141.jpeg",
+      "platform": "Tata CLiQ",
+      "scrapedAt": "2026-08-19T13:06:45.776Z",
+      "extras": {
+        "input": {
+          "url": "https://www.tatacliq.com/search/?searchCategory=all&text=sony%20wh-1000xm5"
+        }
+      },
+      "brand": "Sony",
+      "availability": "Unknown",
+      "listingPosition": 30,
+      "score": 0.23,
+      "reason": "38% off + in stock"
+    },
+    {
+      "id": "tatacliq:kp4x2t",
+      "name": "Sony WF-C710N in Ear Wireless Bluetooth Earbuds with Dual Noise Cancellation & 40Hrs Battery (Blue)",
+      "price": 7999,
+      "originalPrice": 12990,
+      "discount": 38,
+      "currency": "INR",
+      "productUrl": "https://www.tatacliq.com/sony-wfc710n-in-ear-wireless-bluetooth-earbuds-with-dual-noise-cancellation-40hrs-battery-blue/p-mp000000028564769",
+      "imageUrl": "https://img.tatacliq.com/images/i27//437Wx649H/MP000000028564769_437Wx649H_202509292227521.jpeg",
+      "platform": "Tata CLiQ",
+      "scrapedAt": "2026-08-19T13:06:45.776Z",
+      "extras": {
+        "input": {
+          "url": "https://www.tatacliq.com/search/?searchCategory=all&text=sony%20wh-1000xm5"
+        }
+      },
+      "brand": "Sony",
+      "availability": "Unknown",
+      "listingPosition": 37,
+      "score": 0.23,
+      "reason": "38% off + in stock"
+    },
+    {
+      "id": "tatacliq:cr6i0i",
+      "name": "Sony WF-C710N in Ear Wireless Bluetooth Earbuds with Dual Noise Cancellation & 40Hrs Battery (Pink)",
+      "price": 7999,
+      "originalPrice": 12990,
+      "discount": 38,
+      "currency": "INR",
+      "productUrl": "https://www.tatacliq.com/sony-wfc710n-in-ear-wireless-bluetooth-earbuds-with-dual-noise-cancellation-40hrs-battery-pink/p-mp000000028564744",
+      "imageUrl": "https://img.tatacliq.com/images/i27//437Wx649H/MP000000028564744_437Wx649H_202509292226361.jpeg",
+      "platform": "Tata CLiQ",
+      "scrapedAt": "2026-08-19T13:06:45.776Z",
+      "extras": {
+        "input": {
+          "url": "https://www.tatacliq.com/search/?searchCategory=all&text=sony%20wh-1000xm5"
+        }
+      },
+      "brand": "Sony",
+      "availability": "Unknown",
+      "listingPosition": 39,
+      "score": 0.23,
+      "reason": "38% off + in stock"
+    },
+    {
+      "id": "tatacliq:8t2bb0",
+      "name": "Sony Wh-1000Xm6 The Best Wireless Noise Canceling Headphones",
+      "price": 38999,
+      "originalPrice": 49990,
+      "discount": 22,
+      "currency": "INR",
+      "productUrl": "https://www.tatacliq.com/sony-wh1000xm6-the-best-wireless-noise-canceling-headphones/p-mp000000028990513",
+      "imageUrl": "https://img.tatacliq.com/images/i28/437Wx649H/MP000000028990513_437Wx649H_202511071724081.jpeg",
+      "platform": "Tata CLiQ",
+      "scrapedAt": "2026-08-19T13:06:45.776Z",
+      "extras": {
+        "input": {
+          "url": "https://www.tatacliq.com/search/?searchCategory=all&text=sony%20wh-1000xm5"
+        }
+      },
+      "brand": "Sony",
+      "availability": "Unknown",
+      "listingPosition": 16,
+      "score": 0.18,
+      "reason": "22% off + in stock"
+    },
+    {
+      "id": "tatacliq:8t2b9a",
+      "name": "Sony Wh-1000Xm6 The Best Wireless Noise Canceling Headphones",
+      "price": 38999,
+      "originalPrice": 49990,
+      "discount": 22,
+      "currency": "INR",
+      "productUrl": "https://www.tatacliq.com/sony-wh1000xm6-the-best-wireless-noise-canceling-headphones/p-mp000000028990533",
+      "imageUrl": "https://img.tatacliq.com/images/i28//437Wx649H/MP000000028990533_437Wx649H_202510311550061.jpeg",
+      "platform": "Tata CLiQ",
+      "scrapedAt": "2026-08-19T13:06:45.776Z",
+      "extras": {
+        "input": {
+          "url": "https://www.tatacliq.com/search/?searchCategory=all&text=sony%20wh-1000xm5"
+        }
+      },
+      "brand": "Sony",
+      "availability": "Unknown",
+      "listingPosition": 18,
+      "score": 0.18,
+      "reason": "22% off + in stock"
+    },
+    {
+      "id": "tatacliq:8t2bbv",
+      "name": "Sony Wh-1000Xm6 The Best Wireless Noise Canceling Headphones",
+      "price": 38999,
+      "originalPrice": 49990,
+      "discount": 22,
+      "currency": "INR",
+      "productUrl": "https://www.tatacliq.com/sony-wh1000xm6-the-best-wireless-noise-canceling-headphones/p-mp000000028990503",
+      "imageUrl": "https://img.tatacliq.com/images/i28/437Wx649H/MP000000028990503_437Wx649H_202511071725571.jpeg",
+      "platform": "Tata CLiQ",
+      "scrapedAt": "2026-08-19T13:06:45.776Z",
+      "extras": {
+        "input": {
+          "url": "https://www.tatacliq.com/search/?searchCategory=all&text=sony%20wh-1000xm5"
+        }
+      },
+      "brand": "Sony",
+      "availability": "Unknown",
+      "listingPosition": 33,
+      "score": 0.18,
+      "reason": "22% off + in stock"
+    }
+  ],
+  "platforms": [
+    {
+      "name": "Tata CLiQ",
+      "status": "ok",
+      "count": 40,
+      "rawCount": 40,
+      "parsedCount": 40,
+      "fieldFillRate": 60,
+      "heal": {
+        "attempted": false,
+        "success": false
+      }
+    }
+  ]
+}

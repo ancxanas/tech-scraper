@@ -1,0 +1,19 @@
+[0m[32mTask[0m [0m[36mdev[0m deno run --unstable-kv --allow-net=api.brightdata.com --allow-env --allow-read --allow-write main.ts 'search' 'sony wh-1000xm5' '--json' '--no-save' '--no-heal'
+  Scraping Flipkart...
+  Scraping Reliance Digital...
+  Scraping Tata CLiQ...
+  Scraping Amazon India...
+  Amazon trigger snapshot_id: sd_mt0ae8atpl75cki6w
+[32m  Flipkart: 490 products (ok)[39m
+  Amazon snapshot returned non-array: object
+  Amazon snapshot keys: timestamp, input
+    timestamp: string
+    input: object
+[32m  Amazon India: 0 products (empty)[39m
+    Scraper c_msxt4nhe2fxyb: waiting... (10)
+    Scraper c_msxt4lsv12k5p: waiting... (10)
+    Scraper c_msxt4nhe2fxyb: waiting... (20)
+    Scraper c_msxt4lsv12k5p: waiting... (20)
+[32m  Reliance Digital: 18 products (ok)[39m
+    Scraper c_msxt4nhe2fxyb: waiting... (30)
+[32m  Tata CLiQ: 73 products (ok)[39m

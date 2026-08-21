@@ -1,0 +1,123 @@
+[
+  {
+    "product_title": "Sony WH-1000XM5 Wireless Headphones with 30hr Battery",
+    "selling_price": { "value": 24990, "currency": "INR" },
+    "original_price": { "value": 34990, "currency": "INR" },
+    "discount_percentage": "29% off",
+    "brand": "Sony",
+    "rating": 4.6,
+    "review_count": 5678,
+    "image_url": "https://example.com/tcliq-sony-xm5.jpg",
+    "product_page_url": "https://www.tatacliq.com/sony-wh-1000xm5/p/TC001",
+    "pid": "TC_PID_001",
+    "seller": "Tata CLiQ"
+  },
+  {
+    "product_title": "JBL Live 670NC Wireless Over-Ear Headphones",
+    "selling_price": 7999,
+    "original_price": 12999,
+    "discount_percentage": "38% off",
+    "brand": "JBL",
+    "rating": 4.2,
+    "review_count": 2345,
+    "image_url": "https://example.com/tcliq-jbl-live670nc.jpg",
+    "product_page_url": "https://www.tatacliq.com/jbl-live-670nc/p/TC002",
+    "pid": "TC_PID_002"
+  },
+  {
+    "product_title": "Sennheiser Momentum 4 Wireless Headphones",
+    "selling_price": "\u20b919990",
+    "original_price": "\u20b929990",
+    "discount_percentage": "33% off",
+    "brand": "Sennheiser",
+    "rating": 4.5,
+    "review_count": 1234,
+    "image_url": "https://example.com/tcliq-sennheiser-momentum4.jpg",
+    "product_page_url": "https://www.tatacliq.com/sennheiser-momentum-4/p/TC003",
+    "pid": "TC_PID_003"
+  },
+  {
+    "product_title": "Sony WF-1000XM5 Truly Wireless Earbuds",
+    "selling_price": 21990,
+    "original_price": 29990,
+    "discount_percentage": "27% off",
+    "brand": "Sony",
+    "rating": 4.4,
+    "review_count": 3456,
+    "image_url": "https://example.com/tcliq-sony-wfxm5.jpg",
+    "product_page_url": "https://www.tatacliq.com/sony-wf-1000xm5/p/TC004",
+    "pid": "TC_PID_004"
+  },
+  {
+    "product_title": "Bose QuietComfort Ultra Headphones",
+    "selling_price": { "value": 29990, "currency": "INR" },
+    "original_price": { "value": 37990, "currency": "INR" },
+    "discount_percentage": "21% off",
+    "brand": "Bose",
+    "rating": 4.7,
+    "review_count": 890,
+    "image_url": "https://example.com/tcliq-bose-qcultra.jpg",
+    "product_page_url": "https://www.tatacliq.com/bose-quietcomfort-ultra/p/TC005",
+    "pid": "TC_PID_005"
+  },
+  {
+    "product_title": "Apple AirPods Max (USB-C)",
+    "selling_price": 54900,
+    "original_price": 59900,
+    "discount_percentage": "8% off",
+    "brand": "Apple",
+    "rating": 4.6,
+    "review_count": 2100,
+    "image_url": "https://example.com/tcliq-airpods-max.jpg",
+    "product_page_url": "https://www.tatacliq.com/apple-airpods-max/p/TC006",
+    "pid": "TC_PID_006"
+  },
+  {
+    "product_title": "Samsung Galaxy Buds2 Pro",
+    "selling_price": "\u20b99999",
+    "original_price": "\u20b917999",
+    "discount_percentage": "44% off",
+    "brand": "Samsung",
+    "rating": 4.1,
+    "review_count": 4500,
+    "image_url": "https://example.com/tcliq-samsung-buds2pro.jpg",
+    "product_page_url": "https://www.tatacliq.com/samsung-galaxy-buds2-pro/p/TC007",
+    "pid": "TC_PID_007"
+  },
+  {
+    "product_title": "Shure AONIC 50 Gen 2 Wireless Headphones",
+    "selling_price": 27999,
+    "original_price": 35999,
+    "discount_percentage": "22% off",
+    "brand": "Shure",
+    "rating": 4.5,
+    "review_count": 567,
+    "image_url": "https://example.com/tcliq-shure-aonic50.jpg",
+    "product_page_url": "https://www.tatacliq.com/shure-aonic-50-gen2/p/TC008",
+    "pid": "TC_PID_008"
+  },
+  {
+    "product_title": "Marshall Monitor II ANC Wireless Headphones",
+    "selling_price": 12999,
+    "original_price": 19999,
+    "discount_percentage": "35% off",
+    "brand": "Marshall",
+    "rating": 4.3,
+    "review_count": 789,
+    "image_url": "https://example.com/tcliq-marshall-monitor2.jpg",
+    "product_page_url": "https://www.tatacliq.com/marshall-monitor-ii-anc/p/TC009",
+    "pid": "TC_PID_009"
+  },
+  {
+    "product_title": "Skullcandy Crusher ANC 2",
+    "selling_price": { "value": 6999, "currency": "INR" },
+    "original_price": { "value": 12999, "currency": "INR" },
+    "discount_percentage": "46% off",
+    "brand": "Skullcandy",
+    "rating": 4.0,
+    "review_count": 1567,
+    "image_url": "https://example.com/tcliq-skullcandy-crusher.jpg",
+    "product_page_url": "https://www.tatacliq.com/skullcandy-crusher-anc-2/p/TC010",
+    "pid": "TC_PID_010"
+  }
+]

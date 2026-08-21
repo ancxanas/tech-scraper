@@ -1,4 +1,5 @@
 import type { Product } from "./types.ts";
+import { normalize } from "./lib/catalog.ts";
 
 interface PriceRecord {
   name: string;
@@ -14,15 +15,17 @@ interface PriceRecord {
 
 let kvInstance: Deno.Kv | null = null;
 
-async function getKv(): Promise<Deno.Kv> {
+async function getKv(): Promise<Deno.Kv | null> {
   if (!kvInstance) {
-    kvInstance = await Deno.openKv();
+    try {
+      kvInstance = await Deno.openKv();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`  KV unavailable: ${msg}`);
+      return null;
+    }
   }
   return kvInstance;
-}
-
-function normalize(text: string): string {
-  return text.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 function platformKey(platform: string): string {
@@ -34,40 +37,47 @@ export async function savePrices(
   query: string,
 ): Promise<void> {
   const kv = await getKv();
+  if (!kv) return;
+
   const timestamp = new Date().toISOString();
 
-  for (const product of products) {
-    const key = [
-      "prices",
-      platformKey(product.platform),
-      product.id || normalize(product.name),
+  try {
+    for (const product of products) {
+      const key = [
+        "prices",
+        platformKey(product.platform),
+        product.id || normalize(product.name),
+        timestamp,
+      ];
+      const value: PriceRecord = {
+        name: product.name,
+        price: product.price,
+        originalPrice: product.originalPrice,
+        discount: product.discount,
+        currency: product.currency,
+        platform: product.platform,
+        productId: product.id,
+        query,
+        timestamp,
+      };
+      await kv.set(key, value);
+    }
+
+    const searchKey = [
+      "searches",
+      normalize(query),
       timestamp,
     ];
-    const value: PriceRecord = {
-      name: product.name,
-      price: product.price,
-      originalPrice: product.originalPrice,
-      discount: product.discount,
-      currency: product.currency,
-      platform: product.platform,
-      productId: product.id,
+    await kv.set(searchKey, {
       query,
       timestamp,
-    };
-    await kv.set(key, value);
+      productCount: products.length,
+      productIds: products.map((p) => p.id),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`  KV save failed: ${msg}`);
   }
-
-  const searchKey = [
-    "searches",
-    normalize(query),
-    timestamp,
-  ];
-  await kv.set(searchKey, {
-    query,
-    timestamp,
-    productCount: products.length,
-    productIds: products.map((p) => p.id),
-  });
 }
 
 export async function getPriceHistory(

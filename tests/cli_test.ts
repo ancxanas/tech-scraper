@@ -9,13 +9,12 @@ Deno.test("Flipkart URL template includes search path and page", () => {
   assertEquals(url.includes("?"), true);
 });
 
-Deno.test("Reliance URL template uses /products?q= not /search?q=", () => {
+Deno.test("Reliance URL template defaults to /collection/smartphones", () => {
   const template = PLATFORMS.reliance.searchUrlTemplate;
-  const q = encodeURIComponent("iphone");
-  const url = template.replace("{q}", q);
-  assertEquals(url, "https://www.reliancedigital.in/products?q=iphone");
-  assertEquals(url.includes("/search?q="), false);
-  assertEquals(url.includes("/products?q="), true);
+  assertEquals(
+    template,
+    "https://www.reliancedigital.in/collection/smartphones",
+  );
 });
 
 Deno.test("Tata CLiQ URL template includes searchCategory and text param", () => {
@@ -31,13 +30,14 @@ Deno.test("Tata CLiQ URL template includes searchCategory and text param", () =>
   assertEquals(url.includes("?"), true);
 });
 
-Deno.test("Amazon URL template includes /s?k= and page", () => {
-  const template = PLATFORMS.amazon.searchUrlTemplate;
-  const q = encodeURIComponent("sony headphones");
-  const url = template.replace("{q}", q).replace("{page}", "1");
-  assertEquals(url, "https://www.amazon.in/s?k=sony%20headphones&page=1");
-  assertEquals(url.includes("/s?k="), true);
-  assertEquals(url.includes("page="), true);
+Deno.test("Amazon uses prebuilt scraper with empty URL template", () => {
+  const config = PLATFORMS.amazon;
+  assertEquals(config.tool, "prebuilt");
+  assertEquals(
+    typeof config.datasetId === "string" && config.datasetId.length > 0,
+    true,
+  );
+  assertEquals(typeof config.searchUrlTemplate, "string");
 });
 
 Deno.test("Flipkart pagination type is page", () => {

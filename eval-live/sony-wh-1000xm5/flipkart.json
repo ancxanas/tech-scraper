@@ -1,0 +1,138 @@
+{
+  "query": "sony wh-1000xm5",
+  "count": 5,
+  "products": [
+    {
+      "id": "flipkart:itm064cf3dcf3b5c",
+      "name": "SONY WH-CH520/BZ IN Bluetooth",
+      "price": 4388,
+      "originalPrice": 5990,
+      "discount": 27,
+      "currency": "INR",
+      "productUrl": "https://www.flipkart.com/sony-wh-ch520-bz-bluetooth/p/itm064cf3dcf3b5c?pid=ACCGZ4MAKQZWQDRJ&lid=LSTACCGZ4MAKQZWQDRJZQ1ANH&marketplace=FLIPKART&q=sony+wh-1000xm5&store=0pm%2Ffcn%2Fgc3&srno=s_1_4&otracker=search&fm=organic&iid=a9eb6865-2d29-4cff-9405-a0fa99231db3.ACCGZ4MAKQZWQDRJ.SEARCH&ppt=None&ppn=None&ssid=3igw337xhc0000001787137305039&qH=05e74e976065e2d2&ov_redirect=true&ov_redirect=true",
+      "imageUrl": "https://rukminim2.flixcart.com/image/612/612/xif0q/headphone/i/x/x/wh-ch510-sony-enriched-transparent-original-imagz5r5qqrsfteq.png?q=70",
+      "platform": "Flipkart",
+      "scrapedAt": "2026-08-19T11:02:18.214Z",
+      "extras": {
+        "input": {
+          "url": "https://www.flipkart.com/search?q=sony%20wh-1000xm5&page=1"
+        }
+      },
+      "brand": "SONY",
+      "rating": 4.3,
+      "reviewsCount": 14261,
+      "availability": "Unknown",
+      "listingPosition": 4,
+      "score": 0.5,
+      "reason": "27% off + 4.3★ + in stock"
+    },
+    {
+      "id": "flipkart:itm3d1fdc7a05899",
+      "name": "SONY WH-CH520 Bluetooth",
+      "price": 4490,
+      "originalPrice": 5990,
+      "discount": 25,
+      "currency": "INR",
+      "productUrl": "https://www.flipkart.com/sony-wh-ch520-bluetooth/p/itm3d1fdc7a05899?pid=ACCHBPMEU8EZ8HEH&lid=LSTACCHBPMEU8EZ8HEHDEQBCT&marketplace=FLIPKART&q=sony+wh-1000xm5&store=0pm%2Ffcn%2Fgc3&srno=s_1_6&otracker=search&fm=organic&iid=a9eb6865-2d29-4cff-9405-a0fa99231db3.ACCHBPMEU8EZ8HEH.SEARCH&ppt=None&ppn=None&ssid=3igw337xhc0000001787137305039&qH=05e74e976065e2d2&ov_redirect=true&ov_redirect=true",
+      "imageUrl": "https://rukminim2.flixcart.com/image/612/612/xif0q/headphone/e/l/y/-enriched-transparent-original-imahbyh9yjypkqsz.png?q=70",
+      "platform": "Flipkart",
+      "scrapedAt": "2026-08-19T11:02:18.214Z",
+      "extras": {
+        "input": {
+          "url": "https://www.flipkart.com/search?q=sony%20wh-1000xm5&page=1"
+        }
+      },
+      "brand": "SONY",
+      "rating": 4.3,
+      "reviewsCount": 14261,
+      "availability": "Unknown",
+      "listingPosition": 6,
+      "score": 0.5,
+      "reason": "25% off + 4.3★ + in stock"
+    },
+    {
+      "id": "flipkart:itm2517d207c4dd5",
+      "name": "SONY WH1000XM4/SMIN Bluetooth Gaming",
+      "price": 22990,
+      "originalPrice": 29990,
+      "discount": 23,
+      "currency": "INR",
+      "productUrl": "https://www.flipkart.com/sony-wh1000xm4-smin-bluetooth-gaming/p/itm2517d207c4dd5?pid=ACCGCVGXYWHPQJGU&lid=LSTACCGCVGXYWHPQJGUUBYCVK&marketplace=FLIPKART&q=sony+wh-1000xm5&store=0pm%2Ffcn%2Fgc3&srno=s_1_2&otracker=search&fm=organic&iid=a9eb6865-2d29-4cff-9405-a0fa99231db3.ACCGCVGXYWHPQJGU.SEARCH&ppt=None&ppn=None&ssid=3igw337xhc0000001787137305039&qH=05e74e976065e2d2&ov_redirect=true&ov_redirect=true",
+      "imageUrl": "https://rukminim2.flixcart.com/image/612/612/xif0q/headphone/t/0/c/-enriched-transparent-original-imah28h3qdnerykz.png?q=70",
+      "platform": "Flipkart",
+      "scrapedAt": "2026-08-19T11:02:18.214Z",
+      "extras": {
+        "input": {
+          "url": "https://www.flipkart.com/search?q=sony%20wh-1000xm5&page=1"
+        }
+      },
+      "brand": "SONY",
+      "rating": 4.6,
+      "reviewsCount": 3005,
+      "availability": "Unknown",
+      "listingPosition": 2,
+      "score": 0.36,
+      "reason": "23% off + 4.6★ + in stock"
+    },
+    {
+      "id": "flipkart:itm9f84f49ad6ac8",
+      "name": "SONY WH1000XM4/BMIN Bluetooth",
+      "price": 22990,
+      "originalPrice": 29990,
+      "discount": 23,
+      "currency": "INR",
+      "productUrl": "https://www.flipkart.com/sony-wh1000xm4-bmin-bluetooth/p/itm9f84f49ad6ac8?pid=ACCGCVGXQGFUNXTN&lid=LSTACCGCVGXQGFUNXTNMNI87P&marketplace=FLIPKART&q=sony+wh-1000xm5&store=0pm%2Ffcn%2Fgc3&srno=s_1_3&otracker=search&fm=organic&iid=a9eb6865-2d29-4cff-9405-a0fa99231db3.ACCGCVGXQGFUNXTN.SEARCH&ppt=None&ppn=None&ssid=3igw337xhc0000001787137305039&qH=05e74e976065e2d2&ov_redirect=true&ov_redirect=true",
+      "imageUrl": "https://rukminim2.flixcart.com/image/612/612/xif0q/headphone/2/j/l/-original-imah28h4mwkywgfu.jpeg?q=70",
+      "platform": "Flipkart",
+      "scrapedAt": "2026-08-19T11:02:18.214Z",
+      "extras": {
+        "input": {
+          "url": "https://www.flipkart.com/search?q=sony%20wh-1000xm5&page=1"
+        }
+      },
+      "brand": "SONY",
+      "rating": 4.6,
+      "reviewsCount": 3005,
+      "availability": "Unknown",
+      "listingPosition": 3,
+      "score": 0.36,
+      "reason": "23% off + 4.6★ + in stock"
+    },
+    {
+      "id": "flipkart:itm537a684bd08c7",
+      "name": "SONY WH-1000XM6/BM IN Bluetooth & Wired",
+      "price": 39990,
+      "originalPrice": 49990,
+      "discount": 20,
+      "currency": "INR",
+      "productUrl": "https://www.flipkart.com/sony-wh-1000xm6-bm-bluetooth-wired/p/itm537a684bd08c7?pid=ACCHQFJZQC3WEKAZ&lid=LSTACCHQFJZQC3WEKAZ5GJMMX&marketplace=FLIPKART&q=sony+wh-1000xm5&store=0pm%2Ffcn%2Fgc3&srno=s_1_1&otracker=search&fm=organic&iid=a9eb6865-2d29-4cff-9405-a0fa99231db3.ACCHQFJZQC3WEKAZ.SEARCH&ppt=None&ppn=None&ssid=3igw337xhc0000001787137305039&qH=05e74e976065e2d2&ov_redirect=true&ov_redirect=true",
+      "imageUrl": "https://rukminim2.flixcart.com/image/612/612/xif0q/headphone/v/w/4/-original-imahq4g6z8ghgzh2.jpeg?q=70",
+      "platform": "Flipkart",
+      "scrapedAt": "2026-08-19T11:02:18.214Z",
+      "extras": {
+        "input": {
+          "url": "https://www.flipkart.com/search?q=sony%20wh-1000xm5&page=1"
+        }
+      },
+      "brand": "SONY",
+      "availability": "Unknown",
+      "listingPosition": 1,
+      "score": 0.17,
+      "reason": "20% off + in stock"
+    }
+  ],
+  "platforms": [
+    {
+      "name": "Flipkart",
+      "status": "ok",
+      "count": 968,
+      "rawCount": 968,
+      "parsedCount": 968,
+      "fieldFillRate": 72,
+      "heal": {
+        "attempted": false,
+        "success": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "query": "sony wh-1000xm5",
+  "best": {
+    "id": "amazon:B0BS1PRC4L",
+    "name": "WH-CH520 Wireless Bluetooth Headphones On Ear with Mic, Up to 50Hrs Battery, Quick Charge, DSEE Upscale, Multipoint Connectivity, Voice Assistant, Customized EQ-Black",
+    "price": 4419,
+    "originalPrice": 5990,
+    "discount": 26,
+    "currency": "INR",
+    "productUrl": "https://www.amazon.in/Sony-Bluetooth-Headphones-Multipoint-Connectivity/dp/B0BS1PRC4L/ref=sr_1_6_mod_primary_new?dib=eyJ2IjoiMSJ9.fwdR_IY2WQ5eHRdPyQFeM_PIbShRfpEBM0Lc8TjonOOuNxLX9rD2CNfk9zQob802QtmxzpAcbxukLGdWy9KJs1jVfhIjljSDTSFygd4knSRoWfTvPxSFiN65ehCWSTI02eShZBg4oFbPNrReaQRgor5ckOncpq8qDmyGD9J0c5WnAMge7LWEUg3rEHplKO9mWyqgix-xtSn2HRVhiCj0pr9Z_vzDsjyOvFM8zz6ntHo.qohrXagrlQa0SU33QuXky9zZwPnhc0lLyXeJ8AV0Yh0&dib_tag=se&keywords=sony%2Bwh-1000xm5&nsdOptOutParam=true&qid=1787145726&sbo=RZvfv%2F%2FHxDF%2BO5021pAnSA%3D%3D&sr=8-6",
+    "imageUrl": "https://m.media-amazon.com/images/I/41lArSiD5hL._AC_UY218_.jpg",
+    "platform": "Amazon India",
+    "scrapedAt": "2026-08-19T13:22:31.454Z",
+    "brand": "Sony",
+    "rating": 4.2,
+    "reviewsCount": 309,
+    "availability": "Unknown",
+    "score": 0.52,
+    "reason": "26% off + 4.2★ + in stock"
+  }
+}

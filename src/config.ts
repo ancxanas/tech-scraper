@@ -16,15 +16,14 @@ export interface PlatformConfig {
 
 export const PAGES_TO_SCRAPE = 3;
 export const MAX_PRODUCTS_HARD_CAP = 500;
-export const MAX_ENRICH = 20;
+export const MAX_ENRICH = 0;
 
 const relianceId = Deno.env.get("RELIANCE_COLLECTOR_ID") ||
   "c_msxt4lsv12k5p1328b";
 const tatacliqId = Deno.env.get("TATACLIQ_COLLECTOR_ID") ||
-  "c_msxt4nhe2fxyb7bjnw";
+  "c_mt0oxjk82pao8tyc4u";
 const flipkartId = Deno.env.get("FLIPKART_COLLECTOR_ID") ||
-  "c_msyq5fv71wizb98a5s";
-const amazonId = Deno.env.get("AMAZON_COLLECTOR_ID") || "";
+  "c_mt1bpy5nvn2i7o1r7";
 
 export const PLATFORMS: Record<Platform, PlatformConfig> = {
   flipkart: {
@@ -41,7 +40,7 @@ export const PLATFORMS: Record<Platform, PlatformConfig> = {
     name: "Reliance Digital",
     tool: "scraper",
     enabled: true,
-    searchUrlTemplate: "https://www.reliancedigital.in/products?q={q}",
+    searchUrlTemplate: "https://www.reliancedigital.in/collection/smartphones",
     pagination: "scroll",
     startIndex: 1,
     pageSize: 40,
@@ -60,13 +59,12 @@ export const PLATFORMS: Record<Platform, PlatformConfig> = {
   },
   amazon: {
     name: "Amazon India",
-    tool: amazonId ? "scraper" : "prebuilt",
+    tool: "prebuilt",
     enabled: true,
-    searchUrlTemplate: "https://www.amazon.in/s?k={q}&page={page}",
+    searchUrlTemplate: "",
     pagination: "page",
     startIndex: 1,
     pageSize: 60,
-    collectorId: amazonId || undefined,
     datasetId: "gd_lwdb4vjm1ehb499uxs",
   },
 };
@@ -82,4 +80,8 @@ export const SCORE_WEIGHTS = {
   discount: 0.25,
   rating: 0.2,
   availability: 0.1,
+  reviews: 0.05,
+  modelFamilyBonus: 0.1,
+  modelFamilyPenalty: 0.05,
+  brandMatchBonus: 0.08,
 } as const;

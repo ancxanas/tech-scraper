@@ -1,0 +1,92 @@
+{
+  "query": "sony wh-1000xm5",
+  "count": 4,
+  "products": [
+    {
+      "id": "amazon:B0BS1PRC4L",
+      "name": "WH-CH520 Wireless Bluetooth Headphones On Ear with Mic, Up to 50Hrs Battery, Quick Charge, DSEE Upscale, Multipoint Connectivity, Voice Assistant, Customized EQ-Black",
+      "price": 4419,
+      "originalPrice": 5990,
+      "discount": 26,
+      "currency": "INR",
+      "productUrl": "https://www.amazon.in/Sony-Bluetooth-Headphones-Multipoint-Connectivity/dp/B0BS1PRC4L/ref=sr_1_7_mod_primary_new?dib=eyJ2IjoiMSJ9.fwdR_IY2WQ5eHRdPyQFeM_PIbShRfpEBM0Lc8TjonOOuNxLX9rD2CNfk9zQob802PW1ebbOKnLY0HR4LC0nH1RKwAs6aGmNAW9a4a_cxCqrCPB4yeKbDcHNBZ4TMfNqAUq8dPCR4lrc7QvXTU6Qdu5fKzEMXPOLvm78S-GSU6SDyKKbVyfYcgwUMF1sExNCOeqF6gaiOD_sYPjA7-tmdS8dLcIThtl6Xp6VQrhVyUhU.vVk1_bfeNkLQDcK-4ZjI3xieHt25t8W_xTzYK2yMZrI&dib_tag=se&keywords=sony%2Bwh-1000xm5&nsdOptOutParam=true&qid=1787145793&sbo=RZvfv%2F%2FHxDF%2BO5021pAnSA%3D%3D&sr=8-7",
+      "imageUrl": "https://m.media-amazon.com/images/I/41lArSiD5hL._AC_UY218_.jpg",
+      "platform": "Amazon India",
+      "scrapedAt": "2026-08-19T13:23:40.164Z",
+      "brand": "Sony",
+      "rating": 4.2,
+      "reviewsCount": 309,
+      "availability": "Unknown",
+      "score": 0.52,
+      "reason": "26% off + 4.2★ + in stock"
+    },
+    {
+      "id": "amazon:B0CWVX1GNX",
+      "name": "ULT Wear WH-ULT900N Noise Cancellation Wireless Bluetooth Over Ear Headphones with Massive Bass, Up to 50Hrs Battery-Black | Massive Bass, Comfortable Design, 30-Hour Battery, Signature Noise Canceling Found in 1000X Series, Alexa Built-in, Bluetooth",
+      "price": 16990,
+      "originalPrice": 24990,
+      "discount": 32,
+      "currency": "INR",
+      "productUrl": "https://www.amazon.in/Sony-Headphones-Wh-Ult900N-Cancelling-Pair-Black/dp/B0CWVX1GNX/ref=sr_1_5?dib=eyJ2IjoiMSJ9.fwdR_IY2WQ5eHRdPyQFeM_PIbShRfpEBM0Lc8TjonOOuNxLX9rD2CNfk9zQob802PW1ebbOKnLY0HR4LC0nH1RKwAs6aGmNAW9a4a_cxCqrCPB4yeKbDcHNBZ4TMfNqAUq8dPCR4lrc7QvXTU6Qdu5fKzEMXPOLvm78S-GSU6SDyKKbVyfYcgwUMF1sExNCOeqF6gaiOD_sYPjA7-tmdS8dLcIThtl6Xp6VQrhVyUhU.vVk1_bfeNkLQDcK-4ZjI3xieHt25t8W_xTzYK2yMZrI&dib_tag=se&keywords=sony%2Bwh-1000xm5&nsdOptOutParam=true&qid=1787145793&sr=8-5",
+      "imageUrl": "https://m.media-amazon.com/images/I/610DB8Cwm7L._AC_UY218_.jpg",
+      "platform": "Amazon India",
+      "scrapedAt": "2026-08-19T13:23:40.164Z",
+      "brand": "Sony",
+      "rating": 4.3,
+      "reviewsCount": 37,
+      "availability": "Unknown",
+      "score": 0.47,
+      "reason": "32% off + 4.3★ + in stock"
+    },
+    {
+      "id": "amazon:B0BZP2H373",
+      "name": "WH-1000XM5 Best Active Noise Cancelling Wireless Bluetooth Over Ear Headphones with Mic for Clear Calling,Battery Life 30 Hours-Mid Night Blue",
+      "price": 29990,
+      "originalPrice": 34990,
+      "discount": 14,
+      "currency": "INR",
+      "productUrl": "https://www.amazon.in/Sony-WH-1000XM5-Cancelling-Headphones-Connectivity/dp/B0BZP2H373/ref=sr_1_1?dib=eyJ2IjoiMSJ9.fwdR_IY2WQ5eHRdPyQFeM_PIbShRfpEBM0Lc8TjonOOuNxLX9rD2CNfk9zQob802PW1ebbOKnLY0HR4LC0nH1RKwAs6aGmNAW9a4a_cxCqrCPB4yeKbDcHNBZ4TMfNqAUq8dPCR4lrc7QvXTU6Qdu5fKzEMXPOLvm78S-GSU6SDyKKbVyfYcgwUMF1sExNCOeqF6gaiOD_sYPjA7-tmdS8dLcIThtl6Xp6VQrhVyUhU.vVk1_bfeNkLQDcK-4ZjI3xieHt25t8W_xTzYK2yMZrI&dib_tag=se&keywords=sony%2Bwh-1000xm5&nsdOptOutParam=true&qid=1787145793&sr=8-1",
+      "imageUrl": "https://m.media-amazon.com/images/I/51KGPDttQhL._AC_UY218_.jpg",
+      "platform": "Amazon India",
+      "scrapedAt": "2026-08-19T13:23:40.164Z",
+      "brand": "Sony",
+      "rating": 4.4,
+      "reviewsCount": 171,
+      "availability": "Unknown",
+      "score": 0.37,
+      "reason": "14% off + 4.4★ + in stock"
+    },
+    {
+      "id": "amazon:B09Y2MYL5C",
+      "name": "WH-1000XM5 Noise Cancelling Wireless Headphones - 30 hours battery life - Over-ear style - Optimised for Alexa and the Google Assistant - with built-in mic for phone calls - Black",
+      "price": 53999,
+      "originalPrice": 57999,
+      "discount": 7,
+      "currency": "INR",
+      "productUrl": "https://www.amazon.in/Sony-WH-1000XM5-Cancelling-Wireless-Headphones/dp/B09Y2MYL5C/ref=sr_1_9?dib=eyJ2IjoiMSJ9.fwdR_IY2WQ5eHRdPyQFeM_PIbShRfpEBM0Lc8TjonOOuNxLX9rD2CNfk9zQob802PW1ebbOKnLY0HR4LC0nH1RKwAs6aGmNAW9a4a_cxCqrCPB4yeKbDcHNBZ4TMfNqAUq8dPCR4lrc7QvXTU6Qdu5fKzEMXPOLvm78S-GSU6SDyKKbVyfYcgwUMF1sExNCOeqF6gaiOD_sYPjA7-tmdS8dLcIThtl6Xp6VQrhVyUhU.vVk1_bfeNkLQDcK-4ZjI3xieHt25t8W_xTzYK2yMZrI&dib_tag=se&keywords=sony%2Bwh-1000xm5&nsdOptOutParam=true&qid=1787145793&sr=8-9",
+      "imageUrl": "https://m.media-amazon.com/images/I/51hrEIBMDzL._AC_UY218_.jpg",
+      "platform": "Amazon India",
+      "scrapedAt": "2026-08-19T13:23:40.164Z",
+      "brand": "Sony",
+      "rating": 4.3,
+      "reviewsCount": 105,
+      "availability": "Unknown",
+      "score": 0.23,
+      "reason": "7% off + 4.3★ + in stock"
+    }
+  ],
+  "platforms": [
+    {
+      "name": "Amazon India",
+      "status": "ok",
+      "count": 49,
+      "rawCount": 50,
+      "parsedCount": 49,
+      "fieldFillRate": 79,
+      "heal": {
+        "attempted": false,
+        "success": false
+      }
+    }
+  ]
+}

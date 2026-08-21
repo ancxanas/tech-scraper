@@ -1,4 +1,5 @@
 import { bdFetch, pollUntil } from "./brightdata.ts";
+import { extractBrandFromName } from "./catalog.ts";
 
 export interface PreScraperResult {
   title: string;
@@ -73,10 +74,14 @@ export async function searchAmazonPreBuilt(
 
   const snapshotId = triggerRes.snapshot_id || triggerRes.collection_id;
   if (!snapshotId) {
+    console.error(
+      `  Amazon trigger returned no snapshot_id: ${JSON.stringify(triggerRes)}`,
+    );
     throw new Error("No snapshot_id returned from Amazon scraper");
   }
+  console.error(`  Amazon trigger snapshot_id: ${snapshotId}`);
 
-  const progress = await pollUntil<ProgressResponse>(
+  await pollUntil<ProgressResponse>(
     async () => {
       try {
         const data = await bdFetch<ProgressResponse>(
@@ -96,11 +101,27 @@ export async function searchAmazonPreBuilt(
     "Amazon scraper",
   );
 
-  if (!progress.data || !Array.isArray(progress.data)) {
+  const snapshotData = await bdFetch<unknown[]>(
+    `/datasets/v3/snapshot/${snapshotId}`,
+  );
+
+  if (!Array.isArray(snapshotData)) {
+    console.error(
+      `  Amazon snapshot returned non-array: ${typeof snapshotData}`,
+    );
+    const obj = snapshotData as Record<string, unknown>;
+    console.error(
+      `  Amazon snapshot keys: ${obj ? Object.keys(obj).join(", ") : "null"}`,
+    );
+    for (const [k, v] of Object.entries(obj)) {
+      const vtype = Array.isArray(v) ? `array(${v.length})` : typeof v;
+      console.error(`    ${k}: ${vtype}`);
+    }
     return [];
   }
 
-  return progress.data.map((item) =>
+  console.error(`  Amazon snapshot returned ${snapshotData.length} items`);
+  return snapshotData.map((item) =>
     parseAmazonItem(item as Record<string, unknown>)
   );
 }
@@ -114,8 +135,13 @@ function parseAmazonItem(item: Record<string, unknown>): PreScraperResult {
     ? Math.round(((originalPrice - price) / originalPrice) * 100)
     : 0;
 
+  const name = String(
+    item.name || item.title || item.product_name || "Unknown",
+  );
+  const brand = String(item.brand || "") || extractBrandFromName(name);
+
   return {
-    title: String(item.name || item.title || item.product_name || "Unknown"),
+    title: name,
     price,
     originalPrice,
     discount,
@@ -129,7 +155,7 @@ function parseAmazonItem(item: Record<string, unknown>): PreScraperResult {
         : (typeof item.num_ratings === "number" && item.num_ratings > 0)
         ? item.num_ratings
         : null,
-    brand: String(item.brand || ""),
+    brand,
     availability: item.availability
       ? String(item.availability)
       : item.in_stock === false

@@ -1,0 +1,19 @@
+{
+  "query": "sony wh-1000xm5",
+  "count": 0,
+  "products": [],
+  "platforms": [
+    {
+      "name": "Amazon India",
+      "status": "empty",
+      "count": 0,
+      "rawCount": 0,
+      "parsedCount": 0,
+      "fieldFillRate": 0,
+      "heal": {
+        "attempted": false,
+        "success": false
+      }
+    }
+  ]
+}

@@ -1,6 +1,12 @@
 import { bdFetch, pollUntil } from "../lib/brightdata.ts";
 import { type Platform, PLATFORMS } from "../config.ts";
 import type { Product } from "../types.ts";
+import {
+  ALL_BRANDS,
+  extractBrandFromName,
+  hashCode,
+  normalizeName,
+} from "../lib/catalog.ts";
 
 interface TriggerBatchResponse {
   collection_id?: string;
@@ -58,6 +64,25 @@ export interface CollectorInput {
   country?: string;
 }
 
+function filterByQuery(raw: ResultItem[], query: string): ResultItem[] {
+  const tokens = query.toLowerCase().split(/\s+/).filter((t) => t.length > 1);
+  const brandToken = tokens.find((t) => ALL_BRANDS.includes(t));
+
+  return raw.filter((item) => {
+    const name = (
+      item.product_name || item.product_title || item.name || item.title || ""
+    ).toLowerCase();
+
+    if (!name || name.length < 3) return false;
+
+    if (/compatible\s+with/i.test(name)) return false;
+
+    if (brandToken && !name.includes(brandToken)) return false;
+
+    return true;
+  });
+}
+
 export async function runCollector(
   collectorId: string,
   inputs: CollectorInput[],
@@ -84,20 +109,89 @@ export async function runCollector(
     throw new Error("No collection_id or snapshot_id in trigger response");
   }
 
+  let pollAttempt = 0;
+  let consecutiveErrors = 0;
+  const MAX_POLL_ERRORS = 3;
   const items = await pollUntil<ResultItem[]>(
     async () => {
+      pollAttempt++;
       try {
         const data = await bdFetch<ResultItem[]>(
           `/dca/dataset?id=${collectionId}`,
         );
+        consecutiveErrors = 0;
         if (Array.isArray(data) && data.length > 0) return data;
+        if (
+          data && typeof data === "object" && !Array.isArray(data)
+        ) {
+          const obj = data as Record<string, unknown>;
+          if (obj.error || obj.status === "failed" || obj.status === "error") {
+            throw new Error(
+              `DCA collector error: ${JSON.stringify(data).slice(0, 200)}`,
+            );
+          }
+          const wrapped = obj.products || obj.data || obj.results;
+          if (Array.isArray(wrapped) && wrapped.length > 0) return wrapped;
+        }
+        if (pollAttempt <= 5) {
+          let preview: string;
+          if (Array.isArray(data)) {
+            preview = `array(${data.length})`;
+          } else if (data === null) {
+            preview = "null";
+          } else if (typeof data === "object") {
+            const obj = data as Record<string, unknown>;
+            const parts: string[] = [];
+            for (const [k, v] of Object.entries(obj).slice(0, 5)) {
+              const val = typeof v === "string"
+                ? `"${v.slice(0, 60)}"`
+                : Array.isArray(v)
+                ? `array(${v.length})`
+                : typeof v === "object" && v !== null
+                ? `{...}`
+                : String(v);
+              parts.push(`${k}: ${val}`);
+            }
+            preview = `{${parts.join(", ")}}`;
+          } else {
+            preview = String(data);
+          }
+          console.error(
+            `    ${
+              collectorId.slice(0, 15)
+            }: poll #${pollAttempt} → ${preview}`,
+          );
+        } else if (pollAttempt % 5 === 0) {
+          console.error(
+            `    ${
+              collectorId.slice(0, 15)
+            }: poll #${pollAttempt}... collecting`,
+          );
+        }
         return null;
-      } catch {
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("DCA collector error")) throw err;
+        consecutiveErrors++;
+        console.error(
+          `    ${
+            collectorId.slice(0, 15)
+          }: poll #${pollAttempt} error (${consecutiveErrors}/${MAX_POLL_ERRORS}): ${
+            msg.slice(0, 120)
+          }`,
+        );
+        if (consecutiveErrors >= MAX_POLL_ERRORS) {
+          throw new Error(
+            `${
+              collectorId.slice(0, 15)
+            }: ${consecutiveErrors} consecutive errors — ${msg.slice(0, 100)}`,
+          );
+        }
         return null;
       }
     },
     10000,
-    40,
+    48,
     `Scraper ${collectorId.slice(0, 15)}`,
   );
 
@@ -107,18 +201,35 @@ export async function runCollector(
 export function parseCustomProducts(
   raw: ResultItem[],
   platform: Platform,
+  pageNumber?: number,
+  query?: string,
 ): Product[] {
   const now = new Date().toISOString();
 
-  return raw
-    .filter((item) =>
-      !item.error &&
-      (item.product_name || item.product_title || item.name || item.title)
-    )
+  const filtered = query ? filterByQuery(raw, query) : raw;
+
+  const seen = new Map<string, ResultItem>();
+  const deduped: ResultItem[] = [];
+  for (const item of filtered) {
+    if (item.error) continue;
+    const name = (item.product_name || item.product_title || item.name ||
+      item.title || "").trim();
+    if (!name) continue;
+    const dedupKey = `${normalizeName(name)}:${
+      extractNumber(item.selling_price || item.final_price || item.price)
+    }`;
+    if (seen.has(dedupKey)) continue;
+    seen.set(dedupKey, item);
+    deduped.push(item);
+  }
+
+  return deduped
     .map((item, index) => {
       const price = extractNumber(
         item.selling_price || item.final_price || item.price,
       );
+      if (price <= 0) return null;
+
       const originalPrice = extractNumber(
         item.original_price || item.initial_price || item.mrp,
       );
@@ -139,6 +250,14 @@ export function parseCustomProducts(
       const id = generateId(item, platform);
       const currency = item.currency || "INR";
 
+      const productUrl = item.product_url || item.product_page_url ||
+        item.url ||
+        "";
+      if (productUrl && !isValidUrl(productUrl)) return null;
+
+      const imageUrl = item.image_url || item.image || item.main_image || "";
+      if (imageUrl && !imageUrl.startsWith("http")) return null;
+
       const offers: string[] = [];
       if (Array.isArray(item.offers)) {
         offers.push(...item.offers.map(String));
@@ -151,34 +270,72 @@ export function parseCustomProducts(
         originalPrice: originalPrice || price,
         discount,
         currency,
-        productUrl: item.product_url || item.product_page_url || item.url || "",
-        imageUrl: item.image_url || item.image || item.main_image || "",
+        productUrl,
+        imageUrl,
         platform: PLATFORMS[platform].name,
         scrapedAt: now,
         extras: collectExtras(item),
       };
 
-      if (item.brand) product.brand = String(item.brand);
-      const rating = parseRating(item.rating);
-      if (rating !== undefined) product.rating = rating;
+      if (item.brand) {
+        product.brand = String(item.brand);
+      } else {
+        const extracted = extractBrandFromName(name);
+        if (extracted) product.brand = extracted;
+      }
+      let rating = parseRating(item.rating);
+      if (rating !== undefined) {
+        rating = Math.max(0, Math.min(5, rating));
+        product.rating = rating;
+      }
       const reviewsCount = parseReviewsCount(item);
       if (reviewsCount !== undefined) product.reviewsCount = reviewsCount;
       if (item.seller || item.seller_name) {
         product.seller = String(item.seller || item.seller_name);
       }
       if (item.availability) {
-        product.availability = String(item.availability);
+        const avail = String(item.availability).trim();
+        const lower = avail.toLowerCase();
+        if (
+          lower.includes("out of stock") ||
+          lower.includes("currently unavailable")
+        ) {
+          product.availability = "Out of Stock";
+        } else if (
+          lower.includes("in stock") ||
+          lower.includes("available") ||
+          lower.includes("usually ships") ||
+          lower.includes("in stock.")
+        ) {
+          product.availability = "In Stock";
+        } else if (
+          lower.includes("pincode") ||
+          lower.includes("enter") ||
+          lower === "unknown" ||
+          lower === ""
+        ) {
+          product.availability = "In Stock";
+        } else {
+          product.availability = avail;
+        }
       } else if (item.in_stock === false) {
         product.availability = "Out of Stock";
       } else {
-        product.availability = "Unknown";
+        product.availability = "In Stock";
       }
+      if (item.sku || item.asin || item.pid) {
+        product.sku = String(item.sku || item.asin || item.pid);
+      }
+      product.inStock = !product.availability.toLowerCase().includes(
+        "out of stock",
+      );
       if (offers.length > 0) product.offers = offers;
       if (index < 500) product.listingPosition = index + 1;
+      if (pageNumber !== undefined) product.pageNumber = pageNumber;
 
       return product;
     })
-    .filter((p) => p.name && (p.price > 0 || p.productUrl));
+    .filter((p): p is Product => p !== null && p.name !== "Unknown");
 }
 
 function generateId(item: ResultItem, platform: Platform): string {
@@ -195,14 +352,13 @@ function generateId(item: ResultItem, platform: Platform): string {
   return `${platform}:${hashCode(name + item.selling_price)}`;
 }
 
-function hashCode(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash |= 0;
+function isValidUrl(url: string): boolean {
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
   }
-  return Math.abs(hash).toString(36);
 }
 
 function extractNumber(val: unknown): number {
