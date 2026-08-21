@@ -214,6 +214,31 @@ export function detailCards(ranked: RankedCandidate[], count: number): string {
           : ""
       }`,
     );
+    // What you actually pay, when enrichment fetched the offer block.
+    const co = r.checkout;
+    if (co) {
+      const bits: string[] = [];
+      if (co.buyAt !== null && co.buyAt < r.best.price) {
+        bits.push(
+          `${colors.bold(rupees(co.buyAt))} at checkout${
+            co.bankOffer
+              ? colors.dim(` (${rupees(co.bankOffer)} card offer)`)
+              : ""
+          }`,
+        );
+      }
+      if (co.exchangeUpTo !== null) {
+        bits.push(colors.dim(`up to ${rupees(co.exchangeUpTo)} exchange`));
+      }
+      if (co.noCostEmi) bits.push(colors.dim("no-cost EMI"));
+      if (bits.length) out.push(`  ${bits.join("  ·  ")}`);
+      if (co.pincodeBlocked) {
+        out.push(
+          colors.yellow("  offer/delivery unavailable at the default pincode"),
+        );
+      }
+    }
+
     out.push("");
     out.push(`  ${colors.italic(r.verdict)}`);
     out.push("");

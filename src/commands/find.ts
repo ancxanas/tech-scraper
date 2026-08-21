@@ -189,6 +189,7 @@ export const findCommand = new Command()
           inStockOnly: options.inStockOnly,
           budgetTolerance: (options.budgetTolerance ?? 0) / 100,
           enrichText: enriched.text,
+          checkoutInfo: enriched.checkout,
         });
       }
       if (!options.json) {

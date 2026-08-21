@@ -33,6 +33,7 @@ import { loadRun } from "../src/core/replay.ts";
 import { runPipeline } from "../src/core/pipeline.ts";
 import { matchSoc } from "../src/knowledge/soc.ts";
 import { lookupModel, PHONE_MODELS } from "../src/knowledge/models.ts";
+import { hasCheckoutInfo, parseCheckout } from "../src/core/offers.ts";
 import { buildPrompt, classifyFailure } from "../src/commands/heal.ts";
 
 const FIXTURE = "tests/fixtures/run-phones-15000";
@@ -960,4 +961,61 @@ Deno.test("CHEAPEST is still allowed on an unverified product", async () => {
   );
   const cheapest = [...ranked].sort((a, b) => a.best.price - b.best.price)[0];
   assert(cheapest.badges.includes("CHEAPEST"), cheapest.badges.join(","));
+});
+
+// ------------------------------------------------------------ checkout price
+
+Deno.test("checkout details are parsed from a real Flipkart offer block", () => {
+  const text =
+    "Protect Promise Fee Buy at ₹14,249 Apply offers for maximum savings ₹14,249 " +
+    "Lowest price for you OR ₹662 x 24m Pay ₹15,875 Exchange offer Not available at " +
+    "this Pincode Up to ₹10,700 Change pincode to exchange item Exchange offer Up to " +
+    "₹10,700 Bank offers Bank offers ₹750 off View EMI offers No Cost EMI* | Unlock ₹1 lakh";
+
+  const c = parseCheckout(text);
+  assertEquals(c.buyAt, 14249);
+  assertEquals(c.bankOffer, 750);
+  assertEquals(c.exchangeUpTo, 10700);
+  assertEquals(c.noCostEmi, true);
+  assertEquals(c.pincodeBlocked, true);
+});
+
+Deno.test("checkout parsing degrades quietly on a page with no offers", () => {
+  const c = parseCheckout("Some product page with no offer block at all");
+  assertEquals(c.buyAt, null);
+  assertEquals(c.bankOffer, null);
+  assertEquals(hasCheckoutInfo(c), false);
+});
+
+Deno.test("the flat card discount does not reorder results", async () => {
+  // Measured across nine brands, Flipkart's "bank offer" was exactly 5.0% of
+  // the listed price every time. A uniform proportional discount cancels out
+  // of the value ratio, so ranking on it would be theatre. This pins that we
+  // rank on the listed price and treat checkout info as display-only.
+  const batches = await loadRun([FIXTURE]);
+  const intent = parseIntentRules("best phones under 15000");
+  const plain = runPipeline("q", intent, batches);
+
+  const checkout = new Map(
+    plain.ranked.flatMap((r) =>
+      r.listings.map((l) =>
+        [l.id, {
+          buyAt: Math.round(r.best.price * 0.95),
+          bankOffer: Math.round(r.best.price * 0.05),
+          exchangeUpTo: null,
+          noCostEmi: true,
+          pincodeBlocked: false,
+        }] as const
+      )
+    ),
+  );
+
+  const withOffers = runPipeline("q", intent, batches, {
+    checkoutInfo: checkout,
+  });
+  assertEquals(
+    withOffers.ranked.map((r) => r.key),
+    plain.ranked.map((r) => r.key),
+  );
+  assertExists(withOffers.ranked[0].checkout);
 });

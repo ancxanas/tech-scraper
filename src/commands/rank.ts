@@ -106,6 +106,7 @@ export const rankCommand = new Command()
           inStockOnly: options.inStockOnly,
           budgetTolerance: (options.budgetTolerance ?? 0) / 100,
           enrichText: enriched.text,
+          checkoutInfo: enriched.checkout,
         });
       }
       enrichedCount = enriched.fetched;

@@ -14,11 +14,14 @@
 
 import { colors } from "@cliffy/ansi/colors";
 import { fetchDirect, fetchPageMarkdown, htmlToText } from "../lib/unlock.ts";
+import { type CheckoutInfo, hasCheckoutInfo, parseCheckout } from "./offers.ts";
 import type { RankedCandidate } from "./types.ts";
 
 export interface EnrichResult {
   /** listing id -> extra spec text, consumable by `analyze()`. */
   text: Map<string, string>;
+  /** listing id -> what the buyer actually pays, from the same fetch. */
+  checkout: Map<string, CheckoutInfo>;
   fetched: number;
   failed: number;
   skipped: number;
@@ -102,6 +105,7 @@ export async function enrichTop(
   const mode = opts.mode ?? "auto";
   const result: EnrichResult = {
     text: new Map(),
+    checkout: new Map(),
     fetched: 0,
     failed: 0,
     skipped: 0,
@@ -111,21 +115,30 @@ export async function enrichTop(
   };
   if (count <= 0) return result;
 
-  // Filter BEFORE taking N, not after. The products worth enriching are the
-  // ones we know least about, and they sit below the well-documented flagships
-  // in the ranking — slicing first spent the whole budget on phones the KB
-  // already had, which is why the first run recovered nothing.
-  const needsEnrichment = ranked.filter((r) => {
-    if (r.specCompleteness >= 0.85 && r.kbConfidence === "high") {
-      result.skipped++;
-      return false;
-    }
-    return true;
-  });
-  // Least-known first, so a small budget buys the most information.
-  const targets = [...needsEnrichment]
-    .sort((a, b) => a.score.confidence - b.score.confidence)
-    .slice(0, count);
+  // Two different reasons to fetch a page, so two selection rules.
+  //
+  //  - Specs: target what we know least about. Filtering BEFORE taking N
+  //    matters; slicing first spent the whole budget on ranks 1-N, nearly all
+  //    already in the KB, and recovered nothing.
+  //  - Checkout price: only obtainable by fetching, and only actionable for
+  //    the products actually being recommended. So the leaders are always
+  //    fetched even when their specs are already known.
+  const LEADERS = Math.min(3, count);
+  const leaders = ranked.slice(0, LEADERS);
+  const leaderKeys = new Set(leaders.map((r) => r.key));
+
+  const needsSpecs = ranked
+    .filter((r) => !leaderKeys.has(r.key))
+    .filter((r) => {
+      if (r.specCompleteness >= 0.85 && r.kbConfidence === "high") {
+        result.skipped++;
+        return false;
+      }
+      return true;
+    })
+    .sort((a, b) => a.score.confidence - b.score.confidence);
+
+  const targets = [...leaders, ...needsSpecs].slice(0, count);
 
   const concurrency = opts.concurrency ?? 3;
   const queue = [...targets];
@@ -145,8 +158,13 @@ export async function enrichTop(
       try {
         const { text, via } = await fetchPage(listing.url, mode);
         const section = extractSpecSection(text);
+        // Offers are parsed from the whole page, not the spec section.
+        const checkout = parseCheckout(text);
         // Attach to every listing in the group — they are the same product.
-        for (const l of candidate.listings) result.text.set(l.id, section);
+        for (const l of candidate.listings) {
+          result.text.set(l.id, section);
+          if (hasCheckoutInfo(checkout)) result.checkout.set(l.id, checkout);
+        }
         result.fetched++;
         if (via === "direct") result.viaDirect++;
         else result.viaUnlocker++;

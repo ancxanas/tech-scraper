@@ -453,6 +453,70 @@ state a chipset.
 
 ---
 
+## Round 7: what you actually pay — and a feature that was not worth building
+
+The plan was an "effective price" that folded bank offers and exchange bonuses
+into the ranking. Measuring first killed most of it.
+
+Flipkart's `Bank offers ₹X off`, sampled across nine products from nine
+different brands:
+
+| brand    | listed  | buy at  | bank offer | %   |
+| -------- | ------- | ------- | ---------- | --- |
+| POCO     | ₹14,999 | ₹14,249 | ₹750       | 5.0 |
+| realme   | ₹12,970 | ₹12,321 | ₹649       | 5.0 |
+| Samsung  | ₹11,699 | ₹11,114 | ₹585       | 5.0 |
+| Ai+      | ₹11,999 | ₹11,399 | ₹600       | 5.0 |
+| Motorola | ₹12,499 | ₹11,874 | ₹625       | 5.0 |
+| itel     | ₹10,999 | ₹10,449 | ₹550       | 5.0 |
+| LAVA     | ₹11,999 | ₹11,399 | ₹600       | 5.0 |
+| Tecno    | ₹12,499 | ₹11,874 | ₹625       | 5.0 |
+
+Exactly 5.0% every time. It is a flat card discount, not a per-product deal. A
+uniform proportional discount cancels out of the value ratio, so ranking on
+"effective price" would reorder precisely nothing while looking like insight. It
+was not built, and a test pins the decision: feeding a synthetic 5% discount
+through the pipeline must leave the ranking identical.
+
+What _was_ built is the honest part — the detail cards now show the real
+checkout number and the two things that genuinely vary:
+
+```
+₹14,999 on Flipkart  (MRP ₹18,999, 21% off)
+₹14,249 at checkout (₹750 card offer)  ·  up to ₹10,700 exchange  ·  no-cost EMI
+offer/delivery unavailable at the default pincode
+```
+
+Exchange value is conditional on the buyer's old handset and is never scored.
+Pincode availability is surfaced because a deal you cannot receive is not a
+deal.
+
+This changed the enrichment policy too. Spec enrichment targets the products we
+know _least_ about, but checkout price is only actionable for the products being
+_recommended_ — and those are the well-documented ones enrichment was
+deliberately skipping. The top three are now always fetched; the remaining
+budget still goes to the least-confident.
+
+### On review sentiment
+
+Star ratings do not discriminate in this segment: nearly everything sits at
+4.1–4.3. The signal is in the review text, and it is reachable — the PDP has
+none (JS-rendered) but `/product-reviews/` returns it in plain HTML:
+
+```
+Verified Purchase · May, 2025 — "Battery performance is good Display is good
+better phone Good delivery"
+```
+
+Amazon's equivalent is 404 plus bot-blocking, so this would be Flipkart-only and
+the UI must say so rather than implying full coverage. The intended design is a
+deterministic aspect lexicon (battery, heating, camera, display, performance,
+build, charging, service) producing mention counts and polarity — displayed
+first, and allowed to affect the score only behind a volume threshold, for the
+same reason the BEST VALUE badge now demands evidence.
+
+---
+
 ## What is still worth doing
 
 1. **Amazon PDPs need a transport.** Direct fetch gets a bot page, so Amazon
@@ -468,5 +532,6 @@ state a chipset.
    `deno task doctor --query "best phones under 15000"` to eyeball the URLs for
    free, then `deno task heal reliance --dry-run` to see the diagnosis without
    changing anything.
-4. **Amazon pagination.** The prebuilt dataset is driven by keyword only, so
+4. **Review sentiment.** Designed and shown feasible above; not yet built.
+5. **Amazon pagination.** The prebuilt dataset is driven by keyword only, so
    `--pages` has less effect there than on the collector platforms.

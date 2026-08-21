@@ -31,6 +31,8 @@ export interface RawBatch {
 export interface PipelineOptions extends RankOptions {
   /** Extra PDP text keyed by listing id, from `--enrich`. */
   enrichText?: Map<string, string>;
+  /** Checkout details keyed by listing id, from the same enrichment pass. */
+  checkoutInfo?: Map<string, import("./offers.ts").CheckoutInfo>;
   /** Keep rejected listings for the diagnostics view. */
   keepRejected?: boolean;
 }
@@ -142,6 +144,12 @@ export function runPipeline(
   }
 
   const candidates = groupListings(allAnalyzed);
+  if (options.checkoutInfo?.size) {
+    for (const c of candidates) {
+      const hit = c.listings.find((l) => options.checkoutInfo!.has(l.id));
+      if (hit) c.checkout = options.checkoutInfo!.get(hit.id);
+    }
+  }
   const { ranked, rejected } = rankCandidates(
     candidates,
     rankableIntent,
