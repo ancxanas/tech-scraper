@@ -198,15 +198,18 @@ export function detectQualifiers(title: string): string[] {
 export function deriveModelKey(title: string): string {
   const qualifiers = detectQualifiers(title);
 
-  // Everything after a qualifier ("- Locked with Airtel Prepaid ...") is SKU
-  // boilerplate that varies card to card; cutting there keeps the key stable.
-  let head = title;
+  // Amazon writes "<product> | <feature> | <feature>"; Flipkart does not. Left
+  // in, those feature tokens become part of the model key and the same phone
+  // fails to group across platforms — "realme narzo 100 lite 5g" on Flipkart
+  // vs "realme narzo 100 lite 5g 7000mah" on Amazon. Cross-platform offer
+  // comparison is the whole point of scraping four sites, so cut the tail.
+  let head = title.split("|")[0];
   let cutAt = Infinity;
   for (const [re] of QUALIFIERS) {
-    const m = title.match(re);
+    const m = head.match(re);
     if (m && m.index !== undefined && m.index < cutAt) cutAt = m.index;
   }
-  if (cutAt !== Infinity) head = title.slice(0, cutAt);
+  if (cutAt !== Infinity) head = head.slice(0, cutAt);
 
   let t = head.toLowerCase();
   t = t.replace(/\([^)]*\)/g, " "); // drop parenthesised colour/config groups

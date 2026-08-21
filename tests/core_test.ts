@@ -1019,3 +1019,55 @@ Deno.test("the flat card discount does not reorder results", async () => {
   );
   assertExists(withOffers.ranked[0].checkout);
 });
+
+// ------------------------------------------------- cross-platform grouping
+
+Deno.test("the same phone groups across Flipkart and Amazon title styles", () => {
+  // Amazon writes "<product> | <feature> | <feature>", Flipkart does not.
+  // Those feature tokens were leaking into the model key, so the same handset
+  // produced two different keys and never merged — which is why 0 of 48
+  // ranked products had offers on more than one platform.
+  const pairs: Array<[string, string]> = [
+    [
+      "POCO M7 5G (Ocean Blue, 128 GB) (6 GB RAM)",
+      "POCO M7 5G Smartphone (Ocean Blue, 6GB RAM, 128GB Storage) | Snapdragon 4s Gen 2",
+    ],
+    [
+      "Samsung Galaxy M06 5G (Sage Green, 128 GB) (4 GB RAM)",
+      "Samsung Galaxy M06 5G Mobile (Sage Green, 4GB RAM, 128GB Storage) | MediaTek Dimensity 6300 | AnTuTu 623K+",
+    ],
+    [
+      "realme narzo 100 Lite 5G (Thunder Black, 64 GB) (4 GB RAM)",
+      "realme narzo 100 Lite 5G (Thunder Black,4GB+64GB) | 7000mAh Titan Battery",
+    ],
+    [
+      "iQOO Z10 Lite 5G (Cyber Green, 64 GB) (4 GB RAM)",
+      "iQOO Z10 Lite 5G (Cyber Green 2026, 4GB RAM, 64GB Storage) | Dimensity 6300",
+    ],
+  ];
+  for (const [flipkart, amazon] of pairs) {
+    assertEquals(deriveModelKey(amazon), deriveModelKey(flipkart), flipkart);
+  }
+});
+
+Deno.test("a cross-platform pair produces one candidate with the cheaper offer first", () => {
+  const { listings } = normalizeBatch([
+    {
+      product_name: "POCO M7 5G (Ocean Blue, 128 GB) (6 GB RAM)",
+      selling_price: 12499,
+      product_url:
+        "https://www.flipkart.com/poco-m7-5g-ocean-blue-128-gb/p/itm1",
+    },
+    {
+      name:
+        "POCO M7 5G Smartphone (Ocean Blue, 6GB RAM, 128GB Storage) | Snapdragon 4s Gen 2 | 5160mAh",
+      final_price: 11999,
+      url: "https://www.amazon.in/POCO-M7-5G/dp/B0TEST123",
+    },
+  ]);
+  const candidates = groupListings(listings.map((l) => analyze(l)));
+  assertEquals(candidates.length, 1);
+  assertEquals(candidates[0].offers.length, 2);
+  assertEquals(candidates[0].best.platform, "amazon");
+  assertEquals(candidates[0].best.price, 11999);
+});
