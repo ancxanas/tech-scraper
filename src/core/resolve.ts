@@ -26,7 +26,14 @@ import {
 } from "../knowledge/gsmarena.ts";
 import type { Candidate, Specs } from "./types.ts";
 
-export type FetchMode = "auto" | "direct" | "unlocker" | "cache-only";
+/**
+ * Where spec pages may be fetched from.
+ *   auto     free direct fetch, falling back to Web Unlocker if permitted
+ *   direct   free only; blocked pages stay unresolved
+ *   unlocker Web Unlocker only (billed per request)
+ *   cache    no network at all; use what is already cached
+ */
+export type FetchMode = "auto" | "direct" | "unlocker" | "cache";
 
 export interface ResolveOptions {
   mode?: FetchMode;
@@ -335,7 +342,7 @@ export async function resolveSpecs(
     }
   }
 
-  if (mode === "cache-only") return result;
+  if (mode === "cache") return result;
 
   const concurrency = Math.max(1, opts.concurrency ?? 4);
   const pending = [...needsFetch];

@@ -18,7 +18,12 @@ import {
 } from "../core/intent.ts";
 import { runDirFor, saveRun } from "../core/replay.ts";
 import { renderFull } from "../ui/render.ts";
-import { enrichTop, reportEnrichment } from "../core/enrich.ts";
+import {
+  type FetchMode,
+  reportResolution,
+  resolveSpecs,
+} from "../core/resolve.ts";
+import { buildCandidates } from "../core/pipeline.ts";
 import { getStatsFor, savePrices } from "../kv.ts";
 import type { RankIntent } from "../core/types.ts";
 
@@ -59,14 +64,16 @@ async function maybeEnhanceIntent(intent: RankIntent): Promise<RankIntent> {
 }
 
 export const findCommand = new Command()
-  .description("Scrape live prices and rank them (spends BrightData credit)")
+  .description(
+    "Scrape live listings and rank them — SPENDS BrightData collector credit",
+  )
   .arguments("<query:string>")
   .option(
     "-p, --platforms <list:string>",
     "Comma-separated: flipkart,amazon,reliance,tatacliq",
   )
   .option("--pages <n:number>", "Pages per platform", { default: 1 })
-  .option("-n, --limit <n:number>", "Rows in the ranking table", {
+  .option("-n, --top <n:number>", "Rows to show in the ranking table", {
     default: 15,
   })
   .option("-d, --details <n:number>", "Detailed cards for the top N", {
@@ -75,16 +82,21 @@ export const findCommand = new Command()
   .option("--no-compare", "Skip the head-to-head matrix")
   .option("--no-diagnostics", "Skip the coverage/funnel tables")
   .option("--in-stock-only", "Drop items known to be out of stock")
+  .option("--no-specs", "Skip spec resolution and rank on listing data alone")
   .option(
-    "--enrich-via <mode:string>",
-    "auto | direct | unlocker (auto tries the free direct fetch first)",
+    "--specs-source <mode:string>",
+    "Where spec pages come from: auto | direct | unlocker | cache",
     { default: "auto" },
   )
   .option(
-    "--enrich <n:number>",
-    "Fetch real spec sheets for the top N finalists (costs Unlocker credit)",
-    { default: 0 },
+    "--max-fetches <n:number>",
+    "Cap NEW spec-page fetches this run (cached pages are free and uncapped)",
   )
+  .option(
+    "--use-unlocker",
+    "Fall back to BrightData Web Unlocker (BILLED per request) when a free fetch is blocked",
+  )
+  .option("-v, --verbose", "Show each page as it resolves")
   .option(
     "--budget-tolerance <pct:number>",
     "Allow N% over the stated budget",
@@ -171,59 +183,40 @@ export const findCommand = new Command()
       }
     }
 
-    // Second pass: buy real spec sheets for the finalists only, then re-rank.
-    if (options.enrich > 0 && result.ranked.length > 0) {
-      if (!options.json) {
-        console.error(
-          colors.dim(
-            `  → enriching top ${options.enrich} with live spec sheets…`,
-          ),
-        );
-      }
-      const enriched = await enrichTop(result.ranked, options.enrich, {
-        verbose: !options.json,
-        mode: options.enrichVia as "auto" | "direct" | "unlocker",
+    // Resolve specs BEFORE ranking, exactly as `rank` does. Ranking first and
+    // enriching the leaders — which this command used to do — is circular: a
+    // phone ranks low because its specs are unknown, so it never gets
+    // resolved, so it stays low.
+    if (options.specs !== false) {
+      const { candidates } = buildCandidates(intent, batches);
+      const resolved = await resolveSpecs(candidates, {
+        mode: options.specsSource as FetchMode,
+        limit: options.maxFetches,
+        allowPaid: options.useUnlocker,
+        verbose: options.verbose,
       });
-      if (enriched.text.size > 0) {
+      reportResolution(resolved);
+      enrichedCount = resolved.gsmMatched + resolved.fromCache +
+        resolved.fetchedDirect + resolved.fetchedPaid;
+      if (resolved.text.size > 0 || resolved.external.size > 0) {
         result = runPipeline(query, intent, batches, {
           inStockOnly: options.inStockOnly,
           budgetTolerance: (options.budgetTolerance ?? 0) / 100,
-          enrichText: enriched.text,
-          checkoutInfo: enriched.checkout,
+          enrichText: resolved.text,
+          checkoutInfo: resolved.checkout,
+          externalSpecs: resolved.external,
         });
-      }
-      if (!options.json) {
-        enrichedCount = enriched.fetched;
-        reportEnrichment(enriched);
       }
     }
 
-    if (options.json) {
-      console.log(
-        JSON.stringify(
-          { ...result, savedTo },
-          (k, v) => (k === "raw" || k === "listings" ? undefined : v),
-          2,
-        ),
-      );
-    } else {
-      console.log(
-        renderFull(result, {
-          limit: options.limit,
-          details: options.details,
-          compare: options.compare !== false,
-          diagnostics: options.diagnostics !== false,
-          enriched: enrichedCount,
-        }),
-      );
-      if (savedTo) {
-        console.log(
-          colors.dim(
-            `  Raw payloads saved to ${
-              colors.white(savedTo)
-            }\n  Re-rank for free:  deno task rank "${query}" --replay ${savedTo}\n`,
-          ),
-        );
+    if (options.history !== false && result.ranked.length > 0) {
+      const stats = await getStatsFor(result.ranked.map((r) => r.key));
+      if (stats.size > 0) {
+        result = runPipeline(query, intent, batches, {
+          inStockOnly: options.inStockOnly,
+          budgetTolerance: (options.budgetTolerance ?? 0) / 100,
+          priceHistory: stats,
+        });
       }
     }
 
@@ -238,6 +231,34 @@ export const findCommand = new Command()
           );
         }
       } catch { /* price history is a bonus, never fatal */ }
+    }
+
+    if (options.json) {
+      console.log(
+        JSON.stringify(
+          { ...result, savedTo },
+          (k, v) => (k === "raw" || k === "listings" ? undefined : v),
+          2,
+        ),
+      );
+    } else {
+      console.log(
+        renderFull(result, {
+          limit: options.top,
+          details: options.details,
+          compare: options.compare !== false,
+          diagnostics: options.diagnostics !== false,
+          enriched: enrichedCount,
+        }),
+      );
+      if (savedTo) {
+        console.log(
+          colors.dim(
+            `  Raw payloads saved to ${colors.white(savedTo)}\n` +
+              `  Re-rank for free:  deno task rank "${query}" --replay ${savedTo}\n`,
+          ),
+        );
+      }
     }
 
     const allFailed = result.diagnostics.every((d) => d.status !== "ok");

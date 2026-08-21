@@ -20,7 +20,7 @@ import {
 import { buildCandidates } from "../core/pipeline.ts";
 
 export const rankCommand = new Command()
-  .description("Rank products from saved scrape data (no credits spent)")
+  .description("Rank saved listings — no scraping, no collector credit")
   .arguments("<query:string>")
   .option(
     "-r, --replay <path:string>",
@@ -29,7 +29,7 @@ export const rankCommand = new Command()
       required: true,
     },
   )
-  .option("-n, --limit <n:number>", "Rows in the ranking table", {
+  .option("-n, --top <n:number>", "Rows to show in the ranking table", {
     default: 15,
   })
   .option("-d, --details <n:number>", "Detailed cards for the top N", {
@@ -45,17 +45,17 @@ export const rankCommand = new Command()
   )
   .option("--no-specs", "Skip spec resolution and rank on listing data alone")
   .option(
-    "--specs-via <mode:string>",
-    "auto | direct | unlocker | cache-only",
+    "--specs-source <mode:string>",
+    "Where spec pages come from: auto | direct | unlocker | cache",
     { default: "auto" },
   )
   .option(
-    "--specs-limit <n:number>",
-    "Cap new page fetches this run (cache hits are free and uncapped)",
+    "--max-fetches <n:number>",
+    "Cap NEW network fetches this run (cached pages are free and uncapped)",
   )
   .option(
-    "--allow-paid",
-    "Permit Web Unlocker for pages that block direct fetch",
+    "--use-unlocker",
+    "Fall back to BrightData Web Unlocker (BILLED per request) when a free fetch is blocked",
   )
   .option("-v, --verbose", "Show each page as it resolves")
   .option("--json", "Emit JSON instead of the terminal report", {
@@ -105,9 +105,9 @@ export const rankCommand = new Command()
     if (options.specs !== false) {
       const { candidates } = buildCandidates(intent, batches);
       const resolved = await resolveSpecs(candidates, {
-        mode: options.specsVia as FetchMode,
-        limit: options.specsLimit,
-        allowPaid: options.allowPaid,
+        mode: options.specsSource as FetchMode,
+        limit: options.maxFetches,
+        allowPaid: options.useUnlocker,
         verbose: options.verbose,
       });
       reportResolution(resolved);
@@ -137,7 +137,7 @@ export const rankCommand = new Command()
 
     console.log(
       renderFull(result, {
-        limit: options.limit,
+        limit: options.top,
         details: options.details,
         compare: options.compare !== false,
         diagnostics: options.diagnostics !== false,

@@ -550,7 +550,7 @@ scrape -> normalise -> classify -> group -> RESOLVE SPECS -> rank
 It is affordable because specs do not change. A persistent cache
 (`.cache/specs.json`, keyed by URL with tracking parameters stripped, 30-day
 TTL) makes repeat runs free: the cold run took 21s for 61 pages, the warm run
-0.8s for the same catalogue. Paid transports stay behind `--allow-paid`; the 8
+0.8s for the same catalogue. Paid transports stay behind `--use-unlocker`; the 8
 unresolved products are Amazon, which blocks direct fetch.
 
 ### The knowledge base audits itself now
@@ -693,7 +693,7 @@ without a rebuild.
 the same hour reliably earns an HTTP 429. The mitigation is already in place —
 resolved models are cached permanently, and a 429 aborts cleanly and resumes on
 the next run — but populating a fresh catalogue from the free transport is a
-patience exercise. `--allow-paid` routes through Web Unlocker for anyone who
+patience exercise. `--use-unlocker` routes through Web Unlocker for anyone who
 would rather spend a few requests than wait.
 
 ---
@@ -716,7 +716,7 @@ The conclusion is not that a better source exists — it is that the good source
 needs a better **transport**. Web Unlocker bypasses both the 429 and the 403s,
 and because specs are cached permanently it costs one request per model, once.
 
-`--allow-paid` grants _permission to fall back_, not an instruction to spend.
+`--use-unlocker` grants _permission to fall back_, not an instruction to spend.
 Free direct fetch is always attempted first, on both merchant pages and the spec
 database; the paid transport is reached only when the free one is blocked or
 throttled. The first implementation got this wrong for the spec database — it
@@ -730,7 +730,7 @@ report can say how many requests were paid for.
 ```bash
 deno task index                                   # once: build the model index
 deno task specs "best phones under 15000" \
-    --replay runs/latest --allow-paid             # once per catalogue
+    --replay runs/latest --use-unlocker           # once per catalogue
 deno task rank  "best phones under 15000" \
     --replay runs/latest                          # instant thereafter
 ```

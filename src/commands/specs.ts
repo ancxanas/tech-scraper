@@ -19,21 +19,31 @@ import { colors } from "@cliffy/ansi/colors";
 import { loadRun } from "../core/replay.ts";
 import { buildCandidates } from "../core/pipeline.ts";
 import { parseIntentRules } from "../core/intent.ts";
-import { resolveSpecs } from "../core/resolve.ts";
+import { type FetchMode, resolveSpecs } from "../core/resolve.ts";
 import { SpecStore } from "../core/specstore.ts";
 import { loadIndex } from "../knowledge/gsmarena.ts";
 
 export const specsCommand = new Command()
-  .description("Populate the spec cache for a saved run (resumable)")
+  .description(
+    "Pre-fetch spec sheets for a saved run — resumable, cached 30 days",
+  )
   .arguments("<query:string>")
   .option("-r, --replay <path:string>", "Run directory or JSON file(s)", {
     required: true,
   })
   .option(
-    "--allow-paid",
-    "Use Web Unlocker where the free transport is blocked or throttled",
+    "--use-unlocker",
+    "Fall back to BrightData Web Unlocker (BILLED per request) when a free fetch is blocked",
   )
-  .option("--limit <n:number>", "Stop after N new fetches this run")
+  .option(
+    "--specs-source <mode:string>",
+    "Where spec pages come from: auto | direct | unlocker | cache",
+    { default: "auto" },
+  )
+  .option(
+    "--max-fetches <n:number>",
+    "Stop after N new network fetches this run",
+  )
   .option("--pace <ms:number>", "Delay between spec-database requests", {
     default: 1500,
   })
@@ -58,7 +68,9 @@ export const specsCommand = new Command()
     console.error(
       colors.dim(
         `\n  ${candidates.length} products · index has ${index.length} models · transport: ${
-          options.allowPaid ? "direct then Web Unlocker" : "direct only (free)"
+          options.useUnlocker
+            ? "free direct, then Web Unlocker (billed)"
+            : "free direct only"
         }\n`,
       ),
     );
@@ -66,8 +78,10 @@ export const specsCommand = new Command()
     const store = new SpecStore();
     const result = await resolveSpecs(candidates, {
       store,
-      allowPaid: options.allowPaid,
-      limit: options.limit,
+      mode: options.specsSource as FetchMode,
+      pace: options.pace,
+      allowPaid: options.useUnlocker,
+      limit: options.maxFetches,
       verbose: true,
     });
 
@@ -86,7 +100,7 @@ export const specsCommand = new Command()
       console.error(
         colors.yellow(
           "\n  The spec database throttled this IP. Everything resolved so far is\n" +
-            "  cached — re-run in an hour to continue, or pass --allow-paid.",
+            "  cached — re-run in an hour to continue, or pass --use-unlocker.",
         ),
       );
     }
