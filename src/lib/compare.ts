@@ -37,17 +37,17 @@ export function compareProducts(
   });
 
   const comparisons: ProductComparison[] = scored.map((sp) => {
-    const specs = extractSpecs(sp.product, category);
+    const specs = extractSpecs(sp, category);
 
     const specValues: Record<string, string> = {};
     for (const [key, val] of Object.entries(specs.specs)) {
       specValues[key] = formatSpecValue(key, val);
     }
 
-    const pricePerSpec = calculatePricePerSpec(sp.product, specs, category);
+    const pricePerSpec = calculatePricePerSpec(sp, specs, category);
 
     return {
-      product: sp.product,
+      product: sp,
       specs,
       score: sp.score,
       reason: sp.reason,

@@ -3,3 +3,6 @@ deno.lock
 node_modules/
 *.heapsnapshot
 .env
+
+# Saved raw scrape payloads (replay data)
+runs/

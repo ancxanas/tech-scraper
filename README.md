@@ -9,6 +9,36 @@ using Bright Data Scraper Studio.
 
 ## What it does
 
+**v2 ranking engine** (see [docs/RANKING-V2.md](docs/RANKING-V2.md)) — the query
+is understood, products are classified and spec-matched, variants are grouped,
+and results are ranked on value rather than on price alone:
+
+```bash
+deno task find "best phones under 15000"                 # live scrape + rank
+deno task rank "best phones under 15000" --replay runs/…  # re-rank offline, free
+```
+
+- **Hard relevance gating** — a phone query returns phones. Category is decided
+  before scoring, not patched afterwards, and the budget is enforced.
+- **Spec-aware scoring** — chipset (AnTuTu), display, battery, camera, memory
+  and extras, weighted by what the query actually asked for.
+- **Value, not just price** — percentile of spec-points-per-rupee, so the engine
+  can recommend paying ₹2,000 more for a materially better phone.
+- **Honest confidence** — every product reports how much of its spec sheet was
+  known versus inferred; low-confidence items cannot win badges.
+- **Variant grouping** — one phone is one row, with every colour/seller/platform
+  offer attached; carrier-locked and refurbished SKUs stay separate and
+  labelled.
+- **Trustworthy ratings** — Bayesian shrinkage, so 4.9★ from 3 reviews loses to
+  4.2★ from 150,000, and inflated MRPs are flagged instead of rewarded.
+- **Replayable runs** — raw payloads are saved before analysis, so ranking can
+  be iterated endlessly without spending scraping credit.
+- **Rich terminal UI** — ranked table, per-product verdict cards with score bars
+  and pros/cons, head-to-head spec matrix, and a coverage funnel showing where
+  every scraped card went.
+
+### Also included
+
 - Searches across 4 Indian e-commerce platforms: Flipkart, Reliance Digital,
   Tata CLiQ, Amazon India
 - Discovers deals on Google Shopping via SERP API

@@ -1,0 +1,9 @@
+[
+  {
+    "input": {
+      "url": "https://www.tatacliq.com/search/?searchCategory=all&text=phones%2520under%252015000%3Arelevance%3Acategory%3AMSH1210&p%5B%5D=facets.price_range.from%3DMin&p%5B%5D=facets.price_range.to%3D15000"
+    },
+    "error": "Crawler error: waiting for selector \"a[id^=\"ProductModule-\"]\" failed: timeout 30000ms exceeded",
+    "error_code": "wait_element_timeout"
+  }
+]

@@ -27,6 +27,8 @@ import { compareProducts, type ComparisonResult } from "./lib/compare.ts";
 import { generateDealReport } from "./lib/intelligence.ts";
 import { describeIntent, parseIntent } from "./lib/llm-intent.ts";
 import type { ParsedIntent, SearchResult } from "./types.ts";
+import { findCommand } from "./commands/find.ts";
+import { rankCommand } from "./commands/rank.ts";
 
 function parsePlatforms(input: string | undefined): Platform[] {
   if (!input) return [...ALL_ENABLED];
@@ -204,6 +206,9 @@ export const cli = new Command()
   .globalOption("--json", "Output raw JSON instead of formatted tables", {
     default: false,
   })
+  // v2 pipeline: spec-aware ranking, variant grouping, replayable runs.
+  .command("find", findCommand)
+  .command("rank", rankCommand)
   .command(
     "search",
     new Command()
@@ -1041,7 +1046,7 @@ export const cli = new Command()
 
         const report = generateDealReport(
           best,
-          allProducts,
+          scored,
           intent,
           category,
         );

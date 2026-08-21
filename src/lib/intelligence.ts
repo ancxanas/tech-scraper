@@ -6,10 +6,11 @@ import type {
   ProductCategory,
 } from "../types.ts";
 import { extractSpecs, getComparisonFields } from "./specs.ts";
+import type { ScoredProduct } from "../score.ts";
 
 export function generateDealReport(
   best: Product,
-  scored: Product[],
+  scored: ScoredProduct[],
   intent: ParsedIntent,
   category: ProductCategory,
   priceHistory?: PriceAnalytics,
@@ -199,12 +200,12 @@ function buildWhyThis(
   }));
 
   for (const field of specFields.slice(0, 3)) {
-    const bestVal = specs.specs[field];
+    const bestVal = specs.specs[field as keyof typeof specs.specs];
     if (bestVal === undefined || bestVal === null) continue;
 
     let isBest = true;
     for (const { specs: otherSpecs } of allSpecs) {
-      const otherVal = otherSpecs[field];
+      const otherVal = otherSpecs[field as keyof typeof otherSpecs];
       if (otherVal === undefined || otherVal === null) continue;
       if (typeof bestVal === "number" && typeof otherVal === "number") {
         if (otherVal > bestVal) {
@@ -275,7 +276,7 @@ function buildEffectivePrice(
 
 function buildAlternatives(
   best: Product,
-  scored: Product[],
+  scored: ScoredProduct[],
   _intent: ParsedIntent,
 ): DealReport["alternatives"] {
   const alternatives: DealReport["alternatives"] = [];
@@ -411,7 +412,7 @@ function buildSpecBreakdown(
 
   const specFields = getComparisonFields(category);
   for (const field of specFields.slice(0, 5)) {
-    const val = specs.specs[field];
+    const val = specs.specs[field as keyof typeof specs.specs];
     if (val === undefined || val === null) continue;
 
     const allVals = scored

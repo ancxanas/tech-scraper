@@ -84,6 +84,7 @@ export async function getPriceHistory(
   productName: string,
 ): Promise<PriceRecord[]> {
   const kv = await getKv();
+  if (!kv) return [];
   const records: PriceRecord[] = [];
 
   for await (const entry of kv.list({ prefix: ["prices"] })) {
@@ -104,6 +105,7 @@ export async function getHistoryByQuery(
   query: string,
 ): Promise<{ query: string; products: PriceRecord[] }[]> {
   const kv = await getKv();
+  if (!kv) return [];
   const results: { query: string; products: PriceRecord[] }[] = [];
   const queryProducts: PriceRecord[] = [];
 
@@ -125,6 +127,7 @@ export async function getHistoryByQuery(
 
 export async function getTrackedProducts(): Promise<string[]> {
   const kv = await getKv();
+  if (!kv) return [];
   const names = new Set<string>();
 
   for await (const entry of kv.list({ prefix: ["prices"] })) {
