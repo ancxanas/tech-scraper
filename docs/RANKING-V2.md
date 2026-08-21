@@ -645,6 +645,59 @@ against `models.ts` which says 4s Gen 2. That entry should be corrected.
 
 ---
 
+## Round 10: the false-positive that reached #1
+
+Re-running the full pipeline after the rate limit expired produced this:
+
+```
+#1  Peace SC26 5G  —  Apple A17 Pro  —  AnTuTu 1,600,000  —  conf 80%
+```
+
+A Rs 8,988 white-label handset credited with an iPhone 15 Pro chipset, ranked
+first, at high confidence. The cause was in the resolved page text:
+
+```
+"… FREE delivery Wed, 26 Aug Feedback Aulumu A17 for iPhone 17 Pro Max
+ Magnetic Thermal Case | CoolHyper …"
+```
+
+An Amazon recommendation carousel. The bare alias `"a17"` matched a phone case's
+brand name.
+
+This is the sharpest illustration so far of the project's recurring theme: _more
+data is not automatically better data_. Round 8 widened the input to the whole
+page, and the wider input carried other products' names into the spec extractor.
+
+Two fixes, both general rather than patching the one symptom:
+
+1. **Apple aliases now require the vendor word.** `"apple a17"`, `"a17 bionic"`
+   and `"a17 pro"` match; bare `"a17"` no longer exists as an alias.
+2. **Any vendor-less alias requires processor context.** `"T7250"`, `"4 gen 2"`,
+   `"g99"` only resolve when words like _processor_, _chipset_, _octa-core_ or
+   _GHz_ appear within 70 characters. That keeps the Flipkart abbreviation
+   working ("128 GB ROM T7250 | Octa Core Processor") while rejecting the same
+   token loose in unrelated copy.
+
+Both are pinned by regression tests using the exact carousel text.
+
+### Two operational findings
+
+**The model index must not live in `.cache/`.** Tooling treats that directory as
+disposable and wipes it, which silently disabled the entire spec database — the
+run reported "0 measured benchmarks" with no error. The index is now committed
+at `data/gsmarena-index.json` (1,179 models, 88 KB), so a fresh clone works
+without a rebuild.
+
+**The rate limit is tighter than the work required.** Building the index costs
+~55s of paced requests, and doing that plus resolving a 48-product catalogue in
+the same hour reliably earns an HTTP 429. The mitigation is already in place —
+resolved models are cached permanently, and a 429 aborts cleanly and resumes on
+the next run — but populating a fresh catalogue from the free transport is a
+patience exercise. `--allow-paid` routes through Web Unlocker for anyone who
+would rather spend a few requests than wait.
+
+---
+
 ## What is still worth doing
 
 1. **Amazon PDPs need a transport.** Direct fetch gets a bot page, so Amazon

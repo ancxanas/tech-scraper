@@ -22,7 +22,13 @@
 import { fetchDirect, htmlToText } from "../lib/unlock.ts";
 
 const BASE = "https://www.gsmarena.com";
-const INDEX_PATH = ".cache/gsmarena-index.json";
+/**
+ * Committed, not cached. The index costs ~80s of paced requests to rebuild and
+ * risks a rate limit, so it ships with the repo and the tool works on a fresh
+ * clone. (It also must not live under .cache/, which tooling treats as
+ * disposable — losing it silently disabled the whole spec database.)
+ */
+const INDEX_PATH = "data/gsmarena-index.json";
 /** Be a good citizen: this is someone else's server. */
 const DELAY_MS = 1200;
 

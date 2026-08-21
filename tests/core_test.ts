@@ -1282,3 +1282,37 @@ Deno.test("model names are normalised across marketplace and database spellings"
     normaliseModel("samsung galaxy m07"),
   );
 });
+
+// -------------------------------------------- chipset matching needs context
+
+Deno.test("REGRESSION: a case brand name must not be read as a chipset", () => {
+  // Real failure. An Amazon recommendation carousel on a Rs 8,988 handset's
+  // page contained "Aulumu A17 for iPhone 17 Pro Max Magnetic Thermal Case".
+  // The bare "a17" alias matched, the phone was credited with an Apple A17 Pro
+  // and an AnTuTu of 1,600,000, and it ranked #1 at 80% confidence.
+  const carousel =
+    "P: null Rs 9,999.00 FREE delivery Wed, 26 Aug Feedback Aulumu A17 for " +
+    "iPhone 17 Pro Max Magnetic Thermal Case | CoolHyper | with stand";
+  assertEquals(matchSoc(carousel), null);
+
+  // The genuine article still resolves.
+  assertEquals(matchSoc("Chipset Apple A17 Pro (3 nm)")?.name, "Apple A17 Pro");
+  assertEquals(
+    matchSoc("A17 Bionic hexa-core processor")?.name,
+    "Apple A17 Pro",
+  );
+});
+
+Deno.test("vendor-less chipset aliases require processor context", () => {
+  // Flipkart drops the vendor: "128 GB ROM T7250 | Octa Core Processor".
+  assertEquals(
+    matchSoc("4 GB RAM | 64 GB ROM T7250 | Octa Core Processor | 1.8 GHz")
+      ?.name,
+    "Unisoc T7250",
+  );
+  // The same token loose in unrelated copy must not count.
+  assertEquals(matchSoc("Order reference T7250 shipped on Tuesday"), null);
+  assertEquals(matchSoc("Model number G99 packaging box"), null);
+  // With context, it does.
+  assertEquals(matchSoc("Processor Helio G99 octa-core")?.name, "Helio G99");
+});

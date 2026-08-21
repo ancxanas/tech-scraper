@@ -518,7 +518,7 @@ export const SOCS: SocEntry[] = [
     nm: 3,
     year: 2024,
     has5g: true,
-    aliases: ["a18 bionic", "a18 pro", "a18"],
+    aliases: ["apple a18 pro", "apple a18", "a18 bionic", "a18 pro"],
   },
   {
     name: "Apple A17 Pro",
@@ -529,7 +529,7 @@ export const SOCS: SocEntry[] = [
     nm: 3,
     year: 2023,
     has5g: true,
-    aliases: ["a17 pro", "a17"],
+    aliases: ["apple a17 pro", "apple a17", "a17 bionic", "a17 pro"],
   },
   {
     name: "Apple A16 Bionic",
@@ -540,7 +540,7 @@ export const SOCS: SocEntry[] = [
     nm: 4,
     year: 2022,
     has5g: true,
-    aliases: ["a16 bionic", "a16"],
+    aliases: ["apple a16", "a16 bionic"],
   },
   {
     name: "Apple A15 Bionic",
@@ -551,7 +551,7 @@ export const SOCS: SocEntry[] = [
     nm: 5,
     year: 2021,
     has5g: true,
-    aliases: ["a15 bionic", "a15"],
+    aliases: ["apple a15", "a15 bionic"],
   },
 
   // ------------------------------------------------------------------ Google
@@ -778,9 +778,6 @@ export interface SocMatch {
   ambiguous: boolean;
 }
 
-const VENDOR_WORDS =
-  /snapdragon|dimensity|helio|exynos|unisoc|tensor|bionic|mediatek|qualcomm/;
-
 /** Find a SoC mentioned anywhere in a blob of text, with match quality. */
 export function matchSocDetailed(text: string): SocMatch | null {
   const soc = matchSoc(text);
@@ -792,6 +789,20 @@ export function matchSocDetailed(text: string): SocMatch | null {
   const ambiguous = hit ? !VENDOR_WORDS.test(hit) : true;
   return { soc, ambiguous };
 }
+
+/**
+ * Words that establish we are looking at a chipset, not a coincidence.
+ *
+ * Product pages carry recommendation carousels, and a bare alias will happily
+ * match inside another product's name — "Aulumu A17 for iPhone 17 Pro Max
+ * Magnetic Thermal Case" once awarded a Rs 8,988 handset an Apple A17 Pro and
+ * an AnTuTu of 1.6M, putting it top of the ranking.
+ */
+const VENDOR_WORDS =
+  /snapdragon|dimensity|helio|exynos|unisoc|tensor|bionic|mediatek|qualcomm|apple/;
+
+const CHIPSET_CONTEXT =
+  /processor|chipset|cpu|octa[- ]?core|quad[- ]?core|soc\b|ghz|snapdragon|dimensity|helio|exynos|unisoc|tensor|bionic/i;
 
 /** Find a SoC mentioned anywhere in a blob of text. Longest alias wins. */
 export function matchSoc(text: string): SocEntry | null {
@@ -815,7 +826,15 @@ export function matchSoc(text: string): SocEntry | null {
     const after = hay[idx + alias.length];
     const isBoundary = (c: string | undefined) =>
       c === undefined || /[^a-z0-9]/.test(c);
-    if (isBoundary(before) && isBoundary(after)) return soc;
+    if (!isBoundary(before) || !isBoundary(after)) continue;
+
+    // A vendor-less alias ("4 gen 2", "t7250") only counts when the surrounding
+    // text is actually talking about a processor.
+    if (!VENDOR_WORDS.test(alias)) {
+      const window = hay.slice(Math.max(0, idx - 70), idx + alias.length + 70);
+      if (!CHIPSET_CONTEXT.test(window)) continue;
+    }
+    return soc;
   }
   return null;
 }
