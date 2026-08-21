@@ -303,17 +303,90 @@ codebase from 11,333 LOC to 7,877, with test count reflecting only live code.
 
 ---
 
+## Round 4: phones only, on purpose
+
+The generic category machinery was quietly dangerous. Asked for laptops, the
+pipeline produced this:
+
+```
+#1 HP Victus Gaming Laptop, AMD Ryzen 5 7535HS...  ₹54,990  score 43  conf 20%
+     perf 45  display 45  battery 45  camera 45
+```
+
+Three failures in one line. Two of three laptops were dropped because their
+titles lack the literal word "laptop", every dimension is the imputation default
+because there is no CPU/GPU benchmark table, and it is scoring a laptop on
+_camera_. That is the original sin of this project — confident output built on
+nothing — reappearing in a new category.
+
+So the tool now ranks phones and declines everything else:
+
+```
+$ deno task rank "best earbuds under 2000" --replay runs/x
+  This tool ranks phones. "best earbuds under 2000" looks like a search for earbuds.
+  Only phones are ranked. Try: "best phones under 15000".
+```
+
+`find` refuses _before_ spending a request. The classifier still recognises
+earbuds, laptops, TVs and accessories — it has to, in order to reject them and
+to keep the funnel readable ("11 earbuds filtered out" is how the Reliance URL
+bug was caught in the first place) — but only `phone` is rankable.
+
+Audio support and `src/knowledge/audio.ts` were removed with it (~500 LOC),
+along with the dual scoring paths in `rank.ts`, `extract.ts` and the UI. One
+component set, one weight map, no possibility of the two disagreeing (which had
+already produced NaN scores across every headphone once).
+
+Model-hint extraction was also fixed while narrowing. It previously resolved
+"poco m7 pro 5g" to `"pro 5g"`, which would match any Pro 5G phone from any
+brand. A model code is now a token mixing letters and digits ("m7", "z10",
+"m06", "wh-1000xm5") or a word plus a number ("note 14"), with marketing
+suffixes excluded, and short codes require the brand to agree.
+
+## Round 4: the knowledge base, and an honest result
+
+The KB went from 30 to 65 phones and the SoC table from 50 to 65 chipsets, with
+integrity tests (no duplicate keys, every declared chipset resolves, values in
+plausible ranges, and a Pro variant never resolving to its non-Pro sibling).
+
+**It did not improve the sub-₹15,000 fixture at all.** Coverage there is still
+10 of 48 ranked products (21%), average confidence 41% — exactly what it was
+before the additions. The reason is visible in the data:
+
+```
+KB matched:        POCO M7 Pro/M7/C75, Samsung M06/M07/F07, realme narzo 80 Lite
+Chipset unknown:   Itel Zeno 200, Peace I17 Air, ringme BOLD 17 PRO, Peace SC26,
+                   Maplin SC26, Ai+ Pulse 2, Peace I-Ultra, itel Zeno 100 …
+```
+
+The Indian sub-₹15k shelf is dominated by very recent releases and white-label
+brands that no static KB will ever cover. The models added this round — Redmi
+Note 13 Pro, POCO X6/X7 Pro, Galaxy A25/A35/A55, Pixel 8a, Nothing Phone (2a) —
+live in the ₹15k–45k bracket and simply do not appear in a "under 15000" search.
+They should pay off on mid-range queries; that is untested, because there is no
+captured payload for one.
+
+The conclusion is that **KB growth is the wrong lever for the budget segment**.
+For phones nobody has heard of, `--enrich` (fetch the actual product page for
+the finalists) is the only thing that will work, and the confidence figure is
+doing its job in the meantime by marking those results as unverified.
+
+---
+
 ## What is still worth doing
 
-1. **Grow the model KBs.** `src/knowledge/models.ts` covers ~30 phones and
-   `audio.ts` ~16 audio models. Everything else ranks with `conf < 50%` and says
-   so. Highest-leverage improvement available, and it costs nothing but data
-   entry.
-2. **Reliance and Tata CLiQ have no verified payload.** Their URL builders are
+1. **Validate `--enrich` against real listings.** It is the only viable answer
+   for the white-label sub-₹15k phones the KB cannot cover, and it has never
+   been run against a live product page. Budget a handful of Unlocker requests
+   for the top 5 of one query.
+2. **Capture a mid-range payload.** The 35 models added in round 4 target
+   ₹15k–45k and are completely unexercised by the current fixtures. One
+   `find "best phones under 30000"` run would prove or disprove the KB's value.
+3. **Reliance and Tata CLiQ have no verified payload.** Their URL builders are
    fixed but unproven — Reliance's only capture is accessories from the wrong
    URL, Tata CLiQ's is a crawler error. Start with
    `deno task doctor --query "best phones under 15000"` to eyeball the URLs for
    free, then `deno task heal reliance --dry-run` to see the diagnosis without
    changing anything.
-3. **Amazon pagination.** The prebuilt dataset is driven by keyword only, so
+4. **Amazon pagination.** The prebuilt dataset is driven by keyword only, so
    `--pages` has less effect there than on the collector platforms.

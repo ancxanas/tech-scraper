@@ -28,10 +28,11 @@ import {
 } from "../src/core/extract.ts";
 import { groupListings } from "../src/core/group.ts";
 import { rankCandidates } from "../src/core/rank.ts";
-import { parseIntentRules } from "../src/core/intent.ts";
+import { parseIntentRules, unsupportedReason } from "../src/core/intent.ts";
 import { loadRun } from "../src/core/replay.ts";
 import { runPipeline } from "../src/core/pipeline.ts";
 import { matchSoc } from "../src/knowledge/soc.ts";
+import { lookupModel, PHONE_MODELS } from "../src/knowledge/models.ts";
 import { buildPrompt, classifyFailure } from "../src/commands/heal.ts";
 
 const FIXTURE = "tests/fixtures/run-phones-15000";
@@ -561,75 +562,6 @@ Deno.test("model hints parse for alphanumeric part numbers", () => {
   assertExists(parseIntentRules("redmi note 14 5g").modelHint);
 });
 
-Deno.test("naming a model puts that model first, alternatives after", async () => {
-  const batches = await loadRun([
-    "tests/fixtures/run-sony-wh1000xm5/amazon.json",
-    "tests/fixtures/run-sony-wh1000xm5/flipkart.json",
-  ]);
-  const intent = parseIntentRules("sony wh-1000xm5");
-  const { ranked } = runPipeline("sony wh-1000xm5", intent, batches);
-
-  assert(ranked.length > 1);
-  assert(
-    /1000xm5/i.test(ranked[0].modelName),
-    `expected the XM5 first, got ${ranked[0].modelName}`,
-  );
-  assertEquals(ranked[0].matchesRequestedModel, true);
-  assert(ranked.slice(1).some((r) => r.badges.includes("ALTERNATIVE")));
-});
-
-Deno.test("category is inferred from results when the query omits it", async () => {
-  const batches = await loadRun([
-    "tests/fixtures/run-sony-wh1000xm5/amazon.json",
-  ]);
-  const intent = parseIntentRules("sony wh-1000xm5");
-  assertEquals(intent.category, "unknown");
-  const result = runPipeline("sony wh-1000xm5", intent, batches);
-  assertEquals(result.intent.category, "headphone");
-});
-
-Deno.test("headphones are scored on audio dimensions, never on NaN", async () => {
-  const batches = await loadRun([
-    "tests/fixtures/run-sony-wh1000xm5/amazon.json",
-  ]);
-  const intent = parseIntentRules("sony wh-1000xm5 headphones");
-  const { ranked } = runPipeline("sony wh-1000xm5 headphones", intent, batches);
-
-  for (const r of ranked) {
-    assert(
-      Number.isFinite(r.score.total),
-      `${r.modelName} total=${r.score.total}`,
-    );
-    assert(Number.isFinite(r.score.specScore));
-  }
-  // The XM5 has the best spec sheet in this set; it must out-spec the CH520
-  // even though the CH520 is far better value.
-  const xm5 = ranked.find((r) => /1000xm5/i.test(r.modelName))!;
-  const ch520 = ranked.find((r) => /ch520/i.test(r.modelName))!;
-  assertExists(xm5);
-  assertExists(ch520);
-  assert(
-    xm5.score.specScore > ch520.score.specScore,
-    `XM5 spec ${xm5.score.specScore} should beat CH520 ${ch520.score.specScore}`,
-  );
-  assert(ch520.score.valueScore > xm5.score.valueScore);
-});
-
-Deno.test("audio specs come from the audio knowledge base", async () => {
-  const batches = await loadRun([
-    "tests/fixtures/run-sony-wh1000xm5/amazon.json",
-  ]);
-  const intent = parseIntentRules("sony wh-1000xm5 headphones");
-  const { ranked } = runPipeline("sony wh-1000xm5 headphones", intent, batches);
-  const xm5 = ranked.find((r) => /1000xm5/i.test(r.modelName))!;
-  assertEquals(xm5.specs.ancType, "hybrid-anc");
-  assertEquals(xm5.specs.batteryHours, 30);
-  assert(xm5.specs.codecs?.includes("LDAC"));
-  assertEquals(xm5.specs.formFactor, "over-ear");
-});
-
-// ------------------------------------------------------ price history in rank
-
 Deno.test("recorded history sharpens the deal score", async () => {
   const batches = await loadRun([FIXTURE]);
   const intent = parseIntentRules("best phones under 15000");
@@ -782,4 +714,145 @@ Deno.test("heal prompts name the specific fault, not a generic ask", () => {
   );
   assert(missing.includes("120"));
   assert(missing.includes("66"));
+});
+
+// --------------------------------------------------- phones only, on purpose
+
+Deno.test("non-phone queries are declined, not badly ranked", () => {
+  for (
+    const q of [
+      "best earbuds under 2000",
+      "sony wh-1000xm5 headphones",
+      "best gaming laptop under 80000",
+      "55 inch smart tv under 40000",
+      "smartwatch under 5000",
+    ]
+  ) {
+    const reason = unsupportedReason(parseIntentRules(q));
+    assertExists(reason, `expected "${q}" to be declined`);
+    assert(/ranks phones/.test(reason!));
+  }
+});
+
+Deno.test("phone queries are accepted", () => {
+  for (
+    const q of [
+      "best phones under 15000",
+      "samsung 5g phone under 20000",
+      "poco m7 pro 5g",
+      "phones under 10k",
+    ]
+  ) {
+    assertEquals(unsupportedReason(parseIntentRules(q)), null, q);
+  }
+});
+
+Deno.test("a bare model query is not mistaken for another category", () => {
+  // No category word at all — must not be declined on a guess.
+  assertEquals(unsupportedReason(parseIntentRules("iqoo z10 lite 5g")), null);
+});
+
+Deno.test("model hints resolve to the model code, not marketing suffixes", () => {
+  assertEquals(parseIntentRules("poco m7 pro 5g").modelHint, "m7");
+  assertEquals(parseIntentRules("iqoo z10 lite 5g").modelHint, "z10");
+  assertEquals(parseIntentRules("sony wh-1000xm5").modelHint, "wh-1000xm5");
+  assertEquals(parseIntentRules("redmi note 14 5g").modelHint, "note 14");
+  // A budget must never be read as a model.
+  assertEquals(parseIntentRules("best phones under 15000").modelHint, null);
+});
+
+Deno.test("naming a phone model floats it above better-value alternatives", async () => {
+  const batches = await loadRun([FIXTURE]);
+  const intent = parseIntentRules("poco m7 pro");
+  const { ranked } = runPipeline("poco m7 pro", intent, batches);
+
+  assert(ranked.length > 1);
+  assertEquals(ranked[0].matchesRequestedModel, true);
+  assert(/m7 pro/i.test(ranked[0].modelName), ranked[0].modelName);
+  assert(ranked.slice(1).some((r) => r.badges.includes("ALTERNATIVE")));
+});
+
+Deno.test("REGRESSION: audio payloads yield nothing for a phone query", async () => {
+  // The saved headphone run, asked a phone question. Every card must be
+  // filtered, and the funnel must say why.
+  const batches = await loadRun(["tests/fixtures/run-sony-wh1000xm5"]);
+  const result = runPipeline(
+    "best phones under 15000",
+    parseIntentRules("best phones under 15000"),
+    batches,
+  );
+  assertEquals(result.ranked.length, 0);
+  const reasons = Object.keys(
+    result.diagnostics.reduce<Record<string, number>>(
+      (acc, d) => ({ ...acc, ...d.rejectionReasons }),
+      {},
+    ),
+  );
+  assert(
+    reasons.some((r) => /headphone|earbuds|accessory|unknown/.test(r)),
+    reasons.join(", "),
+  );
+});
+
+// -------------------------------------------------- knowledge base integrity
+//
+// The KB is hand-maintained data, and a wrong entry corrupts ranking silently
+// (worse than a missing one, which just lowers confidence). These guard it.
+
+Deno.test("KB: no duplicate model keys", () => {
+  const seen = new Set<string>();
+  const dupes: string[] = [];
+  for (const m of PHONE_MODELS) {
+    if (seen.has(m.key)) dupes.push(m.key);
+    seen.add(m.key);
+    for (const a of m.aliases ?? []) {
+      if (seen.has(a)) dupes.push(a);
+      seen.add(a);
+    }
+  }
+  assertEquals(dupes, []);
+});
+
+Deno.test("KB: every declared chipset resolves in the SoC table", () => {
+  const unresolved = PHONE_MODELS
+    .filter((m) => m.soc && !matchSoc(m.soc))
+    .map((m) => `${m.key} -> ${m.soc}`);
+  assertEquals(unresolved, []);
+});
+
+Deno.test("KB: values are inside plausible ranges", () => {
+  for (const m of PHONE_MODELS) {
+    if (m.batteryMah !== undefined) {
+      assert(m.batteryMah >= 2000 && m.batteryMah <= 8000, `${m.key} battery`);
+    }
+    if (m.chargingW !== undefined) {
+      assert(m.chargingW >= 5 && m.chargingW <= 300, `${m.key} charging`);
+    }
+    if (m.refreshHz !== undefined) {
+      assert([60, 90, 120, 144, 165].includes(m.refreshHz), `${m.key} refresh`);
+    }
+    if (m.inches !== undefined) {
+      assert(m.inches >= 4 && m.inches <= 8, `${m.key} size`);
+    }
+    if (m.mainCameraMp !== undefined) {
+      assert(m.mainCameraMp >= 5 && m.mainCameraMp <= 250, `${m.key} camera`);
+    }
+    if (m.osUpgrades !== undefined) {
+      assert(m.osUpgrades >= 0 && m.osUpgrades <= 8, `${m.key} updates`);
+    }
+  }
+});
+
+Deno.test("KB: a Pro variant never resolves to its non-Pro sibling", () => {
+  const pairs: Array<[string, string]> = [
+    ["POCO X6 Pro 5G (Black, 256 GB) (8 GB RAM)", "poco x6 pro 5g"],
+    ["POCO X6 5G (Blue, 128 GB) (8 GB RAM)", "poco x6 5g"],
+    ["Redmi Note 13 Pro+ 5G (Fusion Purple, 256 GB)", "redmi note 13 pro+ 5g"],
+    ["Redmi Note 13 5G (Arctic White, 128 GB)", "redmi note 13 5g"],
+    ["POCO M7 Pro 5G (Olive Twilight, 128 GB)", "poco m7 pro 5g"],
+    ["POCO M7 5G (Ocean Blue, 128 GB)", "poco m7 5g"],
+  ];
+  for (const [title, expected] of pairs) {
+    assertEquals(lookupModel(title)?.key, expected, title);
+  }
 });

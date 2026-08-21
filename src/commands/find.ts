@@ -11,7 +11,11 @@ import { colors } from "@cliffy/ansi/colors";
 import { ALL_ENABLED, type Platform, PLATFORMS } from "../config.ts";
 import { collectRaw, searchTerm } from "../core/collect.ts";
 import { runPipeline } from "../core/pipeline.ts";
-import { describeIntent, parseIntentRules } from "../core/intent.ts";
+import {
+  describeIntent,
+  parseIntentRules,
+  unsupportedReason,
+} from "../core/intent.ts";
 import { runDirFor, saveRun } from "../core/replay.ts";
 import { renderFull } from "../ui/render.ts";
 import { enrichTop } from "../core/enrich.ts";
@@ -93,6 +97,18 @@ export const findCommand = new Command()
     const platforms = parsePlatforms(options.platforms);
     let intent = parseIntentRules(query);
     intent = await maybeEnhanceIntent(intent);
+
+    // Refuse before spending a single request, not after.
+    const unsupported = unsupportedReason(intent);
+    if (unsupported) {
+      console.error(colors.yellow(`\n  ${unsupported}`));
+      console.error(
+        colors.dim(
+          '  Phone specs, benchmarks and value scoring are the only thing it does well,\n  so it declines rather than guess. Try: "best phones under 15000".\n',
+        ),
+      );
+      Deno.exit(2);
+    }
 
     if (!options.json) {
       console.log("");

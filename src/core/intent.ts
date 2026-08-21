@@ -9,6 +9,13 @@
 import type { Category, RankIntent } from "./types.ts";
 import { BRANDS } from "./extract.ts";
 
+/**
+ * This tool ranks phones only. These patterns exist so we can recognise a
+ * non-phone query and decline it, rather than imputing a spec sheet and
+ * presenting a confident-looking ranking built on nothing. (Ask it for laptops
+ * with the generic machinery and you get every dimension scored 45 at 20%
+ * confidence, including "camera" — see docs/RANKING-V2.md.)
+ */
 const CATEGORY_WORDS: Array<[RegExp, Category]> = [
   [/\b(phones?|smartphones?|mobiles?|handsets?)\b/i, "phone"],
   [/\b(earbuds?|tws|airdopes|neckbands?)\b/i, "earbuds"],
@@ -150,18 +157,48 @@ export function parseIntentRules(query: string): RankIntent {
   }
 
   // A specific model mention ("redmi note 14", "wh-1000xm5") tightens matching.
-  // Model codes come in two shapes: alphanumeric part numbers ("wh-1000xm5",
-  // "wf-c710n") and word+number names ("note 14 5g", "narzo 80 lite"). The old
-  // pattern required the code to end on a word boundary after optional letters,
-  // so "wh-1000xm5" never matched — the single most common way users name a
-  // specific product.
-  const partNumber = lower.match(
-    /\b([a-z]{1,4}[-\s]?\d{2,4}[a-z]{0,3}\d{0,2})\b/i,
-  )?.[1];
-  const wordModel = lower.match(
-    /\b([a-z]+\s+\d{1,4}[a-z]*(?:\s*(?:pro|plus|ultra|lite|max|5g))?)\b/i,
-  )?.[1];
-  const modelHint = partNumber ?? wordModel ?? null;
+  // A model code is a token mixing letters and digits ("m7", "z10", "m06",
+  // "wh-1000xm5"), or a word followed by a number ("note 14"). Marketing
+  // suffixes are not model codes, which the previous pattern got wrong:
+  // "poco m7 pro 5g" resolved to "pro 5g" and would match any Pro 5G phone.
+  const GENERIC_TOKENS = new Set([
+    "5g",
+    "4g",
+    "pro",
+    "plus",
+    "max",
+    "ultra",
+    "lite",
+    "mini",
+    "neo",
+    "prime",
+    "power",
+    "gb",
+    "tb",
+  ]);
+
+  let modelHint: string | null = null;
+  const tokens = lower.split(/\s+/).map((t) => t.replace(/[^a-z0-9-]/g, ""));
+  for (const tok of tokens) {
+    if (!tok || GENERIC_TOKENS.has(tok)) continue;
+    if (/[a-z]/.test(tok) && /\d/.test(tok) && tok.length >= 2) {
+      // A bare budget like "15000" has no letters, so it cannot land here.
+      modelHint = tok;
+      break;
+    }
+  }
+  if (!modelHint) {
+    const worded = lower.match(/\b([a-z]{3,}\s+\d{1,4})\b/);
+    // Reject "under 15000" and friends.
+    if (
+      worded &&
+      !/^(under|below|above|over|around|about|within|upto|max|min)\b/.test(
+        worded[1],
+      )
+    ) {
+      modelHint = worded[1];
+    }
+  }
 
   return {
     raw: q,
@@ -177,6 +214,24 @@ export function parseIntentRules(query: string): RankIntent {
       ? null
       : modelHint,
   };
+}
+
+const CATEGORY_LABEL: Partial<Record<Category, string>> = {
+  earbuds: "earbuds",
+  headphone: "headphones",
+  laptop: "laptops",
+  tablet: "tablets",
+  smartwatch: "smartwatches",
+  tv: "TVs",
+  camera: "cameras",
+  accessory: "accessories",
+};
+
+/** null when the query is rankable; otherwise a human-readable refusal. */
+export function unsupportedReason(i: RankIntent): string | null {
+  if (i.category === "phone" || i.category === "unknown") return null;
+  const label = CATEGORY_LABEL[i.category] ?? i.category;
+  return `This tool ranks phones. "${i.raw}" looks like a search for ${label}.`;
 }
 
 export function describeIntent(i: RankIntent): string {

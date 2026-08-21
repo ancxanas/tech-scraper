@@ -10,7 +10,7 @@ import { Command } from "@cliffy/command";
 import { colors } from "@cliffy/ansi/colors";
 import { loadRun } from "../core/replay.ts";
 import { runPipeline } from "../core/pipeline.ts";
-import { parseIntentRules } from "../core/intent.ts";
+import { parseIntentRules, unsupportedReason } from "../core/intent.ts";
 import { renderFull } from "../ui/render.ts";
 
 export const rankCommand = new Command()
@@ -61,6 +61,17 @@ export const rankCommand = new Command()
     }
 
     const intent = parseIntentRules(query);
+    const unsupported = unsupportedReason(intent);
+    if (unsupported) {
+      console.error(colors.yellow(`\n  ${unsupported}`));
+      console.error(
+        colors.dim(
+          '  Only phones are ranked. Try: "best phones under 15000".\n',
+        ),
+      );
+      Deno.exit(2);
+    }
+
     const result = runPipeline(query, intent, batches, {
       inStockOnly: options.inStockOnly,
       budgetTolerance: (options.budgetTolerance ?? 0) / 100,

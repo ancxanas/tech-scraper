@@ -9,9 +9,10 @@ using Bright Data Scraper Studio.
 
 ## What it does
 
-**v2 ranking engine** (see [docs/RANKING-V2.md](docs/RANKING-V2.md)) — the query
-is understood, products are classified and spec-matched, variants are grouped,
-and results are ranked on value rather than on price alone:
+**Phones, ranked properly.** This tool does one category and declines the rest —
+see [docs/RANKING-V2.md](docs/RANKING-V2.md) for why. The query is understood,
+products are classified and spec-matched, variants are grouped, and results are
+ranked on value rather than on price alone:
 
 ```bash
 deno task find "best phones under 15000"                  # live scrape + rank

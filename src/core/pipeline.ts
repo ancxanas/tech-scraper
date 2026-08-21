@@ -96,6 +96,9 @@ export function runPipeline(
     const inferred = inferCategory(analyzedByBatch.flatMap((b) => b.analyzed));
     if (inferred !== "unknown") intent = { ...intent, category: inferred };
   }
+  // Only phones are ranked. If the query turned out to be for something else,
+  // every candidate will be gated out below and the caller reports why.
+  const rankableIntent: RankIntent = { ...intent, category: "phone" };
 
   for (const { batch, stats, listings, analyzed } of analyzedByBatch) {
     const rejectionReasons: Record<string, number> = {};
@@ -139,7 +142,11 @@ export function runPipeline(
   }
 
   const candidates = groupListings(allAnalyzed);
-  const { ranked, rejected } = rankCandidates(candidates, intent, options);
+  const { ranked, rejected } = rankCandidates(
+    candidates,
+    rankableIntent,
+    options,
+  );
 
   // Attribute survivors back to their source platforms for the coverage table.
   const survivedByPlatform = new Map<string, number>();

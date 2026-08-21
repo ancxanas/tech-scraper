@@ -1,5 +1,13 @@
 /** Core data model for the ranking pipeline. */
 
+/**
+ * This tool ranks phones. Everything else exists in this union only so the
+ * classifier can name what it rejected — "11 earbuds filtered out" is far more
+ * useful than "11 items filtered out", and it is how we caught the Reliance
+ * collector returning audio for a phone query.
+ *
+ * `phone` is the only rankable value. See RANKABLE below.
+ */
 export type Category =
   | "phone"
   | "tablet"
@@ -11,6 +19,9 @@ export type Category =
   | "camera"
   | "accessory"
   | "unknown";
+
+/** The single category this tool is willing to rank. */
+export const RANKABLE: Category = "phone";
 
 export type PlatformId =
   | "flipkart"
@@ -65,22 +76,6 @@ export interface Specs {
   osUpgrades: number | null;
   releaseYear: number | null;
   colour: string | null;
-
-  // ---- audio (headphones / earbuds) ----
-  /** "hybrid-anc" | "anc" | "enc" | "passive" */
-  ancType: string | null;
-  /** Rated playback hours, ANC on where the vendor states it. */
-  batteryHours: number | null;
-  driverMm: number | null;
-  /** LDAC, aptX, AAC, SBC, LHDC... */
-  codecs: string[] | null;
-  bluetoothVersion: number | null;
-  /** "over-ear" | "on-ear" | "in-ear" | "tws" | "neckband" */
-  formFactor: string | null;
-  weightG: number | null;
-  multipoint: boolean | null;
-  /** Vendor/reviewer-grade sound signature note, when known. */
-  soundGrade: number | null;
 }
 
 export type SpecSource = "title" | "slug" | "kb" | "enrich" | "inferred";
@@ -202,6 +197,11 @@ export interface PipelineResult {
 /** What the user actually asked for, after intent parsing. */
 export interface RankIntent {
   raw: string;
+  /**
+   * What the user appears to be shopping for. Anything other than "phone"
+   * means we decline the query rather than rank it badly — see the laptop
+   * experiment in docs/RANKING-V2.md.
+   */
   category: Category;
   brands: string[];
   excludeBrands: string[];
