@@ -251,6 +251,13 @@ export function detailCards(ranked: RankedCandidate[], count: number): string {
       if (co.deliveryBy) bits.push(colors.dim(`delivery by ${co.deliveryBy}`));
       if (co.noCostEmi) bits.push(colors.dim("no-cost EMI"));
       if (bits.length) out.push(`  ${bits.join("  ·  ")}`);
+      if (co.sampledAt) {
+        const age = ageLabel(co.sampledAt);
+        // Under half an hour the sample is as live as the site gets.
+        if (age && Date.now() - Date.parse(co.sampledAt) > 30 * 60_000) {
+          out.push(colors.dim(`  page price sampled ${age} ago`));
+        }
+      }
       if (co.pincodeBlocked) {
         out.push(
           colors.yellow("  offer/delivery unavailable at the default pincode"),

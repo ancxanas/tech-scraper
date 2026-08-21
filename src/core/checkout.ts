@@ -9,6 +9,8 @@ export interface CheckoutInfo {
   exchangeUpTo: number | null;
   noCostEmi: boolean;
   pincodeBlocked: boolean;
+  /** When the page this was read from was fetched. Prices move; a reading without a time is a rumor. */
+  sampledAt?: string;
 }
 
 const EMPTY: CheckoutInfo = {

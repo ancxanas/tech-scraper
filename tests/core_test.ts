@@ -27,9 +27,9 @@ import {
   parseBeebomPage,
 } from "../src/knowledge/beebom.ts";
 import { toSpecs } from "../src/core/resolve.ts";
-import { loadRun } from "../src/core/replay.ts";
-import { capturedAtFor } from "../src/core/replay.ts";
-import { ageLabel } from "../src/core/spec-cache.ts";
+import { refreshPrices, reportRefreshDetail } from "../src/core/resolve.ts";
+import { ageLabel, SpecStore } from "../src/core/spec-cache.ts";
+import { capturedAtFor, loadRun } from "../src/core/replay.ts";
 import { renderFull } from "../src/ui/render.ts";
 import { buildCandidates, runPipeline } from "../src/core/pipeline.ts";
 import {
@@ -41,7 +41,6 @@ import {
 import { lookupModel, PHONE_MODELS } from "../src/knowledge/models.ts";
 import { hasCheckoutInfo, parseCheckout } from "../src/core/checkout.ts";
 import { extractSpecSection } from "../src/core/resolve.ts";
-import { SpecStore } from "../src/core/spec-cache.ts";
 import { reviewsUrlFor, summariseReviews } from "../src/core/reviews.ts";
 import { buildUrls, searchTerm } from "../src/core/collect.ts";
 import { canonicalUrl } from "../src/core/normalize.ts";
@@ -2232,4 +2231,64 @@ Deno.test("the report warns when replayed prices are old", async () => {
     diagnostics: false,
   });
   assert(!live.includes("prices captured"));
+});
+
+Deno.test("the cache can say when a sample was taken", () => {
+  const dir = Deno.makeTempDirSync();
+  try {
+    const store = new SpecStore(`${dir}/specs.json`);
+    const url = "https://www.flipkart.com/x/p/itm1?pid=P1";
+    store.setPrice(url, "28% 17,999 ₹12,951", "direct");
+    assertExists(store.priceFetchedAt(url));
+    assertEquals(store.priceFetchedAt("https://www.flipkart.com/y"), null);
+    store.set(url, "spec text", "direct");
+    assertExists(store.fetchedAt(url));
+    assertEquals(store.fetchedAt("https://www.flipkart.com/z"), null);
+  } finally {
+    Deno.removeSync(dir, { recursive: true });
+  }
+});
+
+Deno.test("a refreshed price reports when we sampled it", async () => {
+  // Real pages are big; the transport treats short bodies as blocks.
+  const filler = "x".repeat(3000);
+  const html =
+    `<html><body>${filler} Samsung Galaxy M17 5G (Moonlight Silver, 128 GB) (6 GB RAM) 4.4 | 1,525 28% 17,999 ₹12,951 +₹109 Protect Promise Fee</body></html>`;
+  const origFetch = globalThis.fetch;
+  globalThis.fetch =
+    (() =>
+      Promise.resolve(new Response(html, { status: 200 }))) as typeof fetch;
+  try {
+    const raws = [{
+      product_name:
+        "Samsung Galaxy M17 5G (Moonlight Silver, 128 GB) (6 GB RAM)",
+      selling_price: 12951,
+      product_url:
+        "https://www.flipkart.com/samsung-galaxy-m17-5g-moonlight-silver-128-gb/p/itmc3b8f7b511eca?pid=MOBHTEST1",
+    }];
+    const { listings } = normalizeBatch(raws, "flipkart");
+    const candidates = groupListings(listings.map((l) => analyze(l)));
+    const fresh = await refreshPrices(candidates, {
+      limit: 1,
+      mode: "direct",
+      pace: 0,
+    });
+    assertEquals(fresh.fetched, 1);
+    const seen = fresh.seen[0];
+    assertExists(seen.sampledAt);
+    const co = [...fresh.checkout.values()][0];
+    assertExists(co?.sampledAt);
+
+    const lines: string[] = [];
+    const origErr = console.error;
+    console.error = (...a: unknown[]) => lines.push(a.map(String).join(" "));
+    reportRefreshDetail(fresh);
+    console.error = origErr;
+    assert(
+      lines.join("\n").includes("sampled"),
+      "the verbose report must carry the sample time",
+    );
+  } finally {
+    globalThis.fetch = origFetch;
+  }
 });

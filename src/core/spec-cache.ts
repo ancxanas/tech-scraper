@@ -96,6 +96,21 @@ export class SpecStore {
     return null;
   }
 
+  /** When the cached price sample was fetched, if it is still fresh. */
+  priceFetchedAt(url: string): string | null {
+    const hit = this.#data.get(SpecStore.priceKey(url));
+    if (hit && Date.now() - Date.parse(hit.fetchedAt) < PRICE_TTL_MS) {
+      return hit.fetchedAt;
+    }
+    return null;
+  }
+
+  /** When the cached spec page was fetched. Spec entries live 30 days. */
+  fetchedAt(url: string): string | null {
+    const hit = this.#data.get(SpecStore.key(url));
+    return hit?.fetchedAt ?? null;
+  }
+
   setPrice(url: string, text: string, via: "direct" | "unlocker"): void {
     this.#data.set(SpecStore.priceKey(url), {
       text,

@@ -5,7 +5,7 @@ import {
   hasCheckoutInfo,
   parseCheckout,
 } from "./checkout.ts";
-import { SpecStore } from "./spec-cache.ts";
+import { ageLabel, SpecStore } from "./spec-cache.ts";
 import { canonicalUrl } from "./normalize.ts";
 import {
   type ReviewSummary,
@@ -234,6 +234,9 @@ export async function resolveSpecs(
     for (const l of c.listings) result.text.set(l.id, section);
     const checkout = parseCheckout(text);
     if (hasCheckoutInfo(checkout)) {
+      // A cached page was fetched some time ago; say when.
+      checkout.sampledAt = store.fetchedAt(sourceUrl) ??
+        new Date().toISOString();
       const want = canonicalUrl(sourceUrl);
       const from = c.listings.find((l) => canonicalUrl(l.url) === want) ??
         c.listings[0];
@@ -497,6 +500,7 @@ export interface RefreshResult {
     page: number | null;
     inStock: boolean | null;
     seller: string | null;
+    sampledAt?: string;
   }>;
 }
 
@@ -532,9 +536,11 @@ export async function refreshPrices(
     const url = c.best.url;
     if (!url) continue;
     try {
+      let sampledAt: string;
       let text = opts.useCache === true ? store.getPrice(url) : null;
       if (text) {
         out.cached++;
+        sampledAt = store.priceFetchedAt(url) ?? new Date().toISOString();
       } else {
         if (n > 0) await sleep(opts.pace ?? 900);
         const got = await fetchPage(
@@ -550,8 +556,10 @@ export async function refreshPrices(
         }
         out.fetched++;
         n++;
+        sampledAt = new Date().toISOString();
       }
       const checkout = parseCheckout(text);
+      checkout.sampledAt = sampledAt;
       if (checkout.pagePrice === null) out.unpriced++;
       out.seen.push({
         product: c.modelName,
@@ -559,6 +567,7 @@ export async function refreshPrices(
         page: checkout.pagePrice,
         inStock: checkout.inStock,
         seller: checkout.seller,
+        sampledAt,
       });
       if (!hasCheckoutInfo(checkout)) continue;
 
@@ -601,6 +610,7 @@ export async function refreshPrices(
 
 export function reportRefreshDetail(r: RefreshResult): void {
   for (const s of r.seen) {
+    const age = s.sampledAt ? ageLabel(s.sampledAt) : null;
     console.error(
       colors.dim(
         `    ${s.product.padEnd(34).slice(0, 34)} card ${
@@ -611,7 +621,9 @@ export function reportRefreshDetail(r: RefreshResult): void {
             : s.inStock === true
             ? "in stock"
             : "stock unknown"
-        }${s.seller ? ` · ${s.seller}` : ""}`,
+        }${s.seller ? ` · ${s.seller}` : ""}${
+          age ? ` · sampled ${age} ago` : ""
+        }`,
       ),
     );
   }
@@ -623,6 +635,10 @@ export function reportRefresh(r: RefreshResult): void {
   if (r.cached) parts.push(`${r.cached} still fresh`);
   if (r.unpriced) parts.push(`${r.unpriced} with no price on the page`);
   if (r.failed) parts.push(`${r.failed} unreadable`);
+  // Prices move between requests; a sample's age is part of the number.
+  const ages = r.seen
+    .map((s) => s.sampledAt ? Date.now() - Date.parse(s.sampledAt) : 0)
+    .filter((ms) => ms > 10 * 60_000);
   console.error(colors.dim(`  Prices: ${parts.join(", ")}`));
   for (const s of r.stockChanged.slice(0, 8)) {
     console.error(
@@ -638,6 +654,16 @@ export function reportRefresh(r: RefreshResult): void {
         `    ${c.product}: listed ₹${c.from.toLocaleString("en-IN")}, now ₹${
           c.to.toLocaleString("en-IN")
         } (${dir}${c.seller ? ` — ${c.seller} holds the buy box` : ""})`,
+      ),
+    );
+  }
+  const oldest = Math.max(0, ...ages);
+  if (oldest >= 10 * 60_000) {
+    console.error(
+      colors.yellow(
+        `    oldest price sample is ${
+          ageLabel(new Date(Date.now() - oldest).toISOString())
+        } old — treat the table as a snapshot, not a live feed`,
       ),
     );
   }
