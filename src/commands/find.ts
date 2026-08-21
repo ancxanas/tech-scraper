@@ -32,7 +32,21 @@ function parsePlatforms(raw?: string): Platform[] {
   const wanted = raw.split(",").map((s) => s.trim().toLowerCase());
   const valid = Object.keys(PLATFORMS) as Platform[];
   const picked = valid.filter((p) => wanted.includes(p));
-  return picked.length ? picked : ALL_ENABLED;
+  if (!picked.length) return ALL_ENABLED;
+
+  // Opting in to a platform that is off by default is allowed — but say why
+  // it is off, so a run that returns nothing from it is not a surprise.
+  for (const p of picked) {
+    const config = PLATFORMS[p];
+    if (!config.enabled && config.disabledReason) {
+      console.error(
+        colors.yellow(
+          `  ${config.name} is off by default: ${config.disabledReason}`,
+        ),
+      );
+    }
+  }
+  return picked;
 }
 
 /** Optional LLM pass; failures are non-fatal, rules already gave us an intent. */

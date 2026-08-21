@@ -219,7 +219,10 @@ export async function collectRaw(
   intent: RankIntent,
   options: CollectOptions,
 ): Promise<RawBatch[]> {
-  const enabled = platforms.filter((p) => PLATFORMS[p].enabled);
+  // No `enabled` filter here: the caller decides. Silently dropping a
+  // platform someone asked for with --platforms would be its own bug, and
+  // `enabled` only governs what the DEFAULT set contains.
+  const enabled = platforms;
   // Must exceed the collector's OWN polling budget (48 attempts x 10s = 480s),
   // or we abort a job that was still going to succeed. A live run lost all 168
   // Flipkart cards to this: Reliance finished at 287s and Tata CLiQ at 298s,

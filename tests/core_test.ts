@@ -30,6 +30,7 @@ import {
 import { groupListings } from "../src/core/group.ts";
 import { rankCandidates } from "../src/core/rank.ts";
 import { parseIntentRules, unsupportedReason } from "../src/core/intent.ts";
+import { ALL_ENABLED, PLATFORMS } from "../src/config.ts";
 import {
   beebomSlugs,
   nameMatches,
@@ -738,6 +739,30 @@ Deno.test("the set's fastest phone is never told it compromises on speed", async
       `fastest phone's verdict contradicts itself: ${best.verdict}`,
     );
   }
+});
+
+// ------------------------------------------------------------ platform defaults
+
+Deno.test("the default platform set contains only marketplaces that return phones", () => {
+  // Reliance returned 0 in-category products in every recorded run and Tata
+  // CLiQ 1 usable product from 35 cards, both costing minutes of wall time
+  // and BrightData credit. A coverage table claiming four platforms when two
+  // return nothing is worse than claiming two.
+  assertEquals(ALL_ENABLED.sort(), ["amazon", "flipkart"]);
+  for (const p of ["reliance", "tatacliq"] as const) {
+    assert(!PLATFORMS[p].enabled);
+    assert(
+      (PLATFORMS[p].disabledReason ?? "").length > 20,
+      `${p} is disabled without saying why`,
+    );
+  }
+});
+
+Deno.test("asking for a disabled platform still runs it", () => {
+  // `enabled` governs the default set only. Silently dropping a platform
+  // someone named on the command line would be its own bug.
+  const urls = buildUrls("reliance", parseIntentRules("phones under 15000"), 1);
+  assert(urls.length === 1 && urls[0].includes("reliancedigital.in/search"));
 });
 
 // -------------------------------------------------------------- benchmark scale

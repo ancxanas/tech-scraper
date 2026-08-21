@@ -26,6 +26,29 @@ variants, and lab measurements are the most accurate and the narrowest.
 | 3    | DXOMARK                              | 200, but device links are **JS-rendered**; flagship-only | not usable yet, and irrelevant sub-₹15k                |
 | 3    | DisplayMate                          | 200, article-based, no per-model addressing              | not machine-readable                                   |
 
+## Marketplaces
+
+| Platform         | Default | Why                                                                                                      |
+| ---------------- | ------- | -------------------------------------------------------------------------------------------------------- |
+| Flipkart         | **on**  | 156 cards, 70 in category, 88% field fill                                                                |
+| Amazon India     | **on**  | 162 cards, 138 in category, 88% field fill                                                               |
+| Reliance Digital | **off** | returns accessories, not phones — 0 in-category products in every recorded run                           |
+| Tata CLiQ        | **off** | its collector's product selector no longer matches the site — 1 usable product from 35 cards, after 276s |
+
+Both disabled platforms are BrightData-hosted collectors: this repo supplies the
+seed URL, and the extraction runs inside the collector. Tata CLiQ says so in its
+own error — `waiting for selector "a[id^="ProductModule-"]" failed` — which is
+the collector's selector, not ours. Reliance's seed URL is a correct search
+endpoint yet it returns earphones, so its collector appears to read an
+accessories rail instead of the product grid.
+
+Neither can be fixed from here. Repair them in the BrightData dashboard, then
+flip `enabled` in `src/config.ts`. Until then they are opt-in:
+
+    deno task find "best phones under 15000" --platforms flipkart,amazon,reliance
+
+which prints why the platform is off before running it.
+
 ## What each source is actually used for
 
 **Chipset and spec sheet, per phone.** GSMArena first, Beebom second. Neither is
