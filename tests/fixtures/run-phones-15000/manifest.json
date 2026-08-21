@@ -1,0 +1,36 @@
+{
+  "query": "best phones under 15000",
+  "capturedAt": "2026-08-21T04:36:37Z",
+  "capturedWith": "tech-scraper find --pages 1 (v1 pipeline)",
+  "note": "The original failing run that motivated the v2 rewrite. Ranked four Rs 1,599 earphones above every phone. Kept verbatim: 54 of the 120 Flipkart cards carry no title or price, Reliance returned audio accessories for a phone query, and Tata CLiQ returned a crawler error. Do not 'clean' these files \u2014 the pathologies are the point.",
+  "files": {
+    "flipkart.json": {
+      "platform": "flipkart",
+      "origin": "user upload data(5).json",
+      "note": "120 cards; 54 lack product_name and selling_price",
+      "records": 120,
+      "sha256": "967a001912c2"
+    },
+    "reliance.json": {
+      "platform": "reliance",
+      "origin": "user upload data(4).json",
+      "note": "22 cards, all audio accessories \u2014 the collector URL ignored the query",
+      "records": 22,
+      "sha256": "2b487e056d09"
+    },
+    "tatacliq.json": {
+      "platform": "tatacliq",
+      "origin": "user upload data(3).json",
+      "note": "single error object: wait_element_timeout",
+      "records": 1,
+      "sha256": "1588f9cb2ca6"
+    },
+    "amazon.json": {
+      "platform": "amazon",
+      "origin": "BrightData snapshot sd_mt2gj3m12b2l7r2jy9",
+      "note": "16 cards; keyword sent was 'phones under 15000 under 15000'",
+      "records": 16,
+      "sha256": "7566104fdfec"
+    }
+  }
+}

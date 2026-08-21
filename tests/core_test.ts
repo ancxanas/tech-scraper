@@ -1460,7 +1460,7 @@ Deno.test("--in-stock-only removes unavailable products entirely", () => {
 // ---------------------------------------------------------- review mining
 
 Deno.test("the ratings histogram is parsed", async () => {
-  const t = await Deno.readTextFile("tests/fixtures/pages/reviews-sample.txt");
+  const t = await Deno.readTextFile("tests/fixtures/reviews/poco-m7-5g.txt");
   const s = summariseReviews(t);
   assertEquals(s.totalRatings, 18971);
   assertEquals(s.totalReviews, 1065);
@@ -1470,7 +1470,7 @@ Deno.test("the ratings histogram is parsed", async () => {
 });
 
 Deno.test("polarity is judged per clause, not per review", async () => {
-  const t = await Deno.readTextFile("tests/fixtures/pages/reviews-sample.txt");
+  const t = await Deno.readTextFile("tests/fixtures/reviews/poco-m7-5g.txt");
   const s = summariseReviews(t);
   const by = (a: string) => s.aspects.find((x) => x.aspect === a);
 

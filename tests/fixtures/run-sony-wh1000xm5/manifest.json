@@ -1,0 +1,28 @@
+{
+  "query": "sony wh-1000xm5",
+  "capturedAt": "2026-08-19T11:25:24Z",
+  "capturedWith": "tech-scraper (v1 pipeline), preserved from eval-live/",
+  "note": "Audio capture, kept as a negative fixture. Used to prove a phone query returns nothing from it, and that accessories (cases, ear pads) are rejected rather than ranked.",
+  "files": {
+    "amazon.json": {
+      "platform": "amazon",
+      "records": 9,
+      "sha256": "88375adeddfe"
+    },
+    "flipkart.json": {
+      "platform": "flipkart",
+      "records": 5,
+      "sha256": "25d13b4a1376"
+    },
+    "reliance.json": {
+      "platform": "reliance",
+      "records": 4,
+      "sha256": "a5d19129b48a"
+    },
+    "tatacliq.json": {
+      "platform": "tatacliq",
+      "records": 16,
+      "sha256": "3302af949449"
+    }
+  }
+}
