@@ -2330,3 +2330,77 @@ Deno.test("an in-stock offer outranks a cheaper sold-out one", () => {
   assertEquals(c.best.inStock, true);
   assertEquals(c.offers[1].price, 9999); // kept, but demoted below buyable
 });
+
+Deno.test("structured data from another variant never becomes our price", () => {
+  // Buy box missing, but the page's ld+json describes a different sku.
+  const text =
+    "Samsung Galaxy M17 5G specs and details | LD_SKU=MOBHOTHER999 | LD_PRICE=10499 | LD_STOCK=InStock";
+  const guarded = parseCheckout(text, "MOBHGU9DYEBQW6NW");
+  assertEquals(guarded.pagePrice, null); // not our variant, not our price
+  assertEquals(guarded.inStock, null);
+
+  // Same sku: the fallback may speak for this listing.
+  const trusted = parseCheckout(
+    text.replace("MOBHOTHER999", "MOBHGU9DYEBQW6NW"),
+    "MOBHGU9DYEBQW6NW",
+  );
+  assertEquals(trusted.pagePrice, 10499);
+  assertEquals(trusted.inStock, true);
+
+  // No pid asked for (e.g. Amazon): behaviour unchanged.
+  assertEquals(parseCheckout(text).pagePrice, 10499);
+});
+
+Deno.test("a price refresh refuses to spend a fetch on an unparseable platform", async () => {
+  const raws = [
+    {
+      product_name: "Motorola G45 5G (Brilliant Green, 64 GB) (4 GB RAM)",
+      selling_price: 10997,
+      product_url: "https://www.amazon.in/dp/B0DGJ7M6XV",
+    },
+    {
+      product_name: "POCO M7 5G (Ocean Blue, 128 GB) (6 GB RAM)",
+      selling_price: 12499,
+      product_url:
+        "https://www.flipkart.com/poco-m7-5g-ocean-blue-128-gb/p/itm1?pid=MOBHTEST2",
+    },
+  ];
+  let billedCalls = 0;
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = ((input: RequestInfo | URL) => {
+    const u = String(input);
+    if (u.includes("flipkart")) {
+      return Promise.resolve(
+        new Response(
+          "x".repeat(3000) + " 28% 17,999 ₹12,499 +₹109 Protect Promise Fee",
+          { status: 200 },
+        ),
+      );
+    }
+    billedCalls++;
+    throw new Error("no paid call may reach Amazon");
+  }) as typeof fetch;
+  try {
+    const { listings } = normalizeBatch(raws, "flipkart" as never);
+    void listings;
+    const flipkartOnly = normalizeBatch([raws[1]], "flipkart").listings;
+    const amazonOnly = normalizeBatch([raws[0]], "amazon").listings;
+    const candidates = groupListings(
+      [...flipkartOnly, ...amazonOnly].map((l) => analyze(l)),
+    );
+    const fresh = await refreshPrices(candidates, {
+      limit: 5,
+      mode: "direct",
+      pace: 0,
+    });
+    assertEquals(fresh.skipped, 1);
+    assertEquals(fresh.fetched, 1);
+    assertEquals(billedCalls, 0);
+    assert(
+      fresh.seen.every((s) => s.product.includes("POCO")),
+      "skipped products must not appear in the report",
+    );
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});

@@ -32,7 +32,10 @@ function rupees(raw: string | undefined): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-export function parseCheckout(text: string): CheckoutInfo {
+export function parseCheckout(
+  text: string,
+  expectPid?: string | null,
+): CheckoutInfo {
   if (!text) return { ...EMPTY };
 
   const gap = "[\\s\\[\\](){}|]*";
@@ -52,7 +55,14 @@ export function parseCheckout(text: string): CheckoutInfo {
   // glyphs out of prose. pageToText appends it as LD_ tokens.
   // The visible buy box first: it is the offer you would actually be sold.
   // Structured data is the fallback for pages that do not render one.
-  const ldPrice = rupees(text.match(/LD_PRICE=(\d{3,8})/)?.[1]);
+  // Structured data for a DIFFERENT variant than the pid we asked for must
+  // not stand in when this one's buy box is missing - a redirect or a
+  // related-products block would otherwise be quoted as our price.
+  const ldSku = text.match(/LD_SKU=([^|\s]+)/)?.[1];
+  const ldTrusted = !ldSku || !expectPid || ldSku === expectPid;
+  const ldPrice = ldTrusted
+    ? rupees(text.match(/LD_PRICE=(\d{3,8})/)?.[1])
+    : null;
   const buyBox = rupees(priced?.[3]) ?? rupees(plain?.[1]);
   const pagePrice = buyBox ?? ldPrice;
   const pageMrp = rupees(priced?.[2]) ??
@@ -69,7 +79,7 @@ export function parseCheckout(text: string): CheckoutInfo {
     text.match(/Exchange offer(?:[^₹]{0,80})Up to ₹([\d,]+)/i)?.[1],
   );
 
-  const ldStock = text.match(/LD_STOCK=(\w+)/)?.[1];
+  const ldStock = ldTrusted ? text.match(/LD_STOCK=(\w+)/)?.[1] : undefined;
   const explicitlyOut = /Selected Colou?r:[^|]{0,40}?Out of stock/i.test(text);
   // A rendered buy box with a price means the listing is sellable, whatever a
   // sold-out seller's structured data says about their own offer.
@@ -82,11 +92,12 @@ export function parseCheckout(text: string): CheckoutInfo {
     ?.[1]?.trim() ?? null;
 
   const seller =
-    text.match(/LD_SELLER=([^|]{2,40}?)(?:\s{2,}|$)/)?.[1]?.trim() ??
+    (ldTrusted
+      ? text.match(/LD_SELLER=([^|]{2,40}?)(?:\s{2,}|$)/)?.[1]?.trim()
+      : undefined) ??
       text.match(
         /(?:Fulfilled by|Sold by|Seller)\s+([A-Za-z0-9][A-Za-z0-9 .&'-]{2,38}?)(?:\s+\d\.\d|\s*\||\s+See other sellers|\s{2,}|\s*$)/i,
-      )?.[1]?.trim() ??
-      text.match(/LD_SELLER=([^|]{2,40}?)(?:\s{2,}|$)/)?.[1]?.trim() ?? null;
+      )?.[1]?.trim() ?? null;
 
   return {
     pagePrice,
