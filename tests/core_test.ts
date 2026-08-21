@@ -38,7 +38,7 @@ import {
 import { toSpecs } from "../src/core/resolve.ts";
 import { loadRun } from "../src/core/replay.ts";
 import { buildCandidates, runPipeline } from "../src/core/pipeline.ts";
-import { matchSoc, matchSocDetailed } from "../src/knowledge/soc.ts";
+import { matchSoc, matchSocDetailed, SOCS } from "../src/knowledge/soc.ts";
 import { lookupModel, PHONE_MODELS } from "../src/knowledge/models.ts";
 import { hasCheckoutInfo, parseCheckout } from "../src/core/checkout.ts";
 import { SpecStore } from "../src/core/spec-cache.ts";
@@ -736,6 +736,43 @@ Deno.test("the set's fastest phone is never told it compromises on speed", async
     assert(
       !best.verdict.includes("compromises on raw speed"),
       `fastest phone's verdict contradicts itself: ${best.verdict}`,
+    );
+  }
+});
+
+// -------------------------------------------------------------- benchmark scale
+
+Deno.test("every chip is on the same benchmark scale", () => {
+  // A v10 figure among v11 ones is invisible by inspection and misranks every
+  // comparison that crosses it. v11 puts even the slowest chip we track above
+  // 100k and the fastest under 3M, so anything outside that is a version slip.
+  for (const soc of SOCS) {
+    assert(
+      soc.antutu >= 100_000 && soc.antutu <= 3_000_000,
+      `${soc.name} at ${soc.antutu} is outside the v11 range — wrong scale?`,
+    );
+  }
+});
+
+Deno.test("the benchmark table preserves known hardware ordering", () => {
+  const at = (n: string) => SOCS.find((s) => s.name === n)!.antutu;
+  // Independently known ordering. A calibration run that inverts any of these
+  // has gone wrong, however plausible the individual numbers look.
+  assert(at("Snapdragon 8 Gen 3") > at("Dimensity 8300"));
+  assert(at("Dimensity 8300") > at("Dimensity 6300"));
+  assert(at("Dimensity 6300") > at("Unisoc T7250"));
+  assert(at("Unisoc T7250") > at("Unisoc SC9863A"));
+  assert(at("Snapdragon 6s Gen 3") > at("Helio G85"));
+});
+
+Deno.test("every chipset named in the model KB exists in the chip table", () => {
+  // Otherwise the phone silently scores as if its chipset were unknown — the
+  // exact "SoC ?" outcome, but hidden behind a name that looks resolved.
+  for (const m of PHONE_MODELS) {
+    if (!m.soc) continue;
+    assert(
+      SOCS.some((s) => s.name === m.soc),
+      `${m.display} names "${m.soc}", which is not in soc.ts`,
     );
   }
 });

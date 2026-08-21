@@ -1,8 +1,22 @@
 /**
  * Offline SoC knowledge base.
  *
- * Values are approximate AnTuTu v10 / Geekbench 6 figures used for RELATIVE
- * ranking only. They are never presented as exact measurements — the UI shows
+ * Values are AnTuTu **v11** / Geekbench 6 figures used for RELATIVE ranking
+ * only.
+ *
+ * The version matters more than it looks. v10 and v11 differ by 20-45%, and
+ * the gap is not a constant -- weaker chips drift furthest. A table holding
+ * both versions therefore misranks every comparison that crosses the
+ * boundary, which is a hardware-looking difference that no buyer could see
+ * and no reviewer could reproduce. So the table is calibrated as a whole,
+ * from one source, by `deno task calibrate`.
+ *
+ * Provenance: 51 entries read from that source's per-chip pages. Apple and
+ * the Ultra/Pro MediaTek variants it does not list were converted using the
+ * ratio observed on the calibrated chips nearest them. Unisoc's budget parts
+ * are absent from it entirely and are measured off phones that use them
+ * (T760 from the Moto G35, T8300 from the Redmi A7 Pro 5G) or bridged via
+ * the Tiger T615, which two sources both publish. They are never presented as exact measurements — the UI shows
  * them as a performance tier plus an approximate index.
  *
  * `aliases` are matched case-insensitively against product titles, URL slugs
@@ -31,7 +45,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 8 Gen 3",
     vendor: "qualcomm",
-    antutu: 2050000,
+    antutu: 2342433,
     gb6Single: 2200,
     gb6Multi: 6900,
     nm: 4,
@@ -42,7 +56,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 8s Gen 3",
     vendor: "qualcomm",
-    antutu: 1450000,
+    antutu: 1801694,
     gb6Single: 1800,
     gb6Multi: 4800,
     nm: 4,
@@ -53,7 +67,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 7+ Gen 3",
     vendor: "qualcomm",
-    antutu: 1420000,
+    antutu: 1660394,
     gb6Single: 1780,
     gb6Multi: 4750,
     nm: 4,
@@ -64,7 +78,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 7s Gen 3",
     vendor: "qualcomm",
-    antutu: 820000,
+    antutu: 1040961,
     gb6Single: 1150,
     gb6Multi: 3050,
     nm: 4,
@@ -75,7 +89,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 7s Gen 2",
     vendor: "qualcomm",
-    antutu: 620000,
+    antutu: 794638,
     gb6Single: 1030,
     gb6Multi: 2900,
     nm: 4,
@@ -86,7 +100,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 6 Gen 3",
     vendor: "qualcomm",
-    antutu: 620000,
+    antutu: 840643,
     gb6Single: 1050,
     gb6Multi: 2950,
     nm: 4,
@@ -97,7 +111,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 6s Gen 3",
     vendor: "qualcomm",
-    antutu: 468541,
+    antutu: 622608,
     gb6Single: 900,
     gb6Multi: 2050,
     nm: 6,
@@ -108,7 +122,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 6 Gen 1",
     vendor: "qualcomm",
-    antutu: 570000,
+    antutu: 736675,
     gb6Single: 950,
     gb6Multi: 2750,
     nm: 4,
@@ -119,7 +133,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 4 Gen 2",
     vendor: "qualcomm",
-    antutu: 450000,
+    antutu: 560863,
     gb6Single: 900,
     gb6Multi: 2100,
     nm: 4,
@@ -130,7 +144,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 4s Gen 2",
     vendor: "qualcomm",
-    antutu: 400000,
+    antutu: 506757,
     gb6Single: 850,
     gb6Multi: 1950,
     nm: 4,
@@ -141,7 +155,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 4 Gen 1",
     vendor: "qualcomm",
-    antutu: 400000,
+    antutu: 521686,
     gb6Single: 830,
     gb6Multi: 1900,
     nm: 6,
@@ -152,7 +166,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 695",
     vendor: "qualcomm",
-    antutu: 400000,
+    antutu: 592015,
     gb6Single: 900,
     gb6Multi: 2000,
     nm: 6,
@@ -163,7 +177,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 685",
     vendor: "qualcomm",
-    antutu: 290000,
+    antutu: 467392,
     gb6Single: 720,
     gb6Multi: 1750,
     nm: 6,
@@ -174,7 +188,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 680",
     vendor: "qualcomm",
-    antutu: 270000,
+    antutu: 421228,
     gb6Single: 680,
     gb6Multi: 1650,
     nm: 6,
@@ -185,7 +199,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 662",
     vendor: "qualcomm",
-    antutu: 180000,
+    antutu: 320666,
     gb6Single: 450,
     gb6Multi: 1400,
     nm: 11,
@@ -198,7 +212,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 9300",
     vendor: "mediatek",
-    antutu: 2100000,
+    antutu: 2415558,
     gb6Single: 2200,
     gb6Multi: 7300,
     nm: 4,
@@ -209,7 +223,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 8400",
     vendor: "mediatek",
-    antutu: 1620000,
+    antutu: 1940768,
     gb6Single: 1450,
     gb6Multi: 6100,
     nm: 4,
@@ -220,7 +234,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 8300",
     vendor: "mediatek",
-    antutu: 1450000,
+    antutu: 1600704,
     gb6Single: 1450,
     gb6Multi: 4500,
     nm: 4,
@@ -231,7 +245,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 8200",
     vendor: "mediatek",
-    antutu: 1000000,
+    antutu: 1221748,
     gb6Single: 1250,
     gb6Multi: 3900,
     nm: 4,
@@ -242,7 +256,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 7400",
     vendor: "mediatek",
-    antutu: 720000,
+    antutu: 956756,
     gb6Single: 1080,
     gb6Multi: 2950,
     nm: 4,
@@ -253,7 +267,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 7300",
     vendor: "mediatek",
-    antutu: 680000,
+    antutu: 877641,
     gb6Single: 1050,
     gb6Multi: 2900,
     nm: 4,
@@ -264,7 +278,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 7050",
     vendor: "mediatek",
-    antutu: 560000,
+    antutu: 806012,
     gb6Single: 970,
     gb6Multi: 2350,
     nm: 6,
@@ -275,7 +289,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 7025",
     vendor: "mediatek",
-    antutu: 531562,
+    antutu: 668462,
     gb6Single: 800,
     gb6Multi: 2050,
     nm: 6,
@@ -286,7 +300,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 6400",
     vendor: "mediatek",
-    antutu: 440000,
+    antutu: 550018,
     gb6Single: 800,
     gb6Multi: 2050,
     nm: 6,
@@ -297,7 +311,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 6300",
     vendor: "mediatek",
-    antutu: 560000,
+    antutu: 524785,
     gb6Single: 780,
     gb6Multi: 2000,
     nm: 6,
@@ -308,7 +322,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 6100+",
     vendor: "mediatek",
-    antutu: 400000,
+    antutu: 513809,
     gb6Single: 740,
     gb6Multi: 1950,
     nm: 6,
@@ -319,7 +333,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 6020",
     vendor: "mediatek",
-    antutu: 380000,
+    antutu: 530583,
     gb6Single: 700,
     gb6Multi: 1850,
     nm: 7,
@@ -330,7 +344,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Helio G100",
     vendor: "mediatek",
-    antutu: 300000,
+    antutu: 576015,
     gb6Single: 740,
     gb6Multi: 1950,
     nm: 6,
@@ -341,7 +355,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Helio G99",
     vendor: "mediatek",
-    antutu: 290000,
+    antutu: 552286,
     gb6Single: 730,
     gb6Multi: 1900,
     nm: 6,
@@ -352,7 +366,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Helio G91",
     vendor: "mediatek",
-    antutu: 210000,
+    antutu: 361872,
     gb6Single: 530,
     gb6Multi: 1450,
     nm: 12,
@@ -363,7 +377,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Helio G85",
     vendor: "mediatek",
-    antutu: 264823,
+    antutu: 346495,
     gb6Single: 520,
     gb6Multi: 1450,
     nm: 12,
@@ -374,7 +388,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Helio G81",
     vendor: "mediatek",
-    antutu: 200000,
+    antutu: 358383,
     gb6Single: 500,
     gb6Multi: 1400,
     nm: 12,
@@ -387,7 +401,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Exynos 1580",
     vendor: "samsung",
-    antutu: 900000,
+    antutu: 1250625,
     gb6Single: 1350,
     gb6Multi: 3900,
     nm: 4,
@@ -398,7 +412,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Exynos 1480",
     vendor: "samsung",
-    antutu: 820000,
+    antutu: 1031048,
     gb6Single: 1200,
     gb6Multi: 3400,
     nm: 4,
@@ -409,7 +423,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Exynos 1380",
     vendor: "samsung",
-    antutu: 610000,
+    antutu: 768212,
     gb6Single: 1050,
     gb6Multi: 3000,
     nm: 5,
@@ -420,7 +434,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Exynos 1330",
     vendor: "samsung",
-    antutu: 420000,
+    antutu: 607137,
     gb6Single: 880,
     gb6Multi: 2050,
     nm: 5,
@@ -431,7 +445,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Exynos 1280",
     vendor: "samsung",
-    antutu: 400000,
+    antutu: 613957,
     gb6Single: 830,
     gb6Multi: 1950,
     nm: 5,
@@ -446,7 +460,7 @@ export const SOCS: SocEntry[] = [
     // shelf and its absence here left several phones showing "SoC ?".
     name: "Unisoc T8300",
     vendor: "unisoc",
-    antutu: 415000,
+    antutu: 646113,
     gb6Single: 730,
     gb6Multi: 1980,
     nm: 6,
@@ -459,7 +473,7 @@ export const SOCS: SocEntry[] = [
     // number, so without the entry the page read as no chipset at all.
     name: "Unisoc T760",
     vendor: "unisoc",
-    antutu: 472470,
+    antutu: 628581,
     gb6Single: 700,
     gb6Multi: 1900,
     nm: 6,
@@ -472,7 +486,7 @@ export const SOCS: SocEntry[] = [
     // than imputing, because an unknown chip gets a median-ish guess.
     name: "Unisoc SC9863A",
     vendor: "unisoc",
-    antutu: 105000,
+    antutu: 160000,
     gb6Single: 180,
     gb6Multi: 620,
     nm: 28,
@@ -483,7 +497,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Unisoc T8200",
     vendor: "unisoc",
-    antutu: 380000,
+    antutu: 468000,
     gb6Single: 700,
     gb6Multi: 1900,
     nm: 6,
@@ -494,7 +508,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Unisoc T7250",
     vendor: "unisoc",
-    antutu: 330000,
+    antutu: 363000,
     gb6Single: 620,
     gb6Multi: 1750,
     nm: 6,
@@ -505,7 +519,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Unisoc T765",
     vendor: "unisoc",
-    antutu: 320000,
+    antutu: 469000,
     gb6Single: 600,
     gb6Multi: 1700,
     nm: 6,
@@ -516,7 +530,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Unisoc T620",
     vendor: "unisoc",
-    antutu: 250000,
+    antutu: 440000,
     gb6Single: 560,
     gb6Multi: 1600,
     nm: 6,
@@ -527,7 +541,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Unisoc T616",
     vendor: "unisoc",
-    antutu: 230000,
+    antutu: 380000,
     gb6Single: 470,
     gb6Multi: 1400,
     nm: 12,
@@ -538,7 +552,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Unisoc T612",
     vendor: "unisoc",
-    antutu: 210000,
+    antutu: 322000,
     gb6Single: 450,
     gb6Multi: 1350,
     nm: 12,
@@ -551,7 +565,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Apple A18",
     vendor: "apple",
-    antutu: 1750000,
+    antutu: 2000000,
     gb6Single: 3300,
     gb6Multi: 8200,
     nm: 3,
@@ -562,7 +576,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Apple A17 Pro",
     vendor: "apple",
-    antutu: 1600000,
+    antutu: 1871000,
     gb6Single: 2900,
     gb6Multi: 7200,
     nm: 3,
@@ -573,7 +587,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Apple A16 Bionic",
     vendor: "apple",
-    antutu: 1350000,
+    antutu: 1579000,
     gb6Single: 2600,
     gb6Multi: 6600,
     nm: 4,
@@ -584,7 +598,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Apple A15 Bionic",
     vendor: "apple",
-    antutu: 1150000,
+    antutu: 1598000,
     gb6Single: 2300,
     gb6Multi: 5800,
     nm: 5,
@@ -597,7 +611,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Tensor G4",
     vendor: "google",
-    antutu: 1050000,
+    antutu: 1499601,
     gb6Single: 1700,
     gb6Multi: 4400,
     nm: 4,
@@ -608,7 +622,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Tensor G3",
     vendor: "google",
-    antutu: 980000,
+    antutu: 1409016,
     gb6Single: 1600,
     gb6Multi: 4200,
     nm: 4,
@@ -620,7 +634,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 8 Gen 2",
     vendor: "qualcomm",
-    antutu: 1560000,
+    antutu: 1754213,
     gb6Single: 1950,
     gb6Multi: 5200,
     nm: 4,
@@ -631,7 +645,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 870",
     vendor: "qualcomm",
-    antutu: 780000,
+    antutu: 1010069,
     gb6Single: 1150,
     gb6Multi: 3300,
     nm: 7,
@@ -642,7 +656,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 7 Gen 3",
     vendor: "qualcomm",
-    antutu: 900000,
+    antutu: 1025251,
     gb6Single: 1180,
     gb6Multi: 3250,
     nm: 4,
@@ -653,7 +667,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 7 Gen 1",
     vendor: "qualcomm",
-    antutu: 660000,
+    antutu: 840330,
     gb6Single: 1000,
     gb6Multi: 2900,
     nm: 4,
@@ -665,7 +679,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 8400 Ultra",
     vendor: "mediatek",
-    antutu: 1650000,
+    antutu: 1929000,
     gb6Single: 1470,
     gb6Multi: 6200,
     nm: 4,
@@ -676,7 +690,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 8300 Ultra",
     vendor: "mediatek",
-    antutu: 1480000,
+    antutu: 1731000,
     gb6Single: 1460,
     gb6Multi: 4600,
     nm: 4,
@@ -687,7 +701,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 8020",
     vendor: "mediatek",
-    antutu: 700000,
+    antutu: 979624,
     gb6Single: 1010,
     gb6Multi: 3000,
     nm: 6,
@@ -698,7 +712,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 7350 Pro",
     vendor: "mediatek",
-    antutu: 750000,
+    antutu: 997000,
     gb6Single: 1100,
     gb6Multi: 2600,
     nm: 4,
@@ -709,7 +723,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 7300 Ultra",
     vendor: "mediatek",
-    antutu: 700000,
+    antutu: 919000,
     gb6Single: 1060,
     gb6Multi: 2950,
     nm: 4,
@@ -720,7 +734,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 7200",
     vendor: "mediatek",
-    antutu: 740000,
+    antutu: 971424,
     gb6Single: 1080,
     gb6Multi: 2500,
     nm: 4,
@@ -731,7 +745,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 7020",
     vendor: "mediatek",
-    antutu: 440000,
+    antutu: 639509,
     gb6Single: 790,
     gb6Multi: 2040,
     nm: 6,
@@ -742,7 +756,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 6080",
     vendor: "mediatek",
-    antutu: 400000,
+    antutu: 567996,
     gb6Single: 740,
     gb6Multi: 1950,
     nm: 6,
@@ -753,7 +767,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 920",
     vendor: "mediatek",
-    antutu: 520000,
+    antutu: 750481,
     gb6Single: 900,
     gb6Multi: 2300,
     nm: 6,
@@ -764,7 +778,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Helio G88",
     vendor: "mediatek",
-    antutu: 230000,
+    antutu: 362744,
     gb6Single: 530,
     gb6Multi: 1470,
     nm: 12,
@@ -775,7 +789,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Helio G36",
     vendor: "mediatek",
-    antutu: 120000,
+    antutu: 195539,
     gb6Single: 320,
     gb6Multi: 1050,
     nm: 12,
@@ -787,7 +801,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Tensor G2",
     vendor: "google",
-    antutu: 820000,
+    antutu: 1192791,
     gb6Single: 1400,
     gb6Multi: 3400,
     nm: 5,
