@@ -104,7 +104,14 @@ export function buildCandidates(
   if (options.checkoutInfo?.size) {
     for (const c of candidates) {
       const hit = c.listings.find((l) => options.checkoutInfo!.has(l.id));
-      if (hit) c.checkout = options.checkoutInfo!.get(hit.id);
+      if (!hit) continue;
+      c.checkout = options.checkoutInfo!.get(hit.id);
+      // The checkout block was read from the best offer's own page, so its
+      // availability belongs to that offer. `best` is the same object as
+      // offers[0], so the --in-stock-only gate sees this too.
+      if (c.checkout?.inStock !== null && c.checkout?.inStock !== undefined) {
+        c.best.inStock = c.checkout.inStock;
+      }
     }
   }
   return { intent, candidates };
@@ -187,7 +194,14 @@ export function runPipeline(
   if (options.checkoutInfo?.size) {
     for (const c of candidates) {
       const hit = c.listings.find((l) => options.checkoutInfo!.has(l.id));
-      if (hit) c.checkout = options.checkoutInfo!.get(hit.id);
+      if (!hit) continue;
+      c.checkout = options.checkoutInfo!.get(hit.id);
+      // The checkout block was read from the best offer's own page, so its
+      // availability belongs to that offer. `best` is the same object as
+      // offers[0], so the --in-stock-only gate sees this too.
+      if (c.checkout?.inStock !== null && c.checkout?.inStock !== undefined) {
+        c.best.inStock = c.checkout.inStock;
+      }
     }
   }
   const { ranked, rejected } = rankCandidates(

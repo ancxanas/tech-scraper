@@ -16,6 +16,17 @@
  */
 
 export interface CheckoutInfo {
+  /**
+   * Whether the *selected variant* can actually be bought.
+   *
+   * Anchored to "Selected Color: <x> Out of stock" rather than a loose search
+   * for the phrase, because product pages carry recommendation carousels and
+   * an unanchored match would inherit another product's status — the same
+   * mistake that once credited a budget handset with an Apple A17 Pro.
+   */
+  inStock: boolean | null;
+  /** Delivery promise, e.g. "24 Aug, Mon". Implies the item is purchasable. */
+  deliveryBy: string | null;
   /** Price after automatically-applied offers, as the site states it. */
   buyAt: number | null;
   /** Flat card discount. Uniform in practice — displayed, never scored. */
@@ -28,6 +39,8 @@ export interface CheckoutInfo {
 }
 
 const EMPTY: CheckoutInfo = {
+  inStock: null,
+  deliveryBy: null,
   buyAt: null,
   bankOffer: null,
   exchangeUpTo: null,
@@ -56,7 +69,17 @@ export function parseCheckout(text: string): CheckoutInfo {
     text.match(/Exchange offer(?:[^₹]{0,80})Up to ₹([\d,]+)/i)?.[1],
   );
 
+  // "Selected Color: Guava Red Out of stock" — the status belongs to the exact
+  // variant this URL points at, which is precisely the offer being ranked.
+  const outOfStock = /Selected Colou?r:[^|]{0,40}?Out of stock/i.test(text);
+  const deliveryBy = text.match(
+    /Delivery by ([A-Za-z0-9 ,]{4,20}?)(?:\s+Arriving|\s+Fulfil|\s*\|)/i,
+  )
+    ?.[1]?.trim() ?? null;
+
   return {
+    inStock: outOfStock ? false : deliveryBy ? true : null,
+    deliveryBy,
     buyAt,
     bankOffer,
     exchangeUpTo,
@@ -68,5 +91,5 @@ export function parseCheckout(text: string): CheckoutInfo {
 /** True when there is anything worth showing the user. */
 export function hasCheckoutInfo(c: CheckoutInfo): boolean {
   return c.buyAt !== null || c.bankOffer !== null || c.exchangeUpTo !== null ||
-    c.noCostEmi || c.pincodeBlocked;
+    c.noCostEmi || c.pincodeBlocked || c.inStock !== null;
 }

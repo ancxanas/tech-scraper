@@ -61,6 +61,7 @@ function badgeChip(b: string): string {
     "BATTERY KING": (s) => colors.bgCyan(colors.black(` ${s} `)),
     "BEST RATED": (s) => colors.bgWhite(colors.black(` ${s} `)),
     "LOWEST YET": (s) => colors.bgBrightGreen(colors.black(` ${s} `)),
+    "OUT OF STOCK": (s) => colors.bgRed(colors.white(` ${s} `)),
   };
   return (styles[b] ?? ((s: string) => colors.inverse(` ${s} `)))(b);
 }
@@ -128,7 +129,10 @@ function ratingCell(r: RankedCandidate): string {
 }
 
 function priceCell(r: RankedCandidate): string {
-  const main = colors.bold(colors.green(rupees(r.best.price)));
+  const main = r.best.inStock === false
+    ? colors.dim(colors.strikethrough(rupees(r.best.price)))
+    : colors.bold(colors.green(rupees(r.best.price)));
+  if (r.best.inStock === false) return `${main}\n${colors.red("out of stock")}`;
   if (r.best.mrp && r.best.discountPct) {
     const suspicious = r.best.discountPct > 55;
     const off = suspicious
@@ -230,6 +234,7 @@ export function detailCards(ranked: RankedCandidate[], count: number): string {
       if (co.exchangeUpTo !== null) {
         bits.push(colors.dim(`up to ${rupees(co.exchangeUpTo)} exchange`));
       }
+      if (co.deliveryBy) bits.push(colors.dim(`delivery by ${co.deliveryBy}`));
       if (co.noCostEmi) bits.push(colors.dim("no-cost EMI"));
       if (bits.length) out.push(`  ${bits.join("  ·  ")}`);
       if (co.pincodeBlocked) {

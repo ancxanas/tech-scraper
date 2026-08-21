@@ -791,6 +791,48 @@ place alongside real captures.
 
 ---
 
+## Round 12: eight of the ranked phones could not be bought
+
+Stock status was known for **0 of 48** ranked products. The pipeline was silent
+about it rather than honest, and silence defaults to optimism — an unbuyable
+phone rendered identically to a purchasable one.
+
+It turned out the answer was already on disk. The product pages fetched during
+spec resolution state it plainly, and Flipkart anchors it to the variant:
+
+```
+Selected Color: Guava Red   Out of stock   Variant: 128 GB + 4 GB
+```
+
+That anchoring matters. After the Apple A17 incident — where an unanchored match
+inherited a _carousel product's_ data — the pattern deliberately requires
+"Selected Color: … Out of stock" rather than searching the page for the phrase.
+A test feeds it carousel text containing "Out of stock" and asserts the result
+is `null`, not `false`.
+
+Result on the reference fixture:
+
+```
+stock status known   0/48  ->  39/48
+out of stock                    8
+```
+
+Among them: **Maplin SC26 5G at #7 — the phone that had earlier been badged BEST
+VALUE.** Also realme P4 Lite in two configurations, Motorola g35, and ringme
+BOLD 17 PRO.
+
+Unavailable products are now struck through with an `OUT OF STOCK` badge, carry
+it as the first entry in their cons list, and are excluded from every
+superlative badge — you cannot recommend something nobody can buy.
+`--in-stock-only` removes them entirely (48 → 41 here). They are still _listed_
+by default, because "this exists but is unavailable right now" is useful
+information, and a phone that returns to stock tomorrow is worth knowing about.
+
+Delivery estimates come along for free: `Delivery by 24 Aug, Mon` is parsed and
+shown, and its presence is itself weak evidence the item is purchasable.
+
+---
+
 ## What is still worth doing
 
 1. **Amazon PDPs need a transport.** Direct fetch gets a bot page, so Amazon

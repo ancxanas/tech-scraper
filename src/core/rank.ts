@@ -566,6 +566,8 @@ function annotate(
 
   /** Enough evidence to actively recommend, not merely to list. */
   const isVouchable = (r: RankedCandidate) =>
+    // Never recommend something that cannot be bought.
+    r.best.inStock !== false &&
     r.score.confidence >= 0.6 &&
     r.specs.socName !== null &&
     (r.ratingCount ?? 0) >= 100 &&
@@ -664,6 +666,10 @@ function annotate(
       cons.push(`weak ${r.rating}★ rating`);
     }
     if ((r.ratingCount ?? 0) < 100) cons.push("very few reviews — unproven");
+    if (r.best.inStock === false) {
+      cons.unshift("out of stock in this colour/variant right now");
+    }
+
     const hist = priceHistory?.get(r.key);
     if (hist && hist.observations >= 2) {
       if (r.best.price <= hist.min) {
@@ -713,6 +719,7 @@ function annotate(
       badges.push("BATTERY KING");
     }
     if (bestRated && r === bestRated) badges.push("BEST RATED");
+    if (r.best.inStock === false) badges.unshift("OUT OF STOCK");
     if (badgesFromHistory.has(r.key)) badges.push("LOWEST YET");
     if (r.rank === 1) badges.unshift("TOP PICK");
 

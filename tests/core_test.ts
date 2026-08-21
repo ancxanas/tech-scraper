@@ -1010,6 +1010,8 @@ Deno.test("the flat card discount does not reorder results", async () => {
     plain.ranked.flatMap((r) =>
       r.listings.map((l) =>
         [l.id, {
+          inStock: null,
+          deliveryBy: null,
           buyAt: Math.round(r.best.price * 0.95),
           bankOffer: Math.round(r.best.price * 0.05),
           exchangeUpTo: null,
@@ -1367,5 +1369,88 @@ Deno.test("a 429 from the spec database is surfaced as a distinct, stoppable err
         () => Promise.reject(new Error("HTTP 429")),
       ),
     RateLimited,
+  );
+});
+
+// ------------------------------------------------------- stock availability
+
+Deno.test("availability is read from the selected variant, not the page at large", async () => {
+  // Real page text. Flipkart states it as "Selected Color: <x> Out of stock",
+  // and the status belongs to the exact variant the URL points at.
+  const out = await Deno.readTextFile(
+    "tests/fixtures/pages/maplin-sc26-5g.txt",
+  );
+  assertEquals(parseCheckout(out).inStock, false);
+
+  const ok = await Deno.readTextFile("tests/fixtures/pages/poco-m7-pro-5g.txt");
+  const c = parseCheckout(ok);
+  assertEquals(c.inStock, true);
+  assertExists(c.deliveryBy);
+});
+
+Deno.test("a carousel's stock status cannot leak onto the product", () => {
+  // Same defensive shape as the Apple A17 incident: the phrase exists on the
+  // page, but not attached to the selected variant.
+  const carousel =
+    "Buy now Similar products Aulumu Case Out of stock Feedback More like this";
+  assertEquals(parseCheckout(carousel).inStock, null);
+});
+
+Deno.test("an out-of-stock product is flagged and never recommended", () => {
+  const rows = [
+    {
+      product_name:
+        "Ghost Phone (Black, 128 GB) (6 GB RAM) | 5000 mAh | 120Hz AMOLED | 50MP | 5G",
+      selling_price: 9999,
+      rating: 4.3,
+      review_count: 40000,
+      product_url: "https://www.flipkart.com/ghost-phone/p/itmghost",
+    },
+    {
+      product_name:
+        "Stocked Phone (Black, 128 GB) (6 GB RAM) | 5000 mAh | 120Hz AMOLED | 50MP | 5G",
+      selling_price: 12999,
+      rating: 4.3,
+      review_count: 40000,
+      product_url: "https://www.flipkart.com/stocked-phone/p/itmstocked",
+    },
+  ];
+  const { listings } = normalizeBatch(rows, "flipkart");
+  const analyzed = listings.map((l) => analyze(l));
+  const candidates = groupListings(analyzed);
+
+  // Mark the cheaper one unavailable, as the resolver would.
+  const ghost = candidates.find((c) => /Ghost/.test(c.modelName))!;
+  ghost.best.inStock = false;
+
+  const { ranked } = rankCandidates(
+    candidates,
+    parseIntentRules("best phones under 15000"),
+  );
+  const g = ranked.find((r) => /Ghost/.test(r.modelName))!;
+
+  assert(g.badges.includes("OUT OF STOCK"), g.badges.join(","));
+  assert(g.cons.some((c) => /out of stock/i.test(c)), g.cons.join(" | "));
+  // It may still be listed, but it must not be held up as a recommendation.
+  assert(!g.badges.includes("BEST VALUE"));
+  assert(!g.badges.includes("FASTEST"));
+});
+
+Deno.test("--in-stock-only removes unavailable products entirely", () => {
+  const rows = [{
+    product_name:
+      "Ghost Phone (Black, 128 GB) (6 GB RAM) | 5000 mAh | 120Hz | 50MP | 5G",
+    selling_price: 9999,
+    product_url: "https://www.flipkart.com/ghost-phone/p/itmghost",
+  }];
+  const { listings } = normalizeBatch(rows, "flipkart");
+  const candidates = groupListings(listings.map((l) => analyze(l)));
+  candidates[0].best.inStock = false;
+
+  const intent = parseIntentRules("best phones under 15000");
+  assertEquals(rankCandidates(candidates, intent).ranked.length, 1);
+  assertEquals(
+    rankCandidates(candidates, intent, { inStockOnly: true }).ranked.length,
+    0,
   );
 });
