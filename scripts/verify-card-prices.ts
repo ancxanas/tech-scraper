@@ -23,7 +23,12 @@
  *   deno task verify-prices runs/<dir> 12 --use-unlocker   when blocked
  */
 
-import { fetchDirect } from "../src/lib/fetch-page.ts";
+import {
+  fetchDirect,
+  fetchPageHtml,
+  pageToText,
+} from "../src/lib/fetch-page.ts";
+import { parseCheckout } from "../src/core/checkout.ts";
 
 const useUnlocker = Deno.args.includes("--use-unlocker");
 
@@ -55,24 +60,14 @@ const cards: Card[] = JSON.parse(
  * the structured data and fall back to the rupee glyph only if that fails.
  */
 function parsePdp(html: string) {
-  const title = html.match(/<title[^>]*>([^<]{5,160})</i)?.[1]?.trim() ?? null;
-  const ld = html.match(/"price"\s*:\s*"?(\d{3,7})"?/)?.[1];
-  const finals = [
-    ...html.matchAll(/"finalPrice"[^}]{0,120}?"value"\s*:\s*(\d{3,7})/g),
-  ]
-    .map((m) => Number(m[1]));
-  const mrps = [...html.matchAll(/"mrp"\s*:\s*(\d{3,7})/g)].map((m) =>
-    Number(m[1])
-  );
-  const rupees = [...html.matchAll(/₹\s?([\d,]{4,8})/g)]
-    .map((m) => Number(m[1].replace(/,/g, "")))
-    .filter((n) => n > 999);
-
+  const text = pageToText(html);
+  const checkout = parseCheckout(text);
+  const title = html.match(/<title[^>]*>([^<]{3,160})</i)?.[1]?.trim() ??
+    text.slice(0, 90);
   return {
     title,
-    price: finals[0] ?? (ld ? Number(ld) : null) ?? rupees[0] ?? null,
-    mrp: mrps[0] ??
-      (rupees.length > 1 ? Math.max(...rupees.slice(0, 4)) : null),
+    price: checkout.pagePrice,
+    mrp: checkout.pageMrp,
     blocked: /recaptcha|are you a human/i.test(html),
   };
 }
@@ -104,22 +99,19 @@ for (const c of withUrls) {
   let html = "";
   try {
     html = await fetchDirect(c.product_url!, 20_000);
-    if (/recaptcha|are you a human/i.test(html) && useUnlocker) {
-      const { fetchPageMarkdown } = await import("../src/lib/fetch-page.ts");
-      html = await fetchPageMarkdown(c.product_url!);
-    }
+    if (/recaptcha|are you a human/i.test(html)) throw new Error("captcha");
   } catch (err) {
-    if (useUnlocker) {
-      try {
-        const { fetchPageMarkdown } = await import("../src/lib/fetch-page.ts");
-        html = await fetchPageMarkdown(c.product_url!);
-      } catch (e2) {
-        console.log(`  ✗ both transports failed: ${(e2 as Error).message}\n`);
-        failed++;
-        continue;
-      }
-    } else {
-      console.log(`  ✗ fetch failed: ${(err as Error).message}\n`);
+    if (!useUnlocker) {
+      console.log(
+        `  ✗ ${(err as Error).message} (retry with --use-unlocker)\n`,
+      );
+      failed++;
+      continue;
+    }
+    try {
+      html = await fetchPageHtml(c.product_url!);
+    } catch (e2) {
+      console.log(`  ✗ both transports failed: ${(e2 as Error).message}\n`);
       failed++;
       continue;
     }
@@ -161,7 +153,7 @@ for (const c of withUrls) {
         "  → TITLE MISMATCH: the card's title and this page are different products",
       );
       titleMismatch++;
-    } else if (cardMrp && page.mrp && cardMrp !== page.mrp) {
+    } else if (cardMrp && page.mrp && Math.abs(cardMrp - page.mrp) > 1) {
       console.log("  → MRP MISMATCH: same phone, different seller/listing");
       mrpMismatch++;
     } else if (priceGap > 0.02) {
