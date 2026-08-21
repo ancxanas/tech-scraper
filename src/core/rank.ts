@@ -515,10 +515,17 @@ export function rankCandidates(
 
   // If the query named a specific model and we found it, it leads — always.
   const anyExactMatch = ranked.some((r) => r.matchesRequestedModel);
+  // Anything you cannot buy sorts below everything you can. A replay put an
+  // out-of-stock Galaxy M17 at #1 wearing TOP PICK, which is not a
+  // recommendation — it is a phone the reader cannot act on. It stays in the
+  // table, badged, because the price is still useful context; it just cannot
+  // lead. Applied before score so no amount of value outranks availability.
+  const unbuyable = (r: RankedCandidate) => Number(r.best.inStock === false);
   ranked.sort((a, b) =>
     (anyExactMatch
       ? Number(b.matchesRequestedModel) - Number(a.matchesRequestedModel)
       : 0) ||
+    unbuyable(a) - unbuyable(b) ||
     b.score.total - a.score.total ||
     b.score.confidence - a.score.confidence ||
     a.best.price - b.best.price

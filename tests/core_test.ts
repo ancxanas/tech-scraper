@@ -742,6 +742,73 @@ Deno.test("the set's fastest phone is never told it compromises on speed", async
   }
 });
 
+// ---------------------------------------------------------- spec precedence
+
+Deno.test("a product page cannot overwrite a trusted knowledge-base entry", () => {
+  // Pages carry carousels and comparison tables, so a value matched anywhere
+  // on one may describe a different handset. A replay produced an AMOLED Moto
+  // G45 (it is IPS LCD) and a 70W Galaxy F07 (it is 25W) this way.
+  const { listings } = normalizeBatch([
+    {
+      product_name: "Motorola G45 5G (Brilliant Blue, 128 GB) (8 GB RAM)",
+      selling_price: 12414,
+      product_url:
+        "https://www.flipkart.com/motorola-g45-5g-brilliant-blue-128-gb/p/itm1",
+    },
+  ], "flipkart");
+
+  const enrichText = new Map([[
+    listings[0].id,
+    "Super AMOLED Display 70W Fast Charging MediaTek Helio G81 7000 mAh",
+  ]]);
+  const a = analyze(listings[0], { enrichText });
+
+  const kb = lookupModel("Motorola G45 5G")!;
+  assertEquals(kb.confidence, "high");
+  assertEquals(a.specs.panel, kb.panel);
+  assertEquals(a.specs.chargingW, kb.chargingW);
+  assertEquals(a.specs.socName, kb.soc);
+  assertEquals(a.specSources.panel, "kb");
+});
+
+Deno.test("a page still fills gaps the knowledge base leaves", () => {
+  // The rule is precedence, not exclusion — a trusted entry that says nothing
+  // about a field must not block the page from supplying it.
+  const { listings } = normalizeBatch([
+    {
+      product_name: "Motorola G45 5G (Brilliant Blue, 128 GB) (8 GB RAM)",
+      selling_price: 12414,
+      product_url:
+        "https://www.flipkart.com/motorola-g45-5g-brilliant-blue-128-gb/p/itm1",
+    },
+  ], "flipkart");
+  const a = analyze(listings[0], {
+    enrichText: new Map([[listings[0].id, "Weight 183 g Android 14"]]),
+  });
+  assertEquals(a.specs.panel, lookupModel("Motorola G45 5G")!.panel);
+});
+
+Deno.test("a phone you cannot buy never leads the ranking", async () => {
+  const batches = await loadRun([FIXTURE]);
+  const intent = parseIntentRules("best phones under 15000");
+  const result = runPipeline("q", intent, batches);
+  const first = result.ranked[0];
+  assert(
+    first.best.inStock !== false,
+    `#1 is out of stock: ${first.modelName}`,
+  );
+  // And no in-stock phone may sit below an out-of-stock one.
+  let seenUnbuyable = false;
+  for (const r of result.ranked) {
+    if (r.best.inStock === false) seenUnbuyable = true;
+    else if (seenUnbuyable) {
+      throw new Error(
+        `${r.modelName} is buyable but ranked below one that is not`,
+      );
+    }
+  }
+});
+
 // ------------------------------------------------------------------ rendered links
 
 Deno.test("a rendered product link is never truncated", () => {
@@ -1414,15 +1481,26 @@ Deno.test("an abbreviated page value cannot overwrite a confident KB entry", () 
   assertEquals(a.specSources.socName, "kb");
 });
 
-Deno.test("an unambiguous page value does overwrite the KB", () => {
+Deno.test("an unambiguous page value overwrites a KB entry we doubt", () => {
+  // This test used to assert the opposite for a high-confidence entry. The
+  // 14:39 replay overturned it: of the conflicts raised, the page was wrong
+  // in three of four — a Dimensity 6300 claimed for the Unisoc Redmi A7 Pro
+  // 4G, a 7400 for the narzo 80 Lite, a 6100+ for the Exynos Galaxy F17 5G.
+  // Unambiguous is not the same as correct when the value may have come from
+  // a comparison table further down the page. So precedence now follows how
+  // much we trust the entry: high-confidence entries hold, and anything less
+  // yields to the page, which is the case where the page usually is better.
   const { listings } = normalizeBatch([
     {
-      product_name: "POCO M7 5G (Ocean Blue, 128 GB) (6 GB RAM)",
-      selling_price: 12499,
+      product_name: "MOTOROLA g35 5G (Leaf Green, 128 GB) (4 GB RAM)",
+      selling_price: 9999,
       product_url:
-        "https://www.flipkart.com/poco-m7-5g-ocean-blue-128-gb/p/itm1",
+        "https://www.flipkart.com/motorola-g35-5g-leaf-green-128-gb/p/itm1",
     },
   ], "flipkart");
+
+  const kb = lookupModel("Motorola G35 5G")!;
+  assertEquals(kb.confidence, "medium");
 
   const enrichText = new Map([[
     listings[0].id,

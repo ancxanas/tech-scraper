@@ -477,13 +477,44 @@ export function analyze(
     apply(external, srcs, true);
   }
 
-  // 1. Enriched PDP text wins — with one exception.
+  // 1. Enriched PDP text — but not over a knowledge-base entry we trust.
   //
-  // Flipkart abbreviates chipsets ("128 GB ROM 4 Gen 2 5G"), dropping the
-  // vendor name. "4 Gen 2" and "4s Gen 2" are different silicon, so a lossy
-  // abbreviation must not silently overwrite a knowledge-base entry we are
-  // confident about. It is surfaced as a conflict for a human instead.
+  // Product pages are not just the product. They carry recommendation
+  // carousels, comparison tables and cross-sell blocks, so a value matched
+  // anywhere on the page may belong to a different handset entirely. A replay
+  // over the 14:39 run showed exactly that once enrichment reached more
+  // pages: the Moto G45 came back AMOLED (it is IPS LCD), the Galaxy F07 came
+  // back with 70W charging (it is 25W), the Redmi A7 Pro 4G was given a
+  // Dimensity 6300 (it is a Unisoc T7250), and the Galaxy F17 5G an
+  // unambiguous but wrong Dimensity 6100+.
+  //
+  // So for a model the knowledge base describes with HIGH confidence, the KB
+  // goes first and the page may only fill the gaps it leaves. Anywhere they
+  // disagree is reported rather than silently applied. Medium and low
+  // confidence entries still yield to the page, which is the case where the
+  // page is usually the better source.
   const kbPreview = lookupModel(listing.title) ?? lookupModel(slugText);
+  const kbIsTrusted = kbPreview?.confidence === "high";
+
+  const kbSpecsFor = (kb: NonNullable<typeof kbPreview>): Partial<Specs> => ({
+    panel: kb.panel ?? null,
+    displayInches: kb.inches ?? null,
+    refreshHz: kb.refreshHz ?? null,
+    resolution: kb.resolution ?? null,
+    batteryMah: kb.batteryMah ?? null,
+    chargingW: kb.chargingW ?? null,
+    mainCameraMp: kb.mainCameraMp ?? null,
+    ois: kb.ois ?? null,
+    ipRating: kb.ipRating ?? null,
+    nfc: kb.nfc ?? null,
+    osUpgrades: kb.osUpgrades ?? null,
+    releaseYear: kb.releaseYear ?? null,
+    socName: kb.soc ?? null,
+  });
+
+  if (kbPreview && kbIsTrusted) {
+    apply(kbSpecsFor(kbPreview), {}, false);
+  }
   if (enrich) {
     const e = specsFromText(enrich);
     for (const k of Object.keys(e.sources) as Array<keyof Specs>) {
@@ -497,29 +528,17 @@ export function analyze(
         delete e.specs.perfTier;
       }
     }
-    apply(e.specs, e.sources, external ? false : true);
+    // Only overwrite when nothing more trustworthy has spoken: a verified
+    // external source, or a high-confidence KB entry applied just above.
+    apply(e.specs, e.sources, external || kbIsTrusted ? false : true);
   }
 
   // 2. Knowledge base for the resolved model.
   const modelKey = deriveModelKey(listing.title);
   const kb = kbPreview;
   if (kb) {
-    const kbSpecs: Partial<Specs> = {
-      panel: kb.panel ?? null,
-      displayInches: kb.inches ?? null,
-      refreshHz: kb.refreshHz ?? null,
-      resolution: kb.resolution ?? null,
-      batteryMah: kb.batteryMah ?? null,
-      chargingW: kb.chargingW ?? null,
-      mainCameraMp: kb.mainCameraMp ?? null,
-      ois: kb.ois ?? null,
-      ipRating: kb.ipRating ?? null,
-      nfc: kb.nfc ?? null,
-      osUpgrades: kb.osUpgrades ?? null,
-      releaseYear: kb.releaseYear ?? null,
-      socName: kb.soc ?? null,
-    };
-    apply(kbSpecs, {}, false);
+    // A trusted entry was already applied above, before the page got a turn.
+    if (!kbIsTrusted) apply(kbSpecsFor(kb), {}, false);
     if (kb.soc) {
       const soc = matchSoc(kb.soc);
       if (soc) {
