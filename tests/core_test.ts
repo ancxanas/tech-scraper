@@ -1806,3 +1806,21 @@ Deno.test("implausible refresh rates are dropped rather than believed", () => {
     120,
   );
 });
+
+Deno.test("panel and charging must be described, not merely mentioned", () => {
+  const contaminated =
+    "Galaxy F07 6.7 inch HD+ PLS LCD display 90Hz refresh rate. " +
+    "5000 mAh battery with 25 W charging. " +
+    "Similar products: Galaxy M36 AMOLED 120Hz, realme P4 70W fast charging";
+  const a = specsFromText(contaminated);
+  assertEquals(a.specs.panel, "PLS LCD");
+  assertEquals(a.specs.chargingW, 25);
+});
+
+Deno.test("a genuine AMOLED is still read", () => {
+  const a = specsFromText(
+    "6.65 inch FHD+ Super AMOLED display, 90Hz, 5000mAh, 25W charging",
+  );
+  assertEquals(a.specs.panel, "AMOLED");
+  assertEquals(a.specs.chargingW, 25);
+});

@@ -230,6 +230,32 @@ function num(m: RegExpMatchArray | null, i = 1): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function matchNear(
+  text: string,
+  value: RegExp,
+  context: RegExp,
+  window = 60,
+): RegExpMatchArray | null {
+  const re = new RegExp(
+    value.source,
+    value.flags.includes("g") ? value.flags : `${value.flags}g`,
+  );
+  for (const m of text.matchAll(re)) {
+    const at = m.index ?? 0;
+    const around = text.slice(
+      Math.max(0, at - window),
+      at + m[0].length + window,
+    );
+    if (context.test(around)) return m;
+  }
+  return null;
+}
+
+const DISPLAY_CONTEXT =
+  /display|screen|panel|refresh|resolution|nits|inch|touch|hd\+|fhd/i;
+const CHARGING_CONTEXT =
+  /charg|charger|adapter|wired|fast\s*charge|watt|mah|battery/i;
+
 export function specsFromText(text: string): {
   specs: Partial<Specs>;
   sources: Partial<Record<keyof Specs, SpecSource>>;
@@ -273,16 +299,26 @@ export function specsFromText(text: string): {
   }
 
   set("batteryMah", num(text.match(/(\d{4,5})\s*mah/i)), "title");
-  set("chargingW", num(text.match(/(\d{2,3})\s*w\b(?!\w)/i)), "title");
+  set(
+    "chargingW",
+    num(matchNear(text, /(\d{2,3})\s*w\b(?!\w)/i, CHARGING_CONTEXT, 40)),
+    "title",
+  );
   set("displayInches", num(text.match(/(\d\.\d{1,2})\s*(?:inch|")/i)), "title");
   set("refreshHz", num(text.match(/(\d{2,3})\s*hz/i)), "title");
   set("mainCameraMp", num(text.match(/(\d{2,3})\s*mp/i)), "title");
 
-  if (/\bamoled\b|\bsuper\s*amoled\b/i.test(text)) {
+  if (matchNear(text, /\bsuper\s*amoled\b|\bamoled\b/i, DISPLAY_CONTEXT)) {
     set("panel", "AMOLED", "title");
-  } else if (/\bp-?oled\b/i.test(text)) set("panel", "pOLED", "title");
-  else if (/\bips\b/i.test(text)) set("panel", "IPS LCD", "title");
-  else if (/\blcd\b/i.test(text)) set("panel", "TFT LCD", "title");
+  } else if (matchNear(text, /\bp-?oled\b/i, DISPLAY_CONTEXT)) {
+    set("panel", "pOLED", "title");
+  } else if (matchNear(text, /\bpls\b/i, DISPLAY_CONTEXT)) {
+    set("panel", "PLS LCD", "title");
+  } else if (matchNear(text, /\bips\b/i, DISPLAY_CONTEXT)) {
+    set("panel", "IPS LCD", "title");
+  } else if (matchNear(text, /\blcd\b/i, DISPLAY_CONTEXT)) {
+    set("panel", "TFT LCD", "title");
+  }
 
   if (/\bfhd\+?\b|\bfull\s*hd\b|1080/i.test(text)) {
     set("resolution", "FHD+", "title");

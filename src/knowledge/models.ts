@@ -365,7 +365,7 @@ export const PHONE_MODELS: ModelEntry[] = [
     mainCameraMp: 50,
     releaseYear: 2025,
     osUpgrades: 4,
-    confidence: "low",
+    confidence: "high",
     aliases: ["galaxy f07"],
   },
   {
