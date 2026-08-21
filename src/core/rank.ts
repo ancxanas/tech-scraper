@@ -400,19 +400,35 @@ export function rankCandidates(
     const spec = specScores[i];
     const comp = spec.comp;
 
-    const valueScore = clamp(percentileRank(ratios[i], sortedRatios));
+    // Value is spec-points per rupee. When the spec sheet is largely imputed
+    // that ratio is an assertion, not a measurement, so it is scaled back by
+    // how much we actually know. Without this a Rs 6,499 phone with no
+    // readable specs and no reviews outranked a verified Rs 13,000 one purely
+    // on price — again caught by the golden set.
+    const evidence = 1 - spec.imputedWeight;
+    const valueScore = clamp(
+      percentileRank(ratios[i], sortedRatios) * (0.45 + 0.55 * evidence),
+    );
     const trust = trustScore(c.rating, c.ratingCount, priorMean);
 
     // ---- deal quality
     let deal = 50;
     const o = c.best;
     if (o.discountPct !== null && o.mrp) {
-      // Indian marketplaces routinely inflate MRP. Treat a >55% "discount" on a
-      // budget device as marketing, not savings.
-      const credible = o.discountPct <= 55
-        ? o.discountPct
-        : 55 - (o.discountPct - 55) * 0.5;
-      deal += clamp(credible, 0, 55) * 0.6;
+      // Indian marketplaces routinely invent the MRP. The previous curve only
+      // *reduced* the bonus for an implausible discount, so a fabricated "70%
+      // off" still bought ~28 points and outranked an identical phone sold
+      // honestly at the same price — caught by tests/golden_test.ts.
+      //
+      // Credibility now decays to zero: 40% off is taken at face value, 55%
+      // counts for 25, and anything at or beyond 80% earns nothing at all.
+      const d = o.discountPct;
+      const credible = d <= 40 ? d : Math.max(0, 40 - (d - 40) * 2);
+      deal += credible * 0.6;
+      // Beyond ~60% the MRP is not merely unhelpful, it is evidence the
+      // listing is dishonest — which is a negative signal about the seller,
+      // not a neutral one. The UI already warns about it in the cons list.
+      if (d > 60) deal -= 8;
     }
     if (c.offers.length > 1) {
       const spread = Math.max(...c.offers.map((x) => x.price)) - o.price;

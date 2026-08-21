@@ -747,6 +747,50 @@ reports, rather than inventing a plausible-looking spec sheet.
 
 ---
 
+## Round 11: the golden set, and the two flaws it found immediately
+
+Every test until now checked that _inputs_ were parsed correctly. None checked
+the thing the product promises: that the **order** is defensible. That gap is
+how a Rs 8,988 handset with a misparsed Apple A17 Pro reached #1 — nothing
+failed, and only reading the output caught it.
+
+Ground truth is awkward here, because the knowledge base is written by the same
+author as the ranker; asserting one against the other proves nothing. So
+`tests/golden_test.ts` leans on three kinds of claim that do not depend on
+anyone's recollection:
+
+1. **Invariants** — true of any correct ranker regardless of weights.
+   Determinism. Cheaper is never worse. A Pareto-dominant phone outranks the one
+   it dominates. More memory at the same price never loses.
+2. **Gates** — promises the CLI makes out loud: budget, category, bounded and
+   ordered scores, and confidence that reflects how much is actually known.
+3. **Anchors** — orderings that are uncontroversial on the captured fixture,
+   plus adversarial products that must _not_ win.
+
+Two anchors failed on first run. Both were real.
+
+**A fabricated MRP still bought a top placement.** Two identical phones at the
+same price, same rating; the one claiming "70% off" ranked higher. The
+credibility curve only _reduced_ the bonus for an implausible discount — 70% off
+still earned about 28 deal points. It now decays to zero by 80%, and beyond 60%
+it is treated as a negative signal, because an invented MRP is evidence about
+the seller rather than a neutral quirk. The UI already warned about this in the
+cons list while the score was quietly rewarding it.
+
+**An unverifiable bargain beat a verified phone.** A Rs 6,499 listing with no
+readable specs and no reviews outranked a Rs 13,000 phone with 4.3 stars from
+80,000 buyers. Value is spec-points per rupee, and when the spec sheet is
+largely imputed that ratio is an assertion rather than a measurement — but it
+was being scored at full weight. The value percentile is now scaled by how much
+of the spec sheet is real, so a product cannot claim good value on specs nobody
+has verified.
+
+Both flaws had survived every previous round of work. Neither was visible in the
+fixture's top ten, which is exactly why adversarial synthetic cases earn their
+place alongside real captures.
+
+---
+
 ## What is still worth doing
 
 1. **Amazon PDPs need a transport.** Direct fetch gets a bot page, so Amazon
