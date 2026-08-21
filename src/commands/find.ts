@@ -74,7 +74,7 @@ export const findCommand = new Command()
   )
   .option(
     "--pages <n:number>",
-    "Search depth per platform. 1 is usually enough: one Flipkart collector run already returns ~120 cards. Each extra page costs another collector request.",
+    "Search depth per platform. Each step is one more collector request but ~12 more distinct models — the catalogue is not exhausted at 1. Try 2-3 for a real run.",
     { default: 1 },
   )
   .option("-n, --top <n:number>", "Rows to show in the ranking table", {

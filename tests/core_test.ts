@@ -1537,17 +1537,22 @@ Deno.test("reviews URL keeps the pid, without which Flipkart serves nothing", ()
 
 // ------------------------------------------------------------ search depth
 
-Deno.test("search depth is scaled per platform, because a 'page' differs", () => {
+Deno.test("collector seeds are strided so extra requests buy new products", () => {
+  // A single collector seed walks ~5 result pages by itself (measured: seeding
+  // page=1 returned cards from result pages 1-5). Seeding 1,2,3 would re-fetch
+  // most of the same catalogue, so seeds step by the observed stride and three
+  // requests cover result pages 1-15 rather than 1-7.
   const intent = parseIntentRules("best phones under 15000");
-  // Collector platforms: one seed URL per page. The collector paginates
-  // internally, so one is usually plenty (~120 cards on the reference run).
-  assertEquals(buildUrls("flipkart", intent, 1).length, 1);
-  assertEquals(buildUrls("flipkart", intent, 3).length, 3);
-  // Each URL must actually target a distinct result page.
   const urls = buildUrls("flipkart", intent, 3);
-  assert(urls[0].includes("page=1"));
-  assert(urls[2].includes("page=3"));
+  assertEquals(urls.length, 3);
   assertEquals(new Set(urls).size, 3);
+  assert(urls[0].includes("page=1"), urls[0]);
+  assert(urls[1].includes("page=6"), urls[1]);
+  assert(urls[2].includes("page=11"), urls[2]);
+
+  // Amazon's dataset paginates literally, so its pages must stay consecutive.
+  const az = buildUrls("amazon", intent, 3);
+  assert(az[1].includes("page=2"), az[1]);
 });
 
 Deno.test("the budget filter is applied at the source, not just in ranking", () => {

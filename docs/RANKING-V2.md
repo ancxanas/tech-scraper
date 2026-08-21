@@ -903,9 +903,25 @@ contributed 8 in-budget products to a 48-product ranking while Flipkart
 contributed 65.
 
 Depth is now scaled per platform so a single `--pages` value means comparable
-breadth rather than an equal number of requests, and the help text says what it
-costs. The guidance is to leave it at 1 — extra pages mostly buy duplicates,
-because the collector has already covered them.
+breadth rather than an equal number of requests.
+
+The first version of this note advised leaving `--pages` at 1, on the assumption
+that the collector's internal pagination had already exhausted the catalogue.
+Measuring new distinct models per result page showed the opposite:
+
+```
+page 1: +13 models    page 3: +14    page 5: +12   (cumulative 60)
+```
+
+Flat, not decaying. The deepest page we ever see is still contributing models we
+have never encountered, so one page is a slice of the market rather than the
+market. 120 cards collapse to 60 distinct models; the remainder are colour and
+storage variants.
+
+Depth therefore pays, and seeds are now strided to make it pay properly: since
+one seed already walks about five result pages, seeding 1, 2, 3 would re-fetch
+the same ground. Seeds step 1, 6, 11, so `--pages 3` covers result pages 1-15
+instead of 1-7.
 
 ---
 

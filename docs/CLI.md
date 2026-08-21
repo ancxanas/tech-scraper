@@ -64,9 +64,29 @@ So a naive `--pages 1` gathers a deep Flipkart catalogue and a thin Amazon one.
 Amazon's depth is therefore tripled internally, so one `--pages` value means
 roughly comparable breadth rather than an equal number of requests.
 
-Practical guidance: **leave it at 1.** Because the collector already walks
-several result pages from a single seed, `--pages 3` largely buys duplicates
-while costing three times as many collector requests.
+### How much catalogue does one page actually give?
+
+Measured by counting _new distinct models_ per result page in the captured run:
+
+| result page | cards | new models | cumulative |
+| ----------- | ----- | ---------- | ---------- |
+| 1           | 22    | 13         | 13         |
+| 2           | 22    | 10         | 23         |
+| 3           | 22    | 14         | 37         |
+| 4           | 24    | 11         | 48         |
+| 5           | 22    | 12         | 60         |
+
+The curve is flat, not decaying — the last page we see still contributes twelve
+models we had never encountered. **One page is a slice of the market, not the
+market.** 120 cards reduce to 60 distinct models; the rest are colour and
+storage variants.
+
+So depth does pay, and seeds are strided to make it pay properly: because one
+collector seed already walks about five result pages, seeding 1, 2, 3 would
+re-fetch the same catalogue. Seeds step 1, 6, 11 instead, so `--pages 3` covers
+result pages 1-15 rather than 1-7.
+
+Practical guidance: **2-3 for a real run**, 1 when you only need a quick look.
 
 ## Naming decisions
 

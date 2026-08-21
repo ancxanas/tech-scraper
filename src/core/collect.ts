@@ -24,15 +24,14 @@ import type { RawBatch } from "./pipeline.ts";
  *
  * Measured on the reference run, "one page" is not one thing:
  *
- *   Flipkart collector, 1 seed URL  -> 120 cards spanning 5 result pages.
- *     The collector paginates internally, so extra seed URLs mostly buy
- *     duplicates at multiplied cost.
- *   Amazon prebuilt dataset, pages_to_search: 1 -> 16 products, one page.
- *     That is thin enough that Amazon contributed only 8 in-budget products
- *     to a 48-product ranking.
+ *   Flipkart collector, 1 seed URL -> 120 cards spanning result pages 1-5.
+ *     The collector paginates internally.
+ *   Amazon prebuilt dataset, pages_to_search: 1 -> 16 products, page 1 only.
+ *     Thin enough that Amazon contributed 8 in-budget products to a
+ *     48-product ranking while Flipkart contributed 65.
  *
- * So the user's `--pages` is scaled per platform to mean roughly the same
- * amount of catalogue, rather than the same number of requests.
+ * So `--pages` is scaled per platform to mean comparable breadth rather than
+ * an equal number of requests.
  */
 function depthFor(platform: Platform, pages: number): number {
   return platform === "amazon" ? pages * 3 : pages;
@@ -136,13 +135,25 @@ function tataCliqUrl(intent: RankIntent, page: number): string {
   return `https://www.tatacliq.com/search/?${params.join("&")}`;
 }
 
+/**
+ * How many result pages a single collector seed URL walks by itself.
+ *
+ * Observed: seeding `page=1` returned cards from result pages 1 through 5.
+ * Seeding consecutive pages would therefore re-fetch ~80% of the same
+ * catalogue, so seeds are strided instead — page 1, 6, 11 — and each extra
+ * request buys genuinely new products.
+ */
+const COLLECTOR_STRIDE = 5;
+
 export function buildUrls(
   platform: Platform,
   intent: RankIntent,
   pages: number,
 ): string[] {
   const urls: string[] = [];
-  for (let page = 1; page <= pages; page++) {
+  const stride = platform === "amazon" ? 1 : COLLECTOR_STRIDE;
+  for (let i = 0; i < pages; i++) {
+    const page = 1 + i * stride;
     switch (platform) {
       case "flipkart":
         urls.push(flipkartUrl(intent, page));
