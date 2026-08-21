@@ -2080,3 +2080,50 @@ Deno.test("the price cache key carries a parser version", async () => {
   );
   await Deno.remove(path);
 });
+
+Deno.test("the buy box wins over a sold-out seller's cheaper offer", () => {
+  // Measured on the live M17 listing: the page carries an AggregateOffer
+  // whose lowPrice is a seller that has sold out, while the buy box shows a
+  // different seller at a higher price. Reading the aggregate reported
+  // "₹12,951, out of stock, AwesomeOnline" and sank a phone that is in fact
+  // on sale at ₹19,474 from SmartTechMart.
+  const html = `<html><head>
+<script type="application/ld+json">${
+    JSON.stringify({
+      "@type": "Product",
+      sku: "MOBHGU9DYEBQW6NW",
+      offers: {
+        "@type": "AggregateOffer",
+        lowPrice: 12951,
+        highPrice: 19474,
+        availability: "https://schema.org/OutOfStock",
+        seller: { name: "AwesomeOnline" },
+      },
+    })
+  }</script></head><body>
+19% 23,999 ₹19,474 +₹109 Protect Promise Fee Buy at ₹18,500
+Delivery by 25 Aug, Tue Fulfilled by SmartTechMart 4.7 See other sellers
+</body></html>`;
+
+  const c = parseCheckout(pageToText(html));
+  assertEquals(c.pagePrice, 19474);
+  assertEquals(c.pageMrp, 23999);
+  assertEquals(c.seller, "SmartTechMart");
+  assertEquals(c.inStock, true);
+});
+
+Deno.test("no buy box and a sold-out offer still reads as out of stock", () => {
+  const html = `<html><head>
+<script type="application/ld+json">${
+    JSON.stringify({
+      "@type": "Product",
+      sku: "X",
+      offers: {
+        "@type": "Offer",
+        price: 9999,
+        availability: "https://schema.org/OutOfStock",
+      },
+    })
+  }</script></head><body>Currently unavailable</body></html>`;
+  assertEquals(parseCheckout(pageToText(html)).inStock, false);
+});

@@ -57,8 +57,20 @@ export function jsonLdSummary(html: string): string {
     for (const raw of items) {
       const it = raw as Record<string, unknown>;
       const offers = it?.offers as Record<string, unknown> | undefined;
-      const price = Number(offers?.price ?? offers?.lowPrice ?? NaN);
-      if (!Number.isFinite(price) || price <= 0) continue;
+      // Only a single Offer describes the buy box. An AggregateOffer's
+      // lowPrice is the cheapest seller on the listing, which on Flipkart is
+      // routinely one that has sold out - that is how a dead 12,951 kept
+      // beating the live 19,474.
+      const isAggregate =
+        String(offers?.["@type"] ?? "").toLowerCase().includes("aggregate") ||
+        offers?.lowPrice !== undefined && offers?.price === undefined;
+      const price = Number(offers?.price ?? NaN);
+      if (isAggregate || !Number.isFinite(price) || price <= 0) {
+        if (offers?.lowPrice !== undefined) {
+          out.push(`LD_LOW=${Math.round(Number(offers.lowPrice))}`);
+        }
+        continue;
+      }
       out.push(`LD_PRICE=${Math.round(price)}`);
       if (typeof it.sku === "string") out.push(`LD_SKU=${it.sku}`);
       const avail = String(offers?.availability ?? "");
