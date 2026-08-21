@@ -30,10 +30,11 @@ import { groupListings } from "../src/core/group.ts";
 import { rankCandidates } from "../src/core/rank.ts";
 import { parseIntentRules, unsupportedReason } from "../src/core/intent.ts";
 import { loadRun } from "../src/core/replay.ts";
-import { runPipeline } from "../src/core/pipeline.ts";
-import { matchSoc } from "../src/knowledge/soc.ts";
+import { buildCandidates, runPipeline } from "../src/core/pipeline.ts";
+import { matchSoc, matchSocDetailed } from "../src/knowledge/soc.ts";
 import { lookupModel, PHONE_MODELS } from "../src/knowledge/models.ts";
 import { hasCheckoutInfo, parseCheckout } from "../src/core/offers.ts";
+import { SpecStore } from "../src/core/specstore.ts";
 import { buildPrompt, classifyFailure } from "../src/commands/heal.ts";
 
 const FIXTURE = "tests/fixtures/run-phones-15000";
@@ -1070,4 +1071,94 @@ Deno.test("a cross-platform pair produces one candidate with the cheaper offer f
   assertEquals(candidates[0].offers.length, 2);
   assertEquals(candidates[0].best.platform, "amazon");
   assertEquals(candidates[0].best.price, 11999);
+});
+
+// ------------------------------------------- specs resolved before ranking
+
+Deno.test("SoC matches record whether the page named the vendor", () => {
+  // Flipkart writes "128 GB ROM 4 Gen 2 5G | Octa Core Processor", dropping
+  // "Snapdragon". That is real evidence but a weak identification, because
+  // "4 Gen 2" and "4s Gen 2" are different silicon.
+  const named = matchSocDetailed("Qualcomm Snapdragon 4 Gen 2 processor");
+  assertEquals(named?.soc.name, "Snapdragon 4 Gen 2");
+  assertEquals(named?.ambiguous, false);
+
+  const abbreviated = matchSocDetailed(
+    "6 GB RAM | 128 GB ROM 4 Gen 2 5G | Octa Core",
+  );
+  assertEquals(abbreviated?.soc.name, "Snapdragon 4 Gen 2");
+  assertEquals(abbreviated?.ambiguous, true);
+
+  assertEquals(matchSocDetailed("no chipset here"), null);
+});
+
+Deno.test("an abbreviated page value cannot overwrite a confident KB entry", () => {
+  const { listings } = normalizeBatch([
+    {
+      product_name: "POCO M7 5G (Ocean Blue, 128 GB) (6 GB RAM)",
+      selling_price: 12499,
+      product_url:
+        "https://www.flipkart.com/poco-m7-5g-ocean-blue-128-gb/p/itm1",
+    },
+  ], "flipkart");
+
+  const enrichText = new Map([[
+    listings[0].id,
+    "Product highlights 6 GB RAM | 128 GB ROM 4 Gen 2 5G | Octa Core Processor | 2.2 GHz",
+  ]]);
+  const a = analyze(listings[0], { enrichText });
+
+  // The KB says 4s Gen 2 with high confidence; the page abbreviated. Keep the
+  // KB value and let the conflict reporter raise it for a human.
+  assertEquals(a.specs.socName, "Snapdragon 4s Gen 2");
+  assertEquals(a.specSources.socName, "kb");
+});
+
+Deno.test("an unambiguous page value does overwrite the KB", () => {
+  const { listings } = normalizeBatch([
+    {
+      product_name: "POCO M7 5G (Ocean Blue, 128 GB) (6 GB RAM)",
+      selling_price: 12499,
+      product_url:
+        "https://www.flipkart.com/poco-m7-5g-ocean-blue-128-gb/p/itm1",
+    },
+  ], "flipkart");
+
+  const enrichText = new Map([[
+    listings[0].id,
+    "Specifications Processor Qualcomm Snapdragon 6 Gen 1 Octa Core",
+  ]]);
+  const a = analyze(listings[0], { enrichText });
+  assertEquals(a.specs.socName, "Snapdragon 6 Gen 1");
+  assertEquals(a.specSources.socName, "enrich");
+});
+
+Deno.test("buildCandidates groups without ranking, so specs can resolve first", async () => {
+  const batches = await loadRun([FIXTURE]);
+  const intent = parseIntentRules("best phones under 15000");
+  const { candidates, intent: resolved } = buildCandidates(intent, batches);
+  assert(candidates.length > 40, `only ${candidates.length} candidates`);
+  assertEquals(resolved.category, "phone");
+  // Not yet scored — that is the point.
+  assert(!("score" in candidates[0]));
+});
+
+Deno.test("the spec cache round-trips and reports hits", async () => {
+  const path = await Deno.makeTempFile({ suffix: ".json" });
+  const url = "https://www.flipkart.com/x/p/itm1?pid=ABC&lid=noise&srno=junk";
+
+  const a = new SpecStore(path);
+  await a.load();
+  assertEquals(a.get(url), null);
+  assertEquals(a.stats.misses, 1);
+  a.set(url, "Product highlights 8 GB RAM | 256 GB ROM", "direct");
+  await a.save();
+
+  // Tracking parameters must not fragment the cache key.
+  const b = new SpecStore(path);
+  await b.load();
+  assertExists(b.get("https://www.flipkart.com/x/p/itm1?pid=ABC&other=1"));
+  assertEquals(b.stats.hits, 1);
+
+  await Deno.remove(path);
 });

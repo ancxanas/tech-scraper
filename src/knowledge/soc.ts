@@ -765,6 +765,34 @@ const ALIAS_INDEX: Array<{ alias: string; soc: SocEntry }> = SOCS
   .flatMap((soc) => soc.aliases.map((alias) => ({ alias, soc })))
   .sort((a, b) => b.alias.length - a.alias.length);
 
+export interface SocMatch {
+  soc: SocEntry;
+  /**
+   * True when the alias that matched carried no vendor name — Flipkart writes
+   * "128 GB ROM 4 Gen 2 5G | Octa Core Processor", dropping "Snapdragon"
+   * entirely. Such a match is real evidence but a weak identification, because
+   * "4 Gen 2" and "4s Gen 2" are different chips and the abbreviation is
+   * lossy. Callers should not let one overwrite a confident knowledge-base
+   * entry; they should raise it for review instead.
+   */
+  ambiguous: boolean;
+}
+
+const VENDOR_WORDS =
+  /snapdragon|dimensity|helio|exynos|unisoc|tensor|bionic|mediatek|qualcomm/;
+
+/** Find a SoC mentioned anywhere in a blob of text, with match quality. */
+export function matchSocDetailed(text: string): SocMatch | null {
+  const soc = matchSoc(text);
+  if (!soc) return null;
+  const hay = text.toLowerCase();
+  // Which alias actually hit? If any matching alias names a vendor, the
+  // identification is solid.
+  const hit = soc.aliases.find((a) => hay.includes(a));
+  const ambiguous = hit ? !VENDOR_WORDS.test(hit) : true;
+  return { soc, ambiguous };
+}
+
 /** Find a SoC mentioned anywhere in a blob of text. Longest alias wins. */
 export function matchSoc(text: string): SocEntry | null {
   if (!text) return null;

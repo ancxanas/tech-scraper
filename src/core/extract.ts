@@ -9,7 +9,7 @@
 import type { AnalyzedListing, Listing, Specs, SpecSource } from "./types.ts";
 import { classify } from "./classify.ts";
 import { lookupModel } from "../knowledge/models.ts";
-import { matchSoc, perfTier } from "../knowledge/soc.ts";
+import { matchSoc, matchSocDetailed, perfTier } from "../knowledge/soc.ts";
 
 const EMPTY_SPECS: Specs = {
   ramGb: null,
@@ -402,18 +402,32 @@ export function analyze(
     }
   };
 
-  // 1. Enriched PDP text wins.
+  // 1. Enriched PDP text wins — with one exception.
+  //
+  // Flipkart abbreviates chipsets ("128 GB ROM 4 Gen 2 5G"), dropping the
+  // vendor name. "4 Gen 2" and "4s Gen 2" are different silicon, so a lossy
+  // abbreviation must not silently overwrite a knowledge-base entry we are
+  // confident about. It is surfaced as a conflict for a human instead.
+  const kbPreview = lookupModel(listing.title) ?? lookupModel(slugText);
   if (enrich) {
     const e = specsFromText(enrich);
     for (const k of Object.keys(e.sources) as Array<keyof Specs>) {
       e.sources[k] = "enrich";
+    }
+    if (e.specs.socName && kbPreview?.soc && kbPreview.confidence === "high") {
+      const detail = matchSocDetailed(enrich);
+      if (detail?.ambiguous && detail.soc.name !== kbPreview.soc) {
+        delete e.specs.socName;
+        delete e.specs.antutu;
+        delete e.specs.perfTier;
+      }
     }
     apply(e.specs, e.sources, true);
   }
 
   // 2. Knowledge base for the resolved model.
   const modelKey = deriveModelKey(listing.title);
-  const kb = lookupModel(listing.title) ?? lookupModel(slugText);
+  const kb = kbPreview;
   if (kb) {
     const kbSpecs: Partial<Specs> = {
       panel: kb.panel ?? null,

@@ -517,6 +517,68 @@ same reason the BEST VALUE badge now demands evidence.
 
 ---
 
+## Round 8: resolve specs before ranking, not after
+
+An audit of the reference run showed how little the ranker actually knew:
+
+```
+ranked                        48
+fully specced (11/11 fields)   7  (15%)
+avg fields known             4.2 / 11
+chipset missing on           38 / 48
+```
+
+85% of ranked products had an incomplete spec sheet, and the missing fields were
+filled with peer medians — invented numbers feeding a visible score.
+
+Worse, the old flow was circular. It ranked first and enriched the top N, which
+means a phone ranked low _because_ its specs were unknown never got enriched, so
+it stayed low. The ranking was deciding what it was allowed to learn.
+
+Resolution now happens between grouping and ranking, for every candidate:
+
+```
+scrape -> normalise -> classify -> group -> RESOLVE SPECS -> rank
+```
+
+|                    | before   | after        |
+| ------------------ | -------- | ------------ |
+| avg fields known   | 4.2 / 11 | **7.1 / 11** |
+| chipset known      | 10 / 48  | **28 / 48**  |
+| average confidence | 41%      | **68%**      |
+
+It is affordable because specs do not change. A persistent cache
+(`.cache/specs.json`, keyed by URL with tracking parameters stripped, 30-day
+TTL) makes repeat runs free: the cold run took 21s for 61 pages, the warm run
+0.8s for the same catalogue. Paid transports stay behind `--allow-paid`; the 8
+unresolved products are Amazon, which blocks direct fetch.
+
+### The knowledge base audits itself now
+
+Fetching every page made a long-standing gap cheap to close: comparing what the
+KB claims against what the merchant states. The very first run found three:
+
+```
+POCO M7 5G: KB says Snapdragon 4s Gen 2, page says Snapdragon 4 Gen 2
+```
+
+Investigating that produced a subtlety worth recording. The page does not say
+"Snapdragon" at all — Flipkart writes
+`128 GB ROM 4 Gen 2 5G | Octa Core
+Processor`, dropping the vendor name.
+`Snapdragon 4 Gen 2` and `4s Gen 2` are different silicon, so the abbreviation
+is lossy and cannot be trusted to overwrite a confident hand-entered value.
+
+So `matchSocDetailed()` now reports whether the matching alias named a vendor.
+Unambiguous page values overwrite the KB automatically; abbreviated ones are
+kept as-is and surfaced for a human to settle. Both paths are tested.
+
+This is the only mechanism in the project capable of catching a KB entry being
+_wrong_ rather than merely missing, which matters because that file is
+hand-maintained and I am the one who typed it.
+
+---
+
 ## What is still worth doing
 
 1. **Amazon PDPs need a transport.** Direct fetch gets a bot page, so Amazon

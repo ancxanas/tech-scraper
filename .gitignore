@@ -6,3 +6,6 @@ node_modules/
 
 # Saved raw scrape payloads (replay data)
 runs/
+
+# Spec cache (regenerable, product pages)
+.cache/

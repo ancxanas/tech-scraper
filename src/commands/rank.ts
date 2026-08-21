@@ -12,7 +12,12 @@ import { loadRun } from "../core/replay.ts";
 import { runPipeline } from "../core/pipeline.ts";
 import { parseIntentRules, unsupportedReason } from "../core/intent.ts";
 import { renderFull } from "../ui/render.ts";
-import { enrichTop, reportEnrichment } from "../core/enrich.ts";
+import {
+  type FetchMode,
+  reportResolution,
+  resolveSpecs,
+} from "../core/resolve.ts";
+import { buildCandidates } from "../core/pipeline.ts";
 
 export const rankCommand = new Command()
   .description("Rank products from saved scrape data (no credits spent)")
@@ -38,16 +43,21 @@ export const rankCommand = new Command()
     "Allow N% over the stated budget",
     { default: 0 },
   )
+  .option("--no-specs", "Skip spec resolution and rank on listing data alone")
   .option(
-    "--enrich-via <mode:string>",
-    "auto | direct | unlocker (auto tries the free direct fetch first)",
+    "--specs-via <mode:string>",
+    "auto | direct | unlocker | cache-only",
     { default: "auto" },
   )
   .option(
-    "--enrich <n:number>",
-    "Fetch real spec sheets for the top N (Web Unlocker credit, no re-scrape)",
-    { default: 0 },
+    "--specs-limit <n:number>",
+    "Cap new page fetches this run (cache hits are free and uncapped)",
   )
+  .option(
+    "--allow-paid",
+    "Permit Web Unlocker for pages that block direct fetch",
+  )
+  .option("-v, --verbose", "Show each page as it resolves")
   .option("--json", "Emit JSON instead of the terminal report", {
     default: false,
   })
@@ -90,27 +100,27 @@ export const rankCommand = new Command()
       keepRejected: false,
     });
 
-    // Enrichment against saved data: the finalists' product pages are fetched
-    // live, but nothing is re-scraped. This is the cheap way to test whether
-    // enrichment actually rescues the white-label phones the KB cannot cover.
-    if (options.enrich > 0 && result.ranked.length > 0) {
-      console.error(
-        colors.dim(`  Fetching spec sheets for the top ${options.enrich}…`),
-      );
-      const enriched = await enrichTop(result.ranked, options.enrich, {
-        verbose: true,
-        mode: options.enrichVia as "auto" | "direct" | "unlocker",
+    // Resolve specs BEFORE ranking. Cache hits are free; the fetch budget
+    // only limits genuinely new pages.
+    if (options.specs !== false) {
+      const { candidates } = buildCandidates(intent, batches);
+      const resolved = await resolveSpecs(candidates, {
+        mode: options.specsVia as FetchMode,
+        limit: options.specsLimit,
+        allowPaid: options.allowPaid,
+        verbose: options.verbose,
       });
-      if (enriched.text.size > 0) {
+      reportResolution(resolved);
+      enrichedCount = resolved.fromCache + resolved.fetchedDirect +
+        resolved.fetchedPaid;
+      if (resolved.text.size > 0 || resolved.checkout.size > 0) {
         result = runPipeline(query, intent, batches, {
           inStockOnly: options.inStockOnly,
           budgetTolerance: (options.budgetTolerance ?? 0) / 100,
-          enrichText: enriched.text,
-          checkoutInfo: enriched.checkout,
+          enrichText: resolved.text,
+          checkoutInfo: resolved.checkout,
         });
       }
-      enrichedCount = enriched.fetched;
-      reportEnrichment(enriched);
     }
 
     if (options.json) {

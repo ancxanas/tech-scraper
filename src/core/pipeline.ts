@@ -9,6 +9,7 @@
 
 import type {
   AnalyzedListing,
+  Candidate,
   PipelineDiagnostics,
   PipelineResult,
   PlatformId,
@@ -68,6 +69,38 @@ function inferCategory(listings: AnalyzedListing[]): RankIntent["category"] {
   if (tally.size === 0) return "unknown";
   const [top] = [...tally.entries()].sort((a, b) => b[1] - a[1]);
   return top[0] as RankIntent["category"];
+}
+
+/**
+ * Phase 1: raw payloads -> grouped candidates, with no ranking yet.
+ *
+ * Exposed separately so specs can be resolved before anything is scored.
+ * Ranking must not decide which products it is allowed to learn about.
+ */
+export function buildCandidates(
+  intentIn: RankIntent,
+  batches: RawBatch[],
+  options: PipelineOptions = {},
+): { intent: RankIntent; candidates: Candidate[] } {
+  const analyzed = batches.flatMap((batch) => {
+    const { listings } = normalizeBatch(batch.items, batch.platform);
+    return listings.map((l) => analyze(l, { enrichText: options.enrichText }));
+  });
+
+  let intent = intentIn;
+  if (intent.category === "unknown") {
+    const inferred = inferCategory(analyzed);
+    if (inferred !== "unknown") intent = { ...intent, category: inferred };
+  }
+
+  const candidates = groupListings(analyzed);
+  if (options.checkoutInfo?.size) {
+    for (const c of candidates) {
+      const hit = c.listings.find((l) => options.checkoutInfo!.has(l.id));
+      if (hit) c.checkout = options.checkoutInfo!.get(hit.id);
+    }
+  }
+  return { intent, candidates };
 }
 
 export function runPipeline(
