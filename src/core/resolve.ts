@@ -482,3 +482,101 @@ export function reportResolution(r: ResolveResult): void {
     );
   }
 }
+
+export interface RefreshResult {
+  checkout: Map<string, CheckoutInfo>;
+  fetched: number;
+  cached: number;
+  failed: number;
+  changed: Array<
+    { product: string; from: number; to: number; seller: string | null }
+  >;
+}
+
+export async function refreshPrices(
+  candidates: Candidate[],
+  opts: {
+    limit?: number;
+    allowPaid?: boolean;
+    mode?: FetchMode;
+    pace?: number;
+  } = {},
+): Promise<RefreshResult> {
+  const out: RefreshResult = {
+    checkout: new Map(),
+    fetched: 0,
+    cached: 0,
+    failed: 0,
+    changed: [],
+  };
+  const top = candidates.slice(0, opts.limit ?? 15);
+  if (!top.length) return out;
+
+  const store = new SpecStore();
+  await store.load();
+  let n = 0;
+
+  for (const c of top) {
+    const url = c.best.url;
+    if (!url) continue;
+    try {
+      let text = store.getPrice(url);
+      if (text) {
+        out.cached++;
+      } else {
+        if (n > 0) await sleep(opts.pace ?? 900);
+        const got = await fetchPage(
+          url,
+          opts.mode ?? "auto",
+          opts.allowPaid ?? false,
+        );
+        text = pageToText(got.text);
+        store.setPrice(url, text, got.via);
+        out.fetched++;
+        n++;
+      }
+      const checkout = parseCheckout(text);
+      if (!hasCheckoutInfo(checkout)) continue;
+
+      const from = c.best.price;
+      for (const l of c.listings) {
+        if (canonicalUrl(l.url) === canonicalUrl(url)) {
+          out.checkout.set(l.id, checkout);
+        }
+      }
+      if (
+        checkout.pagePrice && from &&
+        Math.abs(checkout.pagePrice - from) / from > 0.02
+      ) {
+        out.changed.push({
+          product: c.modelName,
+          from,
+          to: checkout.pagePrice,
+          seller: checkout.seller,
+        });
+      }
+    } catch {
+      out.failed++;
+    }
+  }
+
+  await store.save();
+  return out;
+}
+
+export function reportRefresh(r: RefreshResult): void {
+  if (!r.fetched && !r.cached) return;
+  const parts = [`${r.fetched} refetched`, `${r.cached} still fresh`];
+  if (r.failed) parts.push(`${r.failed} unreadable`);
+  console.error(colors.dim(`  Prices: ${parts.join(", ")}`));
+  for (const c of r.changed.slice(0, 8)) {
+    const dir = c.to > c.from ? "up" : "down";
+    console.error(
+      colors.yellow(
+        `    ${c.product}: listed ₹${c.from.toLocaleString("en-IN")}, now ₹${
+          c.to.toLocaleString("en-IN")
+        } (${dir}${c.seller ? ` — ${c.seller} holds the buy box` : ""})`,
+      ),
+    );
+  }
+}

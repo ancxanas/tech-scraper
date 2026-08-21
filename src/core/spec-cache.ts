@@ -1,5 +1,12 @@
 const DEFAULT_PATH = ".cache/specs.json";
-const TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+const SPEC_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const PRICE_TTL_MS = 60 * 60 * 1000;
+const PRICE_PREFIX = "price://";
+
+function ttlFor(key: string): number {
+  return key.startsWith(PRICE_PREFIX) ? PRICE_TTL_MS : SPEC_TTL_MS;
+}
 
 interface CacheEntry {
   text: string;
@@ -25,6 +32,10 @@ export class SpecStore {
     this.#path = path;
   }
 
+  static priceKey(url: string): string {
+    return `${PRICE_PREFIX}${SpecStore.key(url)}`;
+  }
+
   static key(url: string): string {
     try {
       const u = new URL(url);
@@ -45,12 +56,34 @@ export class SpecStore {
       >;
       const now = Date.now();
       for (const [k, v] of Object.entries(raw)) {
-        if (now - Date.parse(v.fetchedAt) < TTL_MS) this.#data.set(k, v);
+        if (now - Date.parse(v.fetchedAt) < ttlFor(k)) this.#data.set(k, v);
       }
     } catch {
       // ignored
     }
     this.stats.entries = this.#data.size;
+  }
+
+  getPrice(url: string): string | null {
+    const key = SpecStore.priceKey(url);
+    const hit = this.#data.get(key);
+    if (hit && Date.now() - Date.parse(hit.fetchedAt) < PRICE_TTL_MS) {
+      this.stats.hits++;
+      return hit.text;
+    }
+    if (hit) this.#data.delete(key);
+    this.stats.misses++;
+    return null;
+  }
+
+  setPrice(url: string, text: string, via: "direct" | "unlocker"): void {
+    this.#data.set(SpecStore.priceKey(url), {
+      text,
+      fetchedAt: new Date().toISOString(),
+      via,
+    });
+    this.stats.writes++;
+    this.#dirty = true;
   }
 
   get(url: string): string | null {

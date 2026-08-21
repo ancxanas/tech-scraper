@@ -1242,6 +1242,7 @@ Deno.test("the flat card discount does not reorder results", async () => {
         [l.id, {
           pagePrice: null,
           pageMrp: null,
+          seller: null,
           inStock: null,
           deliveryBy: null,
           buyAt: Math.round(r.best.price * 0.95),
@@ -1911,4 +1912,51 @@ Deno.test("the cached page section keeps the price block", async () => {
   const cached = extractSpecSection(page);
   assertEquals(parseCheckout(cached).pagePrice, 11699);
   assertEquals(parseCheckout(cached).pageMrp, 11999);
+});
+
+Deno.test("the buy box seller is read off the page", () => {
+  const live =
+    "Samsung Galaxy M17 5G (Moonlight Silver, 128 GB) (6 GB RAM) 4.4 | 1,525 " +
+    "19% 23,999 ₹19,474 +₹109 Protect Promise Fee Buy at ₹18,500 " +
+    "Bank offers ₹974 off Delivery by 25 Aug, Tue " +
+    "Fulfilled by SmartTechMart 4.7 • 1 year with Flipkart See other sellers";
+  const c = parseCheckout(live);
+  assertEquals(c.pagePrice, 19474);
+  assertEquals(c.pageMrp, 23999);
+  assertEquals(c.buyAt, 18500);
+  assertEquals(c.seller, "SmartTechMart");
+});
+
+Deno.test("prices expire from the cache long before specs do", async () => {
+  const path = await Deno.makeTempFile({ suffix: ".json" });
+  const store = new SpecStore(path);
+  await store.load();
+  const url = "https://www.flipkart.com/x/p/itm1?pid=P1";
+
+  store.set(url, "spec text", "direct");
+  store.setPrice(url, "19% 23,999 ₹19,474 +₹109 Protect Promise Fee", "direct");
+  await store.save();
+
+  const reread = new SpecStore(path);
+  await reread.load();
+  assertEquals(reread.get(url), "spec text");
+  assertEquals(parseCheckout(reread.getPrice(url) ?? "").pagePrice, 19474);
+
+  // An hour-old price entry is gone; the spec text beside it survives.
+  const raw = JSON.parse(await Deno.readTextFile(path)) as Record<
+    string,
+    { fetchedAt: string }
+  >;
+  for (const [k, v] of Object.entries(raw)) {
+    if (k.startsWith("price://")) {
+      v.fetchedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    }
+  }
+  await Deno.writeTextFile(path, JSON.stringify(raw));
+
+  const stale = new SpecStore(path);
+  await stale.load();
+  assertEquals(stale.getPrice(url), null);
+  assertEquals(stale.get(url), "spec text");
+  await Deno.remove(path);
 });

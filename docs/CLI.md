@@ -32,6 +32,7 @@ saved data, so its prices are as old as the capture.
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `--no-specs`            | Do not resolve specs at all; rank on listing data alone.                                                                                |
 | `--specs-source <mode>` | `auto` (free, then Unlocker if permitted) · `direct` (free only) · `unlocker` (paid only) · `cache` (no network).                       |
+| `--refresh-prices <n>`  | Refetch the top **n** product pages so the price comes from the buy box rather than the search card. Cached for one hour.               |
 | `--max-fetches <n>`     | Cap on **new network fetches** this run. Cached pages are free and uncapped.                                                            |
 | `--use-unlocker`        | Permission to fall back to Web Unlocker when a free fetch is blocked. **Billed per request.** It is a fallback, never the first choice. |
 | `-v, --verbose`         | Print each page as it resolves.                                                                                                         |

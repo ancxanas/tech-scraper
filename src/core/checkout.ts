@@ -1,6 +1,7 @@
 export interface CheckoutInfo {
   pagePrice: number | null;
   pageMrp: number | null;
+  seller: string | null;
   inStock: boolean | null;
   deliveryBy: string | null;
   buyAt: number | null;
@@ -13,6 +14,7 @@ export interface CheckoutInfo {
 const EMPTY: CheckoutInfo = {
   pagePrice: null,
   pageMrp: null,
+  seller: null,
   inStock: null,
   deliveryBy: null,
   buyAt: null,
@@ -56,9 +58,14 @@ export function parseCheckout(text: string): CheckoutInfo {
   )
     ?.[1]?.trim() ?? null;
 
+  const seller = text.match(
+    /(?:Fulfilled by|Sold by|Seller)\s+([A-Za-z0-9][A-Za-z0-9 .&'-]{2,38}?)(?:\s+\d\.\d|\s*\||\s+See other sellers|\s{2,})/i,
+  )?.[1]?.trim() ?? null;
+
   return {
     pagePrice,
     pageMrp: pageMrp && pagePrice && pageMrp >= pagePrice ? pageMrp : null,
+    seller,
     inStock: outOfStock ? false : deliveryBy ? true : null,
     deliveryBy,
     buyAt,
@@ -70,7 +77,8 @@ export function parseCheckout(text: string): CheckoutInfo {
 }
 
 export function hasCheckoutInfo(c: CheckoutInfo): boolean {
-  return c.pagePrice !== null || c.buyAt !== null || c.bankOffer !== null ||
+  return c.pagePrice !== null || c.seller !== null || c.buyAt !== null ||
+    c.bankOffer !== null ||
     c.exchangeUpTo !== null ||
     c.noCostEmi || c.pincodeBlocked || c.inStock !== null;
 }

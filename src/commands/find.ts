@@ -12,10 +12,13 @@ import { runDirFor, saveRun } from "../core/replay.ts";
 import { renderFull } from "../ui/render.ts";
 import {
   type FetchMode,
+  refreshPrices,
+  reportRefresh,
   reportResolution,
   resolveSpecs,
 } from "../core/resolve.ts";
 import { buildCandidates } from "../core/pipeline.ts";
+import type { CheckoutInfo } from "../core/checkout.ts";
 import { getStatsFor, savePrices } from "../core/price-history.ts";
 import type { RankIntent } from "../core/types.ts";
 
@@ -100,6 +103,10 @@ export const findCommand = new Command()
     { default: "auto" },
   )
   .option(
+    "--refresh-prices <n:number>",
+    "Refetch the top N product pages so prices come from the buy box, not the search card",
+  )
+  .option(
     "--max-fetches <n:number>",
     "Cap NEW spec-page fetches this run (cached pages are free and uncapped)",
   )
@@ -176,6 +183,8 @@ export const findCommand = new Command()
     }
 
     let enrichedCount = 0;
+    let mergedCheckout = new Map<string, CheckoutInfo>();
+    let lastOptions: Record<string, unknown> = {};
     let result = runPipeline(query, intent, batches, {
       inStockOnly: options.inStockOnly,
       budgetTolerance: (options.budgetTolerance ?? 0) / 100,
@@ -208,6 +217,14 @@ export const findCommand = new Command()
         resolved.text.size > 0 || resolved.external.size > 0 ||
         resolved.reviews.size > 0
       ) {
+        lastOptions = {
+          inStockOnly: options.inStockOnly,
+          budgetTolerance: (options.budgetTolerance ?? 0) / 100,
+          enrichText: resolved.text,
+          externalSpecs: resolved.external,
+          reviewData: resolved.reviews,
+        };
+        mergedCheckout = resolved.checkout;
         result = runPipeline(query, intent, batches, {
           inStockOnly: options.inStockOnly,
           budgetTolerance: (options.budgetTolerance ?? 0) / 100,
@@ -241,6 +258,27 @@ export const findCommand = new Command()
           );
         }
       } catch { /* ignored */ }
+    }
+
+    if (options.refreshPrices && options.refreshPrices > 0) {
+      const fresh = await refreshPrices(
+        result.ranked as unknown as Parameters<typeof refreshPrices>[0],
+        {
+          limit: options.refreshPrices,
+          allowPaid: options.useUnlocker,
+          mode: options.specsSource as FetchMode,
+        },
+      );
+      reportRefresh(fresh);
+      if (fresh.checkout.size) {
+        const merged = new Map(mergedCheckout);
+        for (const [k, v] of fresh.checkout) merged.set(k, v);
+        mergedCheckout = merged;
+        result = runPipeline(query, intent, batches, {
+          ...lastOptions,
+          checkoutInfo: merged,
+        });
+      }
     }
 
     if (options.json) {
