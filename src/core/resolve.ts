@@ -16,6 +16,11 @@ import { colors } from "@cliffy/ansi/colors";
 import { fetchDirect, fetchPageMarkdown, pageToText } from "../lib/unlock.ts";
 import { type CheckoutInfo, hasCheckoutInfo, parseCheckout } from "./offers.ts";
 import { SpecStore } from "./specstore.ts";
+import {
+  type ReviewSummary,
+  reviewsUrlFor,
+  summariseReviews,
+} from "./reviews.ts";
 import { matchSocDetailed } from "../knowledge/soc.ts";
 import {
   fetchSpecs as fetchGsmSpecs,
@@ -37,6 +42,8 @@ export type FetchMode = "auto" | "direct" | "unlocker" | "cache";
 
 export interface ResolveOptions {
   mode?: FetchMode;
+  /** Mine the reviews page too (Flipkart only). Default true. */
+  withReviews?: boolean;
   /** Delay between spec-database requests, ms. */
   pace?: number;
   /** Consult the external spec database (default true when an index exists). */
@@ -66,6 +73,9 @@ export interface ResolveResult {
   checkout: Map<string, CheckoutInfo>;
   /** Verified specs from the external database, keyed by listing id. */
   external: Map<string, Partial<Specs>>;
+  /** Mined review summaries, keyed by listing id. */
+  reviews: Map<string, ReviewSummary>;
+  reviewsFetched: number;
   gsmMatched: number;
   gsmUnmatched: number;
   /** The spec database throttled us; remaining models were left unresolved. */
@@ -224,6 +234,8 @@ export async function resolveSpecs(
     text: new Map(),
     checkout: new Map(),
     external: new Map(),
+    reviews: new Map(),
+    reviewsFetched: 0,
     gsmMatched: 0,
     gsmUnmatched: 0,
     gsmRateLimited: false,
@@ -378,6 +390,34 @@ export async function resolveSpecs(
   await Promise.all(
     Array.from({ length: Math.min(concurrency, pending.length) }, worker),
   );
+
+  // Reviews are a separate page per product. Only Flipkart serves one we can
+  // read, so coverage is partial by construction and the UI says so.
+  const reviewMode: FetchMode = opts.mode ?? "auto";
+  if (opts.withReviews !== false && reviewMode !== "unlocker") {
+    for (const c of candidates) {
+      const url = reviewsUrlFor(c.best.url);
+      if (!url) continue;
+      try {
+        const key = `reviews://${url}`;
+        let text = store.get(key);
+        if (!text) {
+          if (reviewMode === "cache") continue;
+          text = pageToText(await fetchDirect(url, 15000));
+          store.set(key, text.slice(0, 24_000), "direct");
+          result.reviewsFetched++;
+          await sleep(250);
+        }
+        const summary = summariseReviews(text);
+        if (summary.sampled > 0 || summary.distribution) {
+          for (const l of c.listings) result.reviews.set(l.id, summary);
+        }
+      } catch {
+        // A missing reviews page is not a failure worth reporting per product.
+      }
+    }
+  }
+
   await store.save();
   return result;
 }
@@ -389,6 +429,7 @@ export function reportResolution(r: ResolveResult): void {
   if (r.fromCache) parts.push(`${r.fromCache} cached`);
   if (r.fetchedDirect) parts.push(`${r.fetchedDirect} fetched free`);
   if (r.fetchedPaid) parts.push(`${r.fetchedPaid} via Web Unlocker`);
+  if (r.reviews.size) parts.push(`${r.reviews.size} review pages`);
   if (r.skippedComplete) parts.push(`${r.skippedComplete} already complete`);
   if (r.failed) parts.push(`${r.failed} unavailable`);
   console.error(colors.dim(`  Specs: ${parts.join(", ") || "nothing to do"}`));

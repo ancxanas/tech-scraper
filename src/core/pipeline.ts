@@ -36,6 +36,8 @@ export interface PipelineOptions extends RankOptions {
   checkoutInfo?: Map<string, import("./offers.ts").CheckoutInfo>;
   /** Verified external specs keyed by listing id. */
   externalSpecs?: Map<string, Partial<import("./types.ts").Specs>>;
+  /** Mined review summaries keyed by listing id. */
+  reviewData?: Map<string, import("./reviews.ts").ReviewSummary>;
   /** Keep rejected listings for the diagnostics view. */
   keepRejected?: boolean;
 }
@@ -101,6 +103,12 @@ export function buildCandidates(
   }
 
   const candidates = groupListings(analyzed);
+  if (options.reviewData?.size) {
+    for (const c of candidates) {
+      const hit = c.listings.find((l) => options.reviewData!.has(l.id));
+      if (hit) c.reviews = options.reviewData!.get(hit.id);
+    }
+  }
   if (options.checkoutInfo?.size) {
     for (const c of candidates) {
       const hit = c.listings.find((l) => options.checkoutInfo!.has(l.id));
@@ -191,6 +199,12 @@ export function runPipeline(
   }
 
   const candidates = groupListings(allAnalyzed);
+  if (options.reviewData?.size) {
+    for (const c of candidates) {
+      const hit = c.listings.find((l) => options.reviewData!.has(l.id));
+      if (hit) c.reviews = options.reviewData!.get(hit.id);
+    }
+  }
   if (options.checkoutInfo?.size) {
     for (const c of candidates) {
       const hit = c.listings.find((l) => options.checkoutInfo!.has(l.id));

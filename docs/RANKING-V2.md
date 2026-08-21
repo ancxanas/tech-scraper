@@ -833,6 +833,59 @@ shown, and its presence is itself weak evidence the item is purchasable.
 
 ---
 
+## Round 13: what buyers actually say
+
+Star ratings do not discriminate in this segment. Almost every phone in the
+fixture sits between 4.1 and 4.3, so the number is nearly information-free — it
+cannot tell you which handset overheats.
+
+The text can, and it is reachable. Product pages carry no reviews (they are
+rendered client-side), but `/product-reviews/` returns them as plain HTML, along
+with the full ratings histogram:
+
+```
+18,971 ratings and 1,065 reviews   1★ 1,239  2★ 647  3★ 1,515  4★ 4,233  5★ 11,337
+4.0 • Value-for-money  … Good performance.  … Verified Purchase · Mar, 2025
+```
+
+That histogram is worth as much as the prose: a 4.2 with 9% one- and two-star
+ratings is a different phone from a 4.2 with 25%, and the average hides it.
+
+### Design
+
+A lexicon, not a model — deterministic, testable offline, and wrong in ways a
+human can inspect. Ten aspects (battery, heating, camera, display, performance,
+build, sound, software, service, value), with polarity judged **per clause**
+rather than per review, because a single review routinely says both:
+
+> "Phone speed just wow.. Camera not good."
+
+Whole-review scoring would average that into mush. Clause-level correctly
+records performance-positive and camera-negative.
+
+Negation flips polarity, so "camera not good" is a complaint and "no heating
+issues" is praise. Heating counts as a complaint whenever it is mentioned
+without negation, since nobody praises a phone for heating. A single grumble is
+not reported: an aspect surfaces only with at least two mentions outweighing the
+other side two-to-one.
+
+### It stays display-only
+
+The counts are shown and never touch the score. Marketplace reviews are
+incentivised and gamed, and this project has twice been burned by trusting a
+source further than it deserved. Coverage is Flipkart-only — Amazon's review
+pages are bot-blocked — so the UI names the source ("39k Flipkart ratings")
+rather than implying a market-wide consensus.
+
+### One trap worth recording
+
+The reviews URL must carry the `pid` parameter across from the product URL.
+Without it Flipkart serves a page with no histogram and no reviews, which is
+indistinguishable from a product nobody has reviewed. The first implementation
+silently reported "0 reviews" for half the catalogue.
+
+---
+
 ## What is still worth doing
 
 1. **Amazon PDPs need a transport.** Direct fetch gets a bot page, so Amazon

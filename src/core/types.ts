@@ -138,6 +138,8 @@ export interface Candidate {
   imageUrl: string | null;
   /** Checkout details from the product page, when enrichment ran. */
   checkout?: import("./offers.ts").CheckoutInfo;
+  /** What buyers say, mined from the reviews page. Display-only. */
+  reviews?: import("./reviews.ts").ReviewSummary;
   listings: AnalyzedListing[];
 }
 

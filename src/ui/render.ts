@@ -280,6 +280,43 @@ export function detailCards(ranked: RankedCandidate[], count: number): string {
     );
     out.push("");
 
+    // What buyers actually say. Shown, never scored — marketplace reviews are
+    // incentivised, and Flipkart is the only source we can read, so this is
+    // one shop's customers rather than a market consensus.
+    const rv = r.reviews;
+    if (rv && (rv.praised.length || rv.complained.length || rv.distribution)) {
+      out.push("");
+      const who = rv.totalRatings
+        ? `${formatCount(rv.totalRatings)} Flipkart ratings`
+        : "Flipkart buyers";
+      out.push(`  ${colors.dim(`Buyers (${who})`)}`);
+      if (rv.negativeShare !== null) {
+        const pct = Math.round(rv.negativeShare * 100);
+        const paint = pct >= 20
+          ? colors.red
+          : pct >= 12
+          ? colors.yellow
+          : colors.green;
+        out.push(`    ${colors.dim("1–2★ share")}  ${paint(`${pct}%`)}`);
+      }
+      if (rv.praised.length) {
+        out.push(
+          `    ${colors.green("praise")}    ${
+            rv.praised.map((a) => `${a.aspect} (${a.positive})`).join(", ")
+          }`,
+        );
+      }
+      if (rv.complained.length) {
+        out.push(
+          `    ${colors.red("complaints")} ${
+            rv.complained.map((a) => `${a.aspect} (${a.negative})`).join(", ")
+          }`,
+        );
+        const q = rv.complained.find((a) => a.example)?.example;
+        if (q) out.push(`    ${colors.dim(`“${q}”`)}`);
+      }
+    }
+
     if (r.pros.length) {
       out.push(`  ${colors.green("▲ Pros")}`);
       for (const p of r.pros) out.push(`    ${colors.green("+")} ${p}`);

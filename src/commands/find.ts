@@ -83,6 +83,7 @@ export const findCommand = new Command()
   .option("--no-diagnostics", "Skip the coverage/funnel tables")
   .option("--in-stock-only", "Drop items known to be out of stock")
   .option("--no-specs", "Skip spec resolution and rank on listing data alone")
+  .option("--no-reviews", "Skip review mining (Flipkart only, display-only)")
   .option(
     "--specs-source <mode:string>",
     "Where spec pages come from: auto | direct | unlocker | cache",
@@ -193,18 +194,23 @@ export const findCommand = new Command()
         mode: options.specsSource as FetchMode,
         limit: options.maxFetches,
         allowPaid: options.useUnlocker,
+        withReviews: options.reviews !== false,
         verbose: options.verbose,
       });
       reportResolution(resolved);
       enrichedCount = resolved.gsmMatched + resolved.fromCache +
         resolved.fetchedDirect + resolved.fetchedPaid;
-      if (resolved.text.size > 0 || resolved.external.size > 0) {
+      if (
+        resolved.text.size > 0 || resolved.external.size > 0 ||
+        resolved.reviews.size > 0
+      ) {
         result = runPipeline(query, intent, batches, {
           inStockOnly: options.inStockOnly,
           budgetTolerance: (options.budgetTolerance ?? 0) / 100,
           enrichText: resolved.text,
           checkoutInfo: resolved.checkout,
           externalSpecs: resolved.external,
+          reviewData: resolved.reviews,
         });
       }
     }
