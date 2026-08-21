@@ -27,7 +27,11 @@ import {
   parseBeebomPage,
 } from "../src/knowledge/beebom.ts";
 import { toSpecs } from "../src/core/resolve.ts";
-import { refreshPrices, reportRefreshDetail } from "../src/core/resolve.ts";
+import {
+  refreshPrices,
+  reportRefresh,
+  reportRefreshDetail,
+} from "../src/core/resolve.ts";
 import { ageLabel, SpecStore } from "../src/core/spec-cache.ts";
 import { capturedAtFor, loadRun } from "../src/core/replay.ts";
 import { renderFull } from "../src/ui/render.ts";
