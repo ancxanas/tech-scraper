@@ -93,3 +93,17 @@ export async function checkCollector(
     return { ok: false, error: msg };
   }
 }
+
+export async function bdFetchText(
+  path: string,
+  options: RequestInit = {},
+): Promise<string> {
+  const res = await _fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers: { ...authHeaders(), ...options.headers as Record<string, string> },
+  });
+  if (!res.ok) {
+    throw new Error(`Bright Data API ${res.status}: ${await res.text()}`);
+  }
+  return await res.text();
+}

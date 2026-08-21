@@ -135,5 +135,6 @@ UNLOCKER_ZONE=cli_unlocker
 SERP_ZONE=serp_api1
 ```
 
-Shell exports still win over the file, so `UNLOCKER_ZONE=other deno task find ...`
-overrides it for one run. A missing `.env` prints a warning and carries on.
+Shell exports still win over the file, so
+`UNLOCKER_ZONE=other deno task find ...` overrides it for one run. A missing
+`.env` prints a warning and carries on.

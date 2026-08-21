@@ -173,3 +173,36 @@ Deno.test("mock fetch: bdFetch throws on non-ok response", async () => {
 
   setFetchFn(originalFetch);
 });
+
+Deno.test("unlocker: a raw page body is returned as-is", async () => {
+  Deno.env.set("BRIGHTDATA_API_KEY", "test");
+  Deno.env.set("UNLOCKER_ZONE", "cli_unlocker");
+  setFetchFn(() =>
+    Promise.resolve(
+      new Response("<html><body>28% 17,999 ₹12,951</body></html>", {
+        status: 200,
+      }),
+    )
+  );
+  const { fetchPageHtml } = await import("../src/lib/fetch-page.ts");
+  const html = await fetchPageHtml("https://www.flipkart.com/x/p/itm1");
+  assertEquals(html.includes("₹12,951"), true);
+});
+
+Deno.test("unlocker: a JSON envelope is unwrapped", async () => {
+  Deno.env.set("BRIGHTDATA_API_KEY", "test");
+  Deno.env.set("UNLOCKER_ZONE", "cli_unlocker");
+  setFetchFn(() =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({ status_code: 200, body: "<html>ok</html>" }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    )
+  );
+  const { fetchPageHtml } = await import("../src/lib/fetch-page.ts");
+  assertEquals(await fetchPageHtml("https://x/y"), "<html>ok</html>");
+});

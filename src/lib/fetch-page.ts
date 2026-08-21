@@ -1,4 +1,4 @@
-import { bdFetch } from "./brightdata.ts";
+import { bdFetch, bdFetchText } from "./brightdata.ts";
 
 export async function fetchDirect(
   url: string,
@@ -75,12 +75,22 @@ function getUnlockerZone(): string {
   return zone;
 }
 
+function unwrap(text: string): string {
+  try {
+    const parsed = JSON.parse(text) as UnlockResponse;
+    if (typeof parsed?.body === "string") return parsed.body;
+  } catch {
+    // format: "raw" returns the page itself, which is the common case.
+  }
+  return text;
+}
+
 export async function fetchPageHtml(
   url: string,
   country = "in",
 ): Promise<string> {
   const zone = getUnlockerZone();
-  const res = await bdFetch<UnlockResponse>("/request", {
+  const raw = await bdFetchText("/request", {
     method: "POST",
     body: JSON.stringify({
       zone,
@@ -89,14 +99,9 @@ export async function fetchPageHtml(
       country,
     }),
   });
-
-  if (res.status_code && res.status_code >= 400) {
-    throw new Error(
-      `Web Unlocker returned ${res.status_code} for ${url}`,
-    );
-  }
-
-  return res.body || "";
+  const html = unwrap(raw);
+  if (!html) throw new Error(`Web Unlocker returned an empty body for ${url}`);
+  return html;
 }
 
 export async function fetchPageMarkdown(
@@ -104,7 +109,7 @@ export async function fetchPageMarkdown(
   country = "in",
 ): Promise<string> {
   const zone = getUnlockerZone();
-  const res = await bdFetch<UnlockResponse>("/request", {
+  const raw = await bdFetchText("/request", {
     method: "POST",
     body: JSON.stringify({
       zone,
@@ -114,8 +119,7 @@ export async function fetchPageMarkdown(
       data_format: "markdown",
     }),
   });
-
-  return res.body || "";
+  return unwrap(raw);
 }
 
 export async function takeScreenshot(
