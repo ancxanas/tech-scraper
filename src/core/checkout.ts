@@ -1,4 +1,6 @@
 export interface CheckoutInfo {
+  pagePrice: number | null;
+  pageMrp: number | null;
   inStock: boolean | null;
   deliveryBy: string | null;
   buyAt: number | null;
@@ -9,6 +11,8 @@ export interface CheckoutInfo {
 }
 
 const EMPTY: CheckoutInfo = {
+  pagePrice: null,
+  pageMrp: null,
   inStock: null,
   deliveryBy: null,
   buyAt: null,
@@ -27,6 +31,16 @@ function rupees(raw: string | undefined): number | null {
 export function parseCheckout(text: string): CheckoutInfo {
   if (!text) return { ...EMPTY };
 
+  const priced = text.match(
+    /(\d{1,2})%\s*([\d,]{3,8})\s*₹([\d,]{3,8})\s*\+₹\d+\s*Protect Promise Fee/i,
+  );
+  const plain = text.match(/₹([\d,]{3,8})\s*\+₹\d+\s*Protect Promise Fee/i);
+  const pagePrice = rupees(priced?.[3]) ?? rupees(plain?.[1]);
+  const pageMrp = rupees(priced?.[2]) ??
+    rupees(
+      text.match(/₹([\d,]{3,8})\s*\|\s*MRP \(Incl\. of all taxes\)/i)?.[1],
+    );
+
   const buyAt = rupees(text.match(/Buy at ₹([\d,]+)/i)?.[1]) ??
     rupees(text.match(/₹([\d,]+)\s*Lowest price for you/i)?.[1]);
 
@@ -43,6 +57,8 @@ export function parseCheckout(text: string): CheckoutInfo {
     ?.[1]?.trim() ?? null;
 
   return {
+    pagePrice,
+    pageMrp: pageMrp && pagePrice && pageMrp >= pagePrice ? pageMrp : null,
     inStock: outOfStock ? false : deliveryBy ? true : null,
     deliveryBy,
     buyAt,
@@ -54,6 +70,7 @@ export function parseCheckout(text: string): CheckoutInfo {
 }
 
 export function hasCheckoutInfo(c: CheckoutInfo): boolean {
-  return c.buyAt !== null || c.bankOffer !== null || c.exchangeUpTo !== null ||
+  return c.pagePrice !== null || c.buyAt !== null || c.bankOffer !== null ||
+    c.exchangeUpTo !== null ||
     c.noCostEmi || c.pincodeBlocked || c.inStock !== null;
 }

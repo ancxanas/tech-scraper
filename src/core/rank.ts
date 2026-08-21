@@ -219,14 +219,8 @@ export interface PriceHistoryEntry {
   daysTracked: number;
 }
 
-export interface MarketFloor {
-  low: number;
-  high: number;
-}
-
 export interface RankOptions {
   priceHistory?: Map<string, PriceHistoryEntry>;
-  marketFloor?: Map<string, MarketFloor>;
   inStockOnly?: boolean;
   excludeSponsored?: boolean;
   budgetTolerance?: number;
@@ -443,18 +437,6 @@ export function rankCandidates(
     };
   });
 
-  const floor = options.marketFloor;
-  if (floor) {
-    for (const r of ranked) {
-      const m = r.listings.map((l) => floor.get(l.id)).find(Boolean);
-      if (!m) continue;
-      if (r.best.price < m.low * 0.85) {
-        r.priceBelowMarket = true;
-        r.score.dealScore = Math.min(r.score.dealScore, 40);
-      }
-    }
-  }
-
   const anyExactMatch = ranked.some((r) => r.matchesRequestedModel);
   // Anything you cannot buy sorts below everything you can. A replay put an
   // out-of-stock Galaxy M17 at #1 wearing TOP PICK, which is not a
@@ -462,14 +444,11 @@ export function rankCandidates(
   // table, badged, because the price is still useful context; it just cannot
   // lead. Applied before score so no amount of value outranks availability.
   const unbuyable = (r: RankedCandidate) => Number(r.best.inStock === false);
-  const belowFloor = (r: RankedCandidate) =>
-    Number(r.priceBelowMarket === true);
   ranked.sort((a, b) =>
     (anyExactMatch
       ? Number(b.matchesRequestedModel) - Number(a.matchesRequestedModel)
       : 0) ||
     unbuyable(a) - unbuyable(b) ||
-    belowFloor(a) - belowFloor(b) ||
     b.score.total - a.score.total ||
     b.score.confidence - a.score.confidence ||
     a.best.price - b.best.price
@@ -514,7 +493,6 @@ function annotate(
 
   const isVouchable = (r: RankedCandidate) =>
     r.best.inStock !== false &&
-    r.priceBelowMarket !== true &&
     r.score.confidence >= 0.6 &&
     r.specs.socName !== null &&
     (r.ratingCount ?? 0) >= 100 &&
@@ -619,11 +597,6 @@ function annotate(
     if (r.best.inStock === false) {
       cons.unshift("out of stock in this colour/variant right now");
     }
-    if (r.priceBelowMarket) {
-      cons.unshift(
-        "listed price is below every published offer — treat as unverified",
-      );
-    }
 
     const hist = priceHistory?.get(r.key);
     if (hist && hist.runs >= 2) {
@@ -678,7 +651,6 @@ function annotate(
     }
     if (bestRated && r === bestRated) badges.push("BEST RATED");
     if (r.best.inStock === false) badges.unshift("OUT OF STOCK");
-    if (r.priceBelowMarket) badges.unshift("PRICE UNVERIFIED");
     if (badgesFromHistory.has(r.key)) badges.push("LOWEST YET");
     if (r.rank === 1) badges.unshift("TOP PICK");
 

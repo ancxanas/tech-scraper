@@ -63,12 +63,13 @@ export function buildCandidates(
 ): { intent: RankIntent; candidates: Candidate[] } {
   const analyzed = batches.flatMap((batch) => {
     const { listings } = normalizeBatch(batch.items, batch.platform);
-    return listings.map((l) =>
-      analyze(l, {
+    return listings.map((l) => {
+      applyPagePrice(l, options);
+      return analyze(l, {
         enrichText: options.enrichText,
         externalSpecs: options.externalSpecs,
-      })
-    );
+      });
+    });
   });
 
   let intent = intentIn;
@@ -97,6 +98,19 @@ export function buildCandidates(
   return { intent, candidates };
 }
 
+function applyPagePrice(
+  l: import("./types.ts").Listing,
+  options: PipelineOptions,
+): void {
+  const page = options.checkoutInfo?.get(l.id);
+  const card = l.price;
+  if (!page?.pagePrice || !card) return;
+  if (Math.abs(page.pagePrice - card) / card <= 0.02) return;
+  l.cardPrice = card;
+  l.price = page.pagePrice;
+  if (page.pageMrp) l.mrp = page.pageMrp;
+}
+
 export function runPipeline(
   query: string,
   intentIn: RankIntent,
@@ -109,12 +123,16 @@ export function runPipeline(
 
   const analyzedByBatch = batches.map((batch) => {
     const { listings, stats } = normalizeBatch(batch.items, batch.platform);
+    for (const l of listings) applyPagePrice(l, options);
     return {
       batch,
       stats,
       listings,
       analyzed: listings.map((l) =>
-        analyze(l, { enrichText: options.enrichText })
+        analyze(l, {
+          enrichText: options.enrichText,
+          externalSpecs: options.externalSpecs,
+        })
       ),
     };
   });

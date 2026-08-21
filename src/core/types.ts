@@ -29,6 +29,7 @@ export interface Listing {
   url: string;
   imageUrl: string | null;
   price: number | null;
+  cardPrice?: number | null;
   mrp: number | null;
   discountPct: number | null;
   rating: number | null;

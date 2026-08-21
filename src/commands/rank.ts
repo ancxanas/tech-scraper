@@ -113,7 +113,6 @@ export const rankCommand = new Command()
           inStockOnly: options.inStockOnly,
           budgetTolerance: (options.budgetTolerance ?? 0) / 100,
           enrichText: resolved.text,
-          marketFloor: resolved.marketPrices,
           checkoutInfo: resolved.checkout,
           externalSpecs: resolved.external,
           reviewData: resolved.reviews,

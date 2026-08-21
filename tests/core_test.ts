@@ -1239,6 +1239,8 @@ Deno.test("the flat card discount does not reorder results", async () => {
     plain.ranked.flatMap((r) =>
       r.listings.map((l) =>
         [l.id, {
+          pagePrice: null,
+          pageMrp: null,
           inStock: null,
           deliveryBy: null,
           buyAt: Math.round(r.best.price * 0.95),
@@ -1825,23 +1827,37 @@ Deno.test("a genuine AMOLED is still read", () => {
   assertEquals(a.specs.chargingW, 25);
 });
 
-Deno.test("a price below every published offer is flagged, not celebrated", async () => {
+Deno.test("the product page's price beats the search card's", () => {
+  const page = parseCheckout(
+    "Galaxy M17 5G (Moonlight Silver, 128 GB) (6 GB RAM) 4.4 | 1,525 " +
+      "19% 23,999 ₹19,474 +₹109 Protect Promise Fee Buy at ₹18,500 " +
+      "Delivery by Tomorrow | Bank offers ₹974 off",
+  );
+  assertEquals(page.pagePrice, 19474);
+  assertEquals(page.pageMrp, 23999);
+  assertEquals(page.buyAt, 18500);
+});
+
+Deno.test("a card price contradicted by the page is replaced, not averaged", async () => {
   const batches = await loadRun([FIXTURE]);
   const intent = parseIntentRules("best phones under 15000");
   const base = runPipeline("q", intent, batches);
   const top = base.ranked[0];
+  const cardPrice = top.best.price;
 
-  const floor = new Map(
-    top.listings.map((
-      l,
-    ) => [l.id, { low: top.best.price * 2, high: top.best.price * 3 }]),
+  const checkout = new Map(
+    top.listings.map((l) =>
+      [
+        l.id,
+        parseCheckout(`8% 15,999 ₹14,499 +₹109 Protect Promise Fee`),
+      ] as const
+    ),
   );
-  const flagged = runPipeline("q", intent, batches, { marketFloor: floor });
-  const same = flagged.ranked.find((r) => r.key === top.key)!;
-
-  assertEquals(same.priceBelowMarket, true);
-  assert(same.badges.includes("PRICE UNVERIFIED"));
-  assert(same.score.dealScore <= 40);
-  assert(!same.badges.includes("BEST VALUE"));
-  assert(same.rank > 1 || flagged.ranked.length === 1);
+  const out = runPipeline("q", intent, batches, { checkoutInfo: checkout });
+  const same = out.ranked.find((r) => r.key === top.key)!;
+  assert(
+    same.offers.some((o) => o.price === 14499),
+    `page price not applied: ${same.offers.map((o) => o.price).join(", ")}`,
+  );
+  assert(cardPrice !== 14499);
 });
