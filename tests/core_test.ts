@@ -37,6 +37,7 @@ import {
 } from "../src/knowledge/soc.ts";
 import { lookupModel, PHONE_MODELS } from "../src/knowledge/models.ts";
 import { hasCheckoutInfo, parseCheckout } from "../src/core/checkout.ts";
+import { extractSpecSection } from "../src/core/resolve.ts";
 import { SpecStore } from "../src/core/spec-cache.ts";
 import { reviewsUrlFor, summariseReviews } from "../src/core/reviews.ts";
 import { buildUrls, searchTerm } from "../src/core/collect.ts";
@@ -1897,4 +1898,17 @@ Deno.test("one platform's page price never becomes another platform's", () => {
   );
   assertEquals(out.ranked.length, 0);
   assert(!checkout.has(amazon.listings[0]?.id ?? "none"));
+});
+
+Deno.test("the cached page section keeps the price block", async () => {
+  const page = await Deno.readTextFile(
+    "tests/fixtures/pages/samsung-galaxy-m07.txt",
+  );
+  assert(
+    page.indexOf("Protect Promise Fee") <
+      page.toLowerCase().indexOf("product highlights"),
+  );
+  const cached = extractSpecSection(page);
+  assertEquals(parseCheckout(cached).pagePrice, 11699);
+  assertEquals(parseCheckout(cached).pageMrp, 11999);
 });

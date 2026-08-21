@@ -73,7 +73,7 @@ export interface ResolveResult {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function extractSpecSection(text: string): string {
+export function extractSpecSection(text: string): string {
   const lower = text.toLowerCase();
   const anchors = [
     "product highlights",
@@ -88,8 +88,9 @@ function extractSpecSection(text: string): string {
     const i = lower.indexOf(a);
     if (i !== -1 && (start === -1 || i < start)) start = i;
   }
-  const slice = start === -1 ? text : text.slice(start);
-  return slice.slice(0, 24_000);
+  if (start === -1) return text.slice(0, 24_000);
+  const head = start > 0 ? `${text.slice(0, Math.min(start, 4_000))} ` : "";
+  return `${head}${text.slice(start)}`.slice(0, 24_000);
 }
 
 async function fetchPage(
