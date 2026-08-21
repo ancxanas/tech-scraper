@@ -2435,13 +2435,15 @@ Deno.test("a refresh that reached nothing says so instead of going quiet", () =>
 Deno.test("a measured page price outranks the card quotes around it", () => {
   const raws = [
     {
-      product_name: "Samsung Galaxy M17 5G (Moonlight Silver, 128 GB) (6 GB RAM)",
+      product_name:
+        "Samsung Galaxy M17 5G (Moonlight Silver, 128 GB) (6 GB RAM)",
       selling_price: 12951,
       product_url:
         "https://www.flipkart.com/samsung-galaxy-m17-5g-a/p/itmA?pid=MOBHA",
     },
     {
-      product_name: "Samsung Galaxy M17 5G (Moonlight Silver, 128 GB) (6 GB RAM)",
+      product_name:
+        "Samsung Galaxy M17 5G (Moonlight Silver, 128 GB) (6 GB RAM)",
       selling_price: 13499,
       product_url:
         "https://www.flipkart.com/samsung-galaxy-m17-5g-b/p/itmB?pid=MOBHB",
