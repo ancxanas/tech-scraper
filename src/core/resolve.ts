@@ -31,12 +31,13 @@ import {
 } from "./reviews.ts";
 import { matchSocDetailed } from "../knowledge/soc.ts";
 import {
-  fetchSpecs as fetchGsmSpecs,
-  type GsmSpecs,
+  fetchSpecs as fetchExternalSpecs,
   loadIndex,
   RateLimited,
   resolveModel,
 } from "../knowledge/gsmarena.ts";
+import { fetchBeebomSpecs } from "../knowledge/beebom.ts";
+import type { ExternalSpecs } from "../knowledge/spec-source.ts";
 import type { Candidate, Specs } from "./types.ts";
 
 /**
@@ -86,6 +87,8 @@ export interface ResolveResult {
   reviewsFetched: number;
   gsmMatched: number;
   gsmUnmatched: number;
+  /** Models the secondary spec source resolved after the primary missed. */
+  beebomMatched: number;
   /** The spec database throttled us; remaining models were left unresolved. */
   gsmRateLimited: boolean;
   fromCache: number;
@@ -180,7 +183,7 @@ function detectConflicts(c: Candidate, pageText: string): SpecConflict[] {
 }
 
 /** External record -> the pipeline's spec shape. */
-function toSpecs(g: GsmSpecs): Partial<Specs> {
+function toSpecs(g: ExternalSpecs): Partial<Specs> {
   const out: Partial<Specs> = {};
   const set = <K extends keyof Specs>(k: K, v: Specs[K] | null) => {
     if (v !== null && v !== undefined) out[k] = v;
@@ -205,7 +208,7 @@ function toSpecs(g: GsmSpecs): Partial<Specs> {
 }
 
 /** Compare our hand-typed knowledge base against the external database. */
-function conflictsAgainstKb(c: Candidate, g: GsmSpecs): SpecConflict[] {
+function conflictsAgainstKb(c: Candidate, g: ExternalSpecs): SpecConflict[] {
   const out: SpecConflict[] = [];
   if (
     c.specs.socName && c.specSources.socName === "kb" && g.socName &&
@@ -245,6 +248,7 @@ export async function resolveSpecs(
     reviews: new Map(),
     reviewsFetched: 0,
     gsmMatched: 0,
+    beebomMatched: 0,
     gsmUnmatched: 0,
     gsmRateLimited: false,
     fromCache: 0,
@@ -305,11 +309,11 @@ export async function resolveSpecs(
         }
         try {
           const cacheKey = `gsm://${hit.slug}`;
-          let g: GsmSpecs | null = null;
+          let g: ExternalSpecs | null = null;
 
           const cached = store.get(cacheKey);
           if (cached) {
-            g = JSON.parse(cached) as GsmSpecs;
+            g = JSON.parse(cached) as ExternalSpecs;
           } else {
             // Be a guest on someone else's server.
             if (fetchedThisRun > 0) await sleep(opts.pace ?? 1100);
@@ -317,7 +321,7 @@ export async function resolveSpecs(
             // it is not an instruction to spend: routing every lookup through
             // the paid transport would bill for pages the free one serves.
             let via: "direct" | "unlocker" = "direct";
-            g = await fetchGsmSpecs(hit, lookupName, async (u) => {
+            g = await fetchExternalSpecs(hit, lookupName, async (u) => {
               try {
                 return await fetchDirect(u, 15000);
               } catch (err) {
@@ -346,6 +350,47 @@ export async function resolveSpecs(
           }
           result.gsmUnmatched++;
         }
+      }
+    }
+  }
+
+  // Secondary spec source, for everything the primary could not answer.
+  //
+  // The primary has the better data but throttles hard: in the 2026-08-21 run
+  // it resolved 4 models and then returned 429 for the remainder, which is
+  // why 44 of 64 ranked phones showed "SoC ?". This host answered ten
+  // back-to-back requests without complaint and covers the Indian budget
+  // shelf the primary indexes late. Same cache, same pacing, same rule that
+  // a miss is a normal outcome rather than an error.
+  if (opts.useExternal !== false) {
+    let fetchedThisRun = 0;
+    for (const c of candidates) {
+      // Only what is still missing — a model the primary already answered
+      // must not be re-fetched, let alone overwritten by the weaker source.
+      if (c.listings.some((l) => result.external.has(l.id))) continue;
+      if (c.specs.socName && c.specSources.socName === "gsmarena") continue;
+
+      const lookupName = c.key.split("|")[0].split("#")[0].trim();
+      const cacheKey = `beebom://${lookupName.toLowerCase()}`;
+      try {
+        let b: ExternalSpecs | null = null;
+        const cached = store.get(cacheKey);
+        if (cached) {
+          b = JSON.parse(cached) as ExternalSpecs;
+        } else {
+          if (fetchedThisRun > 0) await sleep(opts.pace ?? 1100);
+          b = await fetchBeebomSpecs(lookupName, c.brand ?? undefined);
+          fetchedThisRun++;
+          if (b) store.set(cacheKey, JSON.stringify(b), "direct");
+        }
+        if (!b) continue;
+
+        const partial = toSpecs(b);
+        for (const l of c.listings) result.external.set(l.id, partial);
+        result.beebomMatched++;
+        result.conflicts.push(...conflictsAgainstKb(c, b));
+      } catch {
+        // A source that does not know this phone is not a failure.
       }
     }
   }
@@ -434,6 +479,7 @@ export function reportResolution(r: ResolveResult): void {
   const parts: string[] = [];
   if (r.gsmMatched) parts.push(`${r.gsmMatched} from spec database`);
   if (r.gsmRateLimited) parts.push("spec DB throttled");
+  if (r.beebomMatched) parts.push(`${r.beebomMatched} from secondary source`);
   if (r.fromCache) parts.push(`${r.fromCache} cached`);
   if (r.fetchedDirect) parts.push(`${r.fetchedDirect} fetched free`);
   if (r.fetchedPaid) parts.push(`${r.fetchedPaid} via Web Unlocker`);

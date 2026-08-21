@@ -30,6 +30,7 @@ import {
 import { groupListings } from "../src/core/group.ts";
 import { rankCandidates } from "../src/core/rank.ts";
 import { parseIntentRules, unsupportedReason } from "../src/core/intent.ts";
+import { beebomSlugs, parseBeebomPage } from "../src/knowledge/beebom.ts";
 import { loadRun } from "../src/core/replay.ts";
 import { buildCandidates, runPipeline } from "../src/core/pipeline.ts";
 import { matchSoc, matchSocDetailed } from "../src/knowledge/soc.ts";
@@ -44,7 +45,7 @@ import {
   pageToText,
 } from "../src/lib/fetch-page.ts";
 import {
-  fetchSpecs as fetchGsmSpecs,
+  fetchSpecs as fetchExternalSpecs,
   normaliseModel,
   parseSpecPage,
   RateLimited,
@@ -734,6 +735,64 @@ Deno.test("the set's fastest phone is never told it compromises on speed", async
   }
 });
 
+// ------------------------------------------------------- secondary spec source
+
+Deno.test("the secondary spec source reads a full sheet and a real benchmark", async () => {
+  const html = await Deno.readTextFile(
+    "tests/fixtures/beebom/realme-narzo-90x.html",
+  );
+  const s = parseBeebomPage(html, "u", "realme-narzo-90x")!;
+  assert(s !== null);
+  assertEquals(s.socName, "MediaTek Dimensity 6300");
+  // Published per-phone, so it beats our per-chip approximation.
+  assertEquals(s.antutu, 560000);
+  assertEquals(s.batteryMah, 7000);
+  assertEquals(s.refreshHz, 144);
+  assertEquals(s.panel, "LCD");
+  assertEquals(s.nm, 6);
+  assertEquals(s.resolution, "HD+");
+  assertEquals(s.mainCameraMp, 50);
+  assertEquals(s.ipRating, "IP65");
+});
+
+Deno.test("a spec sheet without a benchmark still resolves the chipset", () => {
+  // Most budget phones are never benchmarked. Returning null for antutu and
+  // letting soc.ts supply the per-chip figure is correct; returning null for
+  // the whole page because one field is missing would not be.
+  const html = Deno.readTextFileSync(
+    "tests/fixtures/beebom/itel-zeno-200.html",
+  );
+  const s = parseBeebomPage(html, "u", "itel-zeno-200")!;
+  assertEquals(s.socName, "Unisoc T7250");
+  assertEquals(s.antutu, null);
+  assertEquals(s.batteryMah, 5000);
+});
+
+Deno.test("slug candidates cope with how brands are actually written", () => {
+  // Measured: "motorola-g45-5g" 404s, "moto-g45-5g" is the live page.
+  assertEquals(
+    beebomSlugs("Motorola G45 5G (8GB/128GB)", "Motorola")[0],
+    "moto-g45-5g",
+  );
+  // The marketplace config suffix must never reach the URL.
+  assert(
+    !beebomSlugs("realme Narzo 90x 5G (8GB/128GB)", "realme")[0].includes(
+      "8gb",
+    ),
+  );
+  assertEquals(
+    beebomSlugs("REDMI A7 Pro 4G (4GB/64GB)", "Xiaomi")[0],
+    "redmi-a7-pro-4g",
+  );
+});
+
+Deno.test("a page with no chipset yields nothing rather than a hollow record", () => {
+  assertEquals(
+    parseBeebomPage("<html><body>not a phone</body></html>", "u", "x"),
+    null,
+  );
+});
+
 // ------------------------------------------------------------ heal diagnosis
 
 Deno.test("heal classifies the failure modes seen in real runs", () => {
@@ -1421,7 +1480,7 @@ Deno.test("--allow-paid is permission to fall back, not to spend by default", as
   );
 
   // Free transport healthy: the paid one must never be reached.
-  const ok = await fetchGsmSpecs(entry, "poco m7 pro", (_u) => {
+  const ok = await fetchExternalSpecs(entry, "poco m7 pro", (_u) => {
     directCalls++;
     return Promise.resolve(page);
   });
@@ -1430,15 +1489,19 @@ Deno.test("--allow-paid is permission to fall back, not to spend by default", as
   assertEquals(paidCalls, 0);
 
   // Free transport failing, with permission: fall back exactly once.
-  const viaFallback = await fetchGsmSpecs(entry, "poco m7 pro", async (_u) => {
-    directCalls++;
-    try {
-      throw new Error("HTTP 403");
-    } catch {
-      paidCalls++;
-      return await Promise.resolve(page);
-    }
-  });
+  const viaFallback = await fetchExternalSpecs(
+    entry,
+    "poco m7 pro",
+    async (_u) => {
+      directCalls++;
+      try {
+        throw new Error("HTTP 403");
+      } catch {
+        paidCalls++;
+        return await Promise.resolve(page);
+      }
+    },
+  );
   assertExists(viaFallback);
   assertEquals(paidCalls, 1);
 });
@@ -1447,7 +1510,7 @@ Deno.test("a 429 from the spec database is surfaced as a distinct, stoppable err
   const entry = { name: "Poco M7 Pro", brand: "Xiaomi", slug: "x-1.php" };
   await assertRejects(
     () =>
-      fetchGsmSpecs(
+      fetchExternalSpecs(
         entry,
         "poco m7 pro",
         () => Promise.reject(new Error("HTTP 429")),

@@ -20,6 +20,7 @@
  */
 
 import { fetchDirect, htmlToText } from "../lib/fetch-page.ts";
+import type { ExternalSpecs } from "./spec-source.ts";
 
 const BASE = "https://www.gsmarena.com";
 /**
@@ -38,26 +39,6 @@ export interface IndexEntry {
   brand: string;
   /** Page slug, e.g. "xiaomi_redmi_note_14-13456.php". */
   slug: string;
-}
-
-export interface GsmSpecs {
-  url: string;
-  matchedName: string;
-  socName: string | null;
-  nm: number | null;
-  antutu: number | null;
-  geekbench: number | null;
-  batteryMah: number | null;
-  chargingW: number | null;
-  panel: string | null;
-  inches: number | null;
-  refreshHz: number | null;
-  resolution: string | null;
-  mainCameraMp: number | null;
-  ois: boolean;
-  nfc: boolean | null;
-  ipRating: string | null;
-  weightG: number | null;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -248,7 +229,7 @@ function num(m: RegExpMatchArray | null, i = 1): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export function parseSpecPage(text: string, url: string): GsmSpecs | null {
+export function parseSpecPage(text: string, url: string): ExternalSpecs | null {
   const title = text.match(
     /^\s*([\w+.\- ]{3,60})\s*-\s*Full phone specifications/im,
   )?.[1];
@@ -316,7 +297,7 @@ export async function fetchSpecs(
   entry: IndexEntry,
   expectedName: string,
   fetcher: (url: string) => Promise<string> = (u) => fetchDirect(u, 15000),
-): Promise<GsmSpecs | null> {
+): Promise<ExternalSpecs | null> {
   const url = `${BASE}/${entry.slug}`;
   let html: string;
   try {
