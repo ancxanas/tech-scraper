@@ -138,7 +138,7 @@ export interface Candidate {
   ratingCount: number | null;
   imageUrl: string | null;
   /** Checkout details from the product page, when enrichment ran. */
-  checkout?: import("./offers.ts").CheckoutInfo;
+  checkout?: import("./checkout.ts").CheckoutInfo;
   /** What buyers say, mined from the reviews page. Display-only. */
   reviews?: import("./reviews.ts").ReviewSummary;
   listings: AnalyzedListing[];

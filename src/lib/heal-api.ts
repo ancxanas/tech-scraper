@@ -1,6 +1,6 @@
 import { colors } from "@cliffy/ansi/colors";
 import { Confirm } from "@cliffy/prompt";
-import { bdFetch, pollUntil } from "../lib/brightdata.ts";
+import { bdFetch, pollUntil } from "./brightdata.ts";
 
 interface HealProgress {
   step?: string;

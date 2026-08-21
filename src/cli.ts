@@ -18,7 +18,7 @@ import { snapshotCommand } from "./commands/snapshot.ts";
 import { healCommand } from "./commands/heal.ts";
 import { doctorCommand } from "./commands/doctor.ts";
 import { historyCommand } from "./commands/history.ts";
-import { indexCommand } from "./commands/index_cmd.ts";
+import { indexCommand } from "./commands/spec-index.ts";
 import { specsCommand } from "./commands/specs.ts";
 
 export const cli = new Command()

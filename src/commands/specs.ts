@@ -20,7 +20,7 @@ import { loadRun } from "../core/replay.ts";
 import { buildCandidates } from "../core/pipeline.ts";
 import { parseIntentRules } from "../core/intent.ts";
 import { type FetchMode, resolveSpecs } from "../core/resolve.ts";
-import { SpecStore } from "../core/specstore.ts";
+import { SpecStore } from "../core/spec-cache.ts";
 import { loadIndex } from "../knowledge/gsmarena.ts";
 
 export const specsCommand = new Command()

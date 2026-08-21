@@ -203,31 +203,53 @@ deno task dev fetch "https://example.com/product"
 ## Architecture
 
 ```
-main.ts                       Entry point, loads .env
+main.ts                     Entry point, loads .env
 src/
-  cli.ts                      CLI commands (10 subcommands)
-  config.ts                   Platform configs, URL templates, scoring weights
-  scraper.ts                  Scraping orchestrator (parallel, auto-heal, coverage)
-  score.ts                    Scoring, ranking, deduplication, relevance filtering
-  types.ts                    Product, SearchResult, ProductVariant interfaces
-  kv.ts                       Price history with Deno KV
+  cli.ts                    Command registry (find, rank, specs, index, snapshot, heal, doctor, history)
+  config.ts                 Platform definitions and collector IDs
+  commands/
+    find.ts                 Live scrape + rank. The only command that spends collector credit.
+    rank.ts                 Rank a saved run. Free and repeatable.
+    specs.ts                Bulk-resolve spec sheets for a saved run. Resumable.
+    spec-index.ts           Build the external spec-database model index (run once).
+    snapshot.ts             Re-download a BrightData snapshot by id.
+    heal.ts                 Diagnose a broken collector from a real run and repair it.
+    doctor.ts               Config, credentials, collector health, request plan.
+    history.ts              Price history across runs.
+  core/                     The pipeline. Marketplace-agnostic and offline-testable.
+    types.ts                Listing, Candidate, Specs, RankIntent, scores
+    normalize.ts            Raw payload -> Listing, including title recovery from URL slugs
+    classify.ts             What is this product? Phones vs audio vs accessories vs feature phones
+    extract.ts              Specs from titles, slugs and pages, with plausibility bounds
+    group.ts                Colour and storage variants -> one candidate, many offers
+    resolve.ts              Fetch specs BEFORE ranking; spec DB, product pages, reviews
+    rank.ts                 Gates, spec/value/trust/deal scoring, pros, cons, badges
+    pipeline.ts             Wires the above together
+    checkout.ts             Real price at checkout, offers, stock, delivery
+    reviews.ts              Ratings histogram and aspect-level sentiment
+    price-history.ts        Observations over time, via Deno KV
+    spec-cache.ts           Persistent page cache so specs are fetched once
+    replay.ts               Save and reload raw runs
+    collect.ts              Live collection and per-platform search URLs
+  knowledge/
+    soc.ts                  ~65 chipsets with approximate benchmarks (fallback)
+    models.ts               ~65 phone spec sheets, hand-maintained, confidence-tagged
+    gsmarena.ts             External spec database: model index, verified lookup, measured benchmarks
   lib/
-    brightdata.ts             Direct REST API client (fetch-based, handles NDJSON)
-    serp.ts                   SERP API client (Google Shopping discovery)
-    prescrapers.ts            Pre-built scrapers (Amazon India dataset)
-    unlock.ts                 Web Unlocker client (screenshots + markdown)
-    query-parser.ts           Query intent detection (specific/category/generic)
-    specs.ts                  Spec extraction, benchmarks, comparison scoring
-    compare.ts                Comparison engine (category-specific ranking)
-  tools/
-    scraper.ts                Scraper Studio batch runner (trigger + poll + parse)
-    healer.ts                 Self-healing API wrapper (trigger + poll + approve)
+    brightdata.ts           REST client (handles NDJSON)
+    collector.ts            Data Collector API driver (trigger + poll)
+    amazon-dataset.ts       Amazon prebuilt dataset client
+    fetch-page.ts           Page fetching: free direct, Web Unlocker fallback, HTML/JSON to text
+    heal-api.ts             Self-healing API wrapper
+    llm-intent.ts           Optional Gemini intent parsing
+  ui/
+    render.ts               Ranking table, detail cards, head-to-head matrix, coverage funnel
 tests/
-  cli_test.ts                 URL template and validation tests
-  score_test.ts               Scoring, dedup, and relevance tests
-  scraper_test.ts             Parser and field extraction tests
-  query_parser_test.ts        Query intent detection tests
-  specs_test.ts               Spec extraction and benchmark tests
+  core_test.ts              Parsing, classification, grouping, scoring, regressions
+  golden_test.ts            Ranking invariants, gates and anchors
+  llm-intent_test.ts        Optional LLM intent layer
+  mock_fetch_test.ts        Transport injection
+  fixtures/                 Real captured runs and pages — see tests/fixtures/README.md
 ```
 
 ### Data flow

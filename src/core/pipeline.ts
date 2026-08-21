@@ -33,7 +33,7 @@ export interface PipelineOptions extends RankOptions {
   /** Extra PDP text keyed by listing id, from `--enrich`. */
   enrichText?: Map<string, string>;
   /** Checkout details keyed by listing id, from the same enrichment pass. */
-  checkoutInfo?: Map<string, import("./offers.ts").CheckoutInfo>;
+  checkoutInfo?: Map<string, import("./checkout.ts").CheckoutInfo>;
   /** Verified external specs keyed by listing id. */
   externalSpecs?: Map<string, Partial<import("./types.ts").Specs>>;
   /** Mined review summaries keyed by listing id. */

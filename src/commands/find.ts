@@ -24,7 +24,7 @@ import {
   resolveSpecs,
 } from "../core/resolve.ts";
 import { buildCandidates } from "../core/pipeline.ts";
-import { getStatsFor, savePrices } from "../kv.ts";
+import { getStatsFor, savePrices } from "../core/price-history.ts";
 import type { RankIntent } from "../core/types.ts";
 
 function parsePlatforms(raw?: string): Platform[] {

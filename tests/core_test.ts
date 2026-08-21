@@ -34,11 +34,15 @@ import { loadRun } from "../src/core/replay.ts";
 import { buildCandidates, runPipeline } from "../src/core/pipeline.ts";
 import { matchSoc, matchSocDetailed } from "../src/knowledge/soc.ts";
 import { lookupModel, PHONE_MODELS } from "../src/knowledge/models.ts";
-import { hasCheckoutInfo, parseCheckout } from "../src/core/offers.ts";
-import { SpecStore } from "../src/core/specstore.ts";
+import { hasCheckoutInfo, parseCheckout } from "../src/core/checkout.ts";
+import { SpecStore } from "../src/core/spec-cache.ts";
 import { reviewsUrlFor, summariseReviews } from "../src/core/reviews.ts";
 import { buildUrls, searchTerm } from "../src/core/collect.ts";
-import { htmlToText, jsonStateText, pageToText } from "../src/lib/unlock.ts";
+import {
+  htmlToText,
+  jsonStateText,
+  pageToText,
+} from "../src/lib/fetch-page.ts";
 import {
   fetchSpecs as fetchGsmSpecs,
   normaliseModel,

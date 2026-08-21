@@ -16,7 +16,7 @@
 import { Command } from "@cliffy/command";
 import { colors } from "@cliffy/ansi/colors";
 import { type Platform, PLATFORMS } from "../config.ts";
-import { runHealFlow } from "../tools/healer.ts";
+import { runHealFlow } from "../lib/heal-api.ts";
 import { collectRaw } from "../core/collect.ts";
 import { runPipeline } from "../core/pipeline.ts";
 import { parseIntentRules } from "../core/intent.ts";

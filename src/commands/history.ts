@@ -8,7 +8,12 @@
 import { Command } from "@cliffy/command";
 import { colors } from "@cliffy/ansi/colors";
 import { Table } from "@cliffy/table";
-import { getStats, isAvailable, listTracked, type PriceStats } from "../kv.ts";
+import {
+  getStats,
+  isAvailable,
+  listTracked,
+  type PriceStats,
+} from "../core/price-history.ts";
 import { rupees } from "../ui/render.ts";
 
 function trendCell(s: PriceStats): string {

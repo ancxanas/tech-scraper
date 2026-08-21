@@ -10,7 +10,7 @@
  * single snapshot's discount percentage.
  */
 
-import type { PlatformId, RankedCandidate } from "./core/types.ts";
+import type { PlatformId, RankedCandidate } from "./types.ts";
 
 export interface PriceObservation {
   /** Candidate key: "poco m7 5g|6r-128s". */

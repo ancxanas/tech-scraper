@@ -19,7 +19,7 @@
  *     page's own title before its data is accepted.
  */
 
-import { fetchDirect, htmlToText } from "../lib/unlock.ts";
+import { fetchDirect, htmlToText } from "../lib/fetch-page.ts";
 
 const BASE = "https://www.gsmarena.com";
 /**

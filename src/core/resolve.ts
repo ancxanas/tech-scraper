@@ -13,9 +13,17 @@
  */
 
 import { colors } from "@cliffy/ansi/colors";
-import { fetchDirect, fetchPageMarkdown, pageToText } from "../lib/unlock.ts";
-import { type CheckoutInfo, hasCheckoutInfo, parseCheckout } from "./offers.ts";
-import { SpecStore } from "./specstore.ts";
+import {
+  fetchDirect,
+  fetchPageMarkdown,
+  pageToText,
+} from "../lib/fetch-page.ts";
+import {
+  type CheckoutInfo,
+  hasCheckoutInfo,
+  parseCheckout,
+} from "./checkout.ts";
+import { SpecStore } from "./spec-cache.ts";
 import {
   type ReviewSummary,
   reviewsUrlFor,

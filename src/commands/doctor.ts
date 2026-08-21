@@ -13,7 +13,7 @@ import { ALL_ENABLED, PLATFORMS } from "../config.ts";
 import { checkCollector } from "../lib/brightdata.ts";
 import { buildUrls, searchTerm } from "../core/collect.ts";
 import { parseIntentRules } from "../core/intent.ts";
-import { isAvailable } from "../kv.ts";
+import { isAvailable } from "../core/price-history.ts";
 
 function envRow(name: string, required: boolean): [string, string, string] {
   const set = Boolean(Deno.env.get(name));
