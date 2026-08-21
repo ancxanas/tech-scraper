@@ -2306,3 +2306,27 @@ Deno.test("a price fetch drops the seller-specific listing id", () => {
   assert(!fetched.includes("lid="), `lid survived: ${fetched}`);
   assert(!fetched.includes("marketplace="), fetched);
 });
+
+Deno.test("an in-stock offer outranks a cheaper sold-out one", () => {
+  const raws = [
+    {
+      product_name: "POCO M7 5G (Ocean Blue, 128 GB) (6 GB RAM)",
+      selling_price: 12499,
+      product_url:
+        "https://www.flipkart.com/poco-m7-5g-ocean-blue-128-gb/p/itm1?pid=P1",
+      availability: "In stock",
+    },
+    {
+      product_name: "POCO M7 5G (Ocean Blue, 128 GB) (6 GB RAM)",
+      selling_price: 9999,
+      product_url:
+        "https://www.flipkart.com/poco-m7-5g-ocean-blue-128-gb/p/itm2?pid=P2",
+      availability: "Out of stock",
+    },
+  ];
+  const { listings } = normalizeBatch(raws, "flipkart");
+  const [c] = groupListings(listings.map((l) => analyze(l)));
+  assertEquals(c.best.price, 12499);
+  assertEquals(c.best.inStock, true);
+  assertEquals(c.offers[1].price, 9999); // kept, but demoted below buyable
+});
