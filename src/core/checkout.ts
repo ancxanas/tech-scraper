@@ -46,7 +46,10 @@ export function parseCheckout(text: string): CheckoutInfo {
       "i",
     ),
   );
-  const pagePrice = rupees(priced?.[3]) ?? rupees(plain?.[1]);
+  // The page publishes its own structured data; prefer it to reading rupee
+  // glyphs out of prose. pageToText appends it as LD_ tokens.
+  const ldPrice = rupees(text.match(/LD_PRICE=(\d{3,8})/)?.[1]);
+  const pagePrice = ldPrice ?? rupees(priced?.[3]) ?? rupees(plain?.[1]);
   const pageMrp = rupees(priced?.[2]) ??
     rupees(
       text.match(/₹([\d,]{3,8})\s*\|\s*MRP \(Incl\. of all taxes\)/i)?.[1],
@@ -61,21 +64,26 @@ export function parseCheckout(text: string): CheckoutInfo {
     text.match(/Exchange offer(?:[^₹]{0,80})Up to ₹([\d,]+)/i)?.[1],
   );
 
-  const outOfStock = /Selected Colou?r:[^|]{0,40}?Out of stock/i.test(text);
+  const ldStock = text.match(/LD_STOCK=(\w+)/)?.[1];
+  const outOfStock = ldStock
+    ? /OutOfStock|SoldOut|Discontinued/i.test(ldStock)
+    : /Selected Colou?r:[^|]{0,40}?Out of stock/i.test(text);
   const deliveryBy = text.match(
     /Delivery by ([A-Za-z0-9 ,]{4,20}?)(?:\s+Arriving|\s+Fulfil|\s*\|)/i,
   )
     ?.[1]?.trim() ?? null;
 
-  const seller = text.match(
-    /(?:Fulfilled by|Sold by|Seller)\s+([A-Za-z0-9][A-Za-z0-9 .&'-]{2,38}?)(?:\s+\d\.\d|\s*\||\s+See other sellers|\s{2,}|\s*$)/i,
-  )?.[1]?.trim() ?? null;
+  const seller =
+    text.match(/LD_SELLER=([^|]{2,40}?)(?:\s{2,}|$)/)?.[1]?.trim() ??
+      text.match(
+        /(?:Fulfilled by|Sold by|Seller)\s+([A-Za-z0-9][A-Za-z0-9 .&'-]{2,38}?)(?:\s+\d\.\d|\s*\||\s+See other sellers|\s{2,}|\s*$)/i,
+      )?.[1]?.trim() ?? null;
 
   return {
     pagePrice,
     pageMrp: pageMrp && pagePrice && pageMrp >= pagePrice ? pageMrp : null,
     seller,
-    inStock: outOfStock ? false : deliveryBy ? true : null,
+    inStock: outOfStock ? false : ldStock ? true : deliveryBy ? true : null,
     deliveryBy,
     buyAt,
     bankOffer,

@@ -1980,3 +1980,43 @@ Deno.test("the price parses from markdown as well as page text", () => {
   assertEquals(c.buyAt, 18500);
   assertEquals(c.seller, "SmartTechMart");
 });
+
+Deno.test("the page's own structured data is preferred to reading prose", () => {
+  // Flipkart publishes application/ld+json with the price, the sku (which is
+  // the pid, so a wrong-listing match is detectable), availability and the
+  // seller. Reading that beats hunting rupee glyphs through prose, and it is
+  // the same number the site shows.
+  const html = `<html><head>
+<script type="application/ld+json">${
+    JSON.stringify({
+      "@type": "Product",
+      name: "Samsung Galaxy M17 5G (Moonlight Silver, 128 GB)",
+      sku: "MOBHGU9DYEBQW6NW",
+      offers: {
+        price: 19474,
+        priceCurrency: "INR",
+        availability: "https://schema.org/InStock",
+        seller: { name: "SmartTechMart" },
+      },
+    })
+  }</script></head>
+<body><div>19% 23,999 ₹19,474 +₹109 Protect Promise Fee</div></body></html>`;
+
+  const c = parseCheckout(pageToText(html));
+  assertEquals(c.pagePrice, 19474);
+  assertEquals(c.pageMrp, 23999);
+  assertEquals(c.seller, "SmartTechMart");
+  assertEquals(c.inStock, true);
+});
+
+Deno.test("a sold-out listing is read from the structured data", () => {
+  const html = `<html><head>
+<script type="application/ld+json">${
+    JSON.stringify({
+      "@type": "Product",
+      sku: "X",
+      offers: { price: 9999, availability: "https://schema.org/OutOfStock" },
+    })
+  }</script></head><body></body></html>`;
+  assertEquals(parseCheckout(pageToText(html)).inStock, false);
+});

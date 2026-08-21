@@ -42,8 +42,40 @@ export function jsonStateText(html: string, cap = 20_000): string {
   return [...new Set(out)].join(" | ").slice(0, cap);
 }
 
+export function jsonLdSummary(html: string): string {
+  const out: string[] = [];
+  const re =
+    /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]{2,20000}?)<\/script>/gi;
+  for (const m of html.matchAll(re)) {
+    let node: unknown;
+    try {
+      node = JSON.parse(m[1].trim());
+    } catch {
+      continue;
+    }
+    const items = Array.isArray(node) ? node : [node];
+    for (const raw of items) {
+      const it = raw as Record<string, unknown>;
+      const offers = it?.offers as Record<string, unknown> | undefined;
+      const price = Number(offers?.price ?? offers?.lowPrice ?? NaN);
+      if (!Number.isFinite(price) || price <= 0) continue;
+      out.push(`LD_PRICE=${Math.round(price)}`);
+      if (typeof it.sku === "string") out.push(`LD_SKU=${it.sku}`);
+      const avail = String(offers?.availability ?? "");
+      if (avail) out.push(`LD_STOCK=${avail.split("/").pop()}`);
+      const seller = (offers?.seller as Record<string, unknown> | undefined)
+        ?.name;
+      if (typeof seller === "string") out.push(`LD_SELLER=${seller}`);
+      return out.join(" ");
+    }
+  }
+  return "";
+}
+
 export function pageToText(html: string): string {
-  return `${htmlToText(html)} | ${jsonStateText(html)}`;
+  return `${htmlToText(html)} | ${jsonStateText(html)} | ${
+    jsonLdSummary(html)
+  }`;
 }
 
 export function htmlToText(html: string): string {
