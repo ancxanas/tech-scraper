@@ -1960,3 +1960,23 @@ Deno.test("prices expire from the cache long before specs do", async () => {
   assertEquals(stale.get(url), "spec text");
   await Deno.remove(path);
 });
+
+Deno.test("the price parses from markdown as well as page text", () => {
+  // The unlocker returned markdown, where the fee link renders as
+  // "₹19,474\n\n[+₹109 Protect Promise Fee](...)". The bracket broke the
+  // pattern, so --refresh-prices fetched 15 pages and reported one change.
+  const markdown = [
+    "# Samsung Galaxy M17 5G (Moonlight Silver, 128 GB) (6 GB RAM)",
+    "19%",
+    "23,999",
+    "₹19,474",
+    "[+₹109 Protect Promise Fee](https://www.flipkart.com/pp-protect-promise-fee?pid=X)",
+    "Buy at ₹18,500",
+    "Fulfilled by SmartTechMart",
+  ].join("\n\n");
+  const c = parseCheckout(markdown);
+  assertEquals(c.pagePrice, 19474);
+  assertEquals(c.pageMrp, 23999);
+  assertEquals(c.buyAt, 18500);
+  assertEquals(c.seller, "SmartTechMart");
+});

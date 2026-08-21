@@ -1,9 +1,5 @@
 import { colors } from "@cliffy/ansi/colors";
-import {
-  fetchDirect,
-  fetchPageMarkdown,
-  pageToText,
-} from "../lib/fetch-page.ts";
+import { fetchDirect, fetchPageHtml, pageToText } from "../lib/fetch-page.ts";
 import {
   type CheckoutInfo,
   hasCheckoutInfo,
@@ -112,7 +108,7 @@ async function fetchPage(
 
   if ((mode === "auto" || mode === "unlocker") && allowPaid) {
     try {
-      return { text: await fetchPageMarkdown(url), via: "unlocker" };
+      return { text: pageToText(await fetchPageHtml(url)), via: "unlocker" };
     } catch (err) {
       errors.push(`unlocker: ${err instanceof Error ? err.message : err}`);
     }
@@ -274,7 +270,7 @@ export async function resolveSpecs(
                 if (!allowPaid) throw err;
                 via = "unlocker";
                 result.fetchedPaid++;
-                return await fetchPageMarkdown(u);
+                return await fetchPageHtml(u);
               }
             });
             fetchedThisRun++;

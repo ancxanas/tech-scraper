@@ -33,10 +33,19 @@ function rupees(raw: string | undefined): number | null {
 export function parseCheckout(text: string): CheckoutInfo {
   if (!text) return { ...EMPTY };
 
+  const gap = "[\\s\\[\\](){}|]*";
   const priced = text.match(
-    /(\d{1,2})%\s*([\d,]{3,8})\s*₹([\d,]{3,8})\s*\+₹\d+\s*Protect Promise Fee/i,
+    new RegExp(
+      `(\\d{1,2})%${gap}([\\d,]{3,8})${gap}₹\\s?([\\d,]{3,8})${gap}\\+\\s?₹\\d+${gap}Protect Promise Fee`,
+      "i",
+    ),
   );
-  const plain = text.match(/₹([\d,]{3,8})\s*\+₹\d+\s*Protect Promise Fee/i);
+  const plain = text.match(
+    new RegExp(
+      `₹\\s?([\\d,]{3,8})${gap}\\+\\s?₹\\d+${gap}Protect Promise Fee`,
+      "i",
+    ),
+  );
   const pagePrice = rupees(priced?.[3]) ?? rupees(plain?.[1]);
   const pageMrp = rupees(priced?.[2]) ??
     rupees(
@@ -59,7 +68,7 @@ export function parseCheckout(text: string): CheckoutInfo {
     ?.[1]?.trim() ?? null;
 
   const seller = text.match(
-    /(?:Fulfilled by|Sold by|Seller)\s+([A-Za-z0-9][A-Za-z0-9 .&'-]{2,38}?)(?:\s+\d\.\d|\s*\||\s+See other sellers|\s{2,})/i,
+    /(?:Fulfilled by|Sold by|Seller)\s+([A-Za-z0-9][A-Za-z0-9 .&'-]{2,38}?)(?:\s+\d\.\d|\s*\||\s+See other sellers|\s{2,}|\s*$)/i,
   )?.[1]?.trim() ?? null;
 
   return {
