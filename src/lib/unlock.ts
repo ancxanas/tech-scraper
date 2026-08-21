@@ -35,6 +35,41 @@ export async function fetchDirect(
   }
 }
 
+/**
+ * Harvest text nodes out of the JSON state blob embedded in the page.
+ *
+ * Flipkart ships the full specification table inside `__INITIAL_STATE__` as
+ * {"label_0":{"value":{"text":"Display Type"}},"label_1":{"value":{"text":
+ * ["HD+ 120Hz Display"]}}} — so stripping <script> tags, which is what a naive
+ * html-to-text does, throws away the richest data on the page. The visible
+ * markup only carries the marketing highlights.
+ *
+ * Rather than parse that structure (deeply nested and liable to change), this
+ * harvests every "text" node and concatenates the distinct values. Order is
+ * lost, which is fine: extraction is regex over key:value fragments such as
+ * "Refresh Rate:120Hz" and "5160 mAh".
+ */
+export function jsonStateText(html: string, cap = 20_000): string {
+  const out: string[] = [];
+  const re =
+    /"text"\s*:\s*(?:"((?:[^"\\]|\\.){1,300})"|\[\s*"((?:[^"\\]|\\.){1,300})")/g;
+  for (const m of html.matchAll(re)) {
+    const raw = m[1] ?? m[2] ?? "";
+    const v = raw
+      .replace(/\\"/g, '"')
+      .replace(/\\u[\dA-Fa-f]{4}/g, " ")
+      .replace(/\\n/g, " ")
+      .trim();
+    if (v.length > 1) out.push(v);
+  }
+  return [...new Set(out)].join(" | ").slice(0, cap);
+}
+
+/** Visible text plus the embedded JSON spec table. */
+export function pageToText(html: string): string {
+  return `${htmlToText(html)} | ${jsonStateText(html)}`;
+}
+
 /** Crude HTML -> text. Enough for regex spec extraction; no DOM needed. */
 export function htmlToText(html: string): string {
   return html

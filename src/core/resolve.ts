@@ -13,7 +13,7 @@
  */
 
 import { colors } from "@cliffy/ansi/colors";
-import { fetchDirect, fetchPageMarkdown, htmlToText } from "../lib/unlock.ts";
+import { fetchDirect, fetchPageMarkdown, pageToText } from "../lib/unlock.ts";
 import { type CheckoutInfo, hasCheckoutInfo, parseCheckout } from "./offers.ts";
 import { SpecStore } from "./specstore.ts";
 import { matchSocDetailed } from "../knowledge/soc.ts";
@@ -72,7 +72,7 @@ function extractSpecSection(text: string): string {
     if (i !== -1 && (start === -1 || i < start)) start = i;
   }
   const slice = start === -1 ? text : text.slice(start);
-  return slice.slice(0, 12_000);
+  return slice.slice(0, 24_000);
 }
 
 /** Paid transports are only reached when explicitly allowed. */
@@ -85,7 +85,7 @@ async function fetchPage(
 
   if (mode === "auto" || mode === "direct") {
     try {
-      const text = htmlToText(await fetchDirect(url));
+      const text = pageToText(await fetchDirect(url));
       // A block page is short and specless; treat it as a failure so we can
       // fall through rather than caching junk.
       if (text.length > 2000) return { text, via: "direct" };

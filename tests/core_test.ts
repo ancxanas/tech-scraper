@@ -35,6 +35,7 @@ import { matchSoc, matchSocDetailed } from "../src/knowledge/soc.ts";
 import { lookupModel, PHONE_MODELS } from "../src/knowledge/models.ts";
 import { hasCheckoutInfo, parseCheckout } from "../src/core/offers.ts";
 import { SpecStore } from "../src/core/specstore.ts";
+import { htmlToText, jsonStateText, pageToText } from "../src/lib/unlock.ts";
 import { buildPrompt, classifyFailure } from "../src/commands/heal.ts";
 
 const FIXTURE = "tests/fixtures/run-phones-15000";
@@ -1161,4 +1162,48 @@ Deno.test("the spec cache round-trips and reports hits", async () => {
   assertEquals(b.stats.hits, 1);
 
   await Deno.remove(path);
+});
+
+// ------------------------------------------- embedded JSON spec extraction
+
+Deno.test("spec text is harvested from the embedded JSON, not just visible markup", () => {
+  // Flipkart ships the real specification table inside __INITIAL_STATE__.
+  // Stripping <script> tags — what a naive html-to-text does — discards it and
+  // leaves only marketing highlights, which is why chargingW was missing on 36
+  // of 48 products and resolution on 29.
+  const html = `<html><body><div>Product highlights 6 GB RAM</div>
+    <script>window.__INITIAL_STATE__ = {"a":{"label_0":{"value":{"text":"Display Type"}},
+    "label_1":{"value":{"text":["HD+ 120Hz Display"]}},
+    "label_2":{"value":{"text":["Refresh Rate:120Hz, 240Hz Touch Sampling Rate"]}},
+    "label_3":{"value":{"text":["5160 mAh Battery"]}},
+    "label_4":{"value":{"text":["33W Fast Charging"]}}}}</script></body></html>`;
+
+  const visible = htmlToText(html);
+  assert(
+    !visible.includes("Refresh Rate"),
+    "script content must be stripped from visible text",
+  );
+
+  const harvested = jsonStateText(html);
+  assert(harvested.includes("Refresh Rate:120Hz"), harvested);
+  assert(harvested.includes("5160 mAh"), harvested);
+
+  const combined = pageToText(html);
+  assert(combined.includes("Product highlights"), "keeps visible text");
+  assert(combined.includes("33W Fast Charging"), "adds JSON text");
+
+  // And the extractor must now find fields it previously could not.
+  const { specs } = specsFromText(combined);
+  assertEquals(specs.refreshHz, 120);
+  assertEquals(specs.batteryMah, 5160);
+  assertEquals(specs.chargingW, 33);
+});
+
+Deno.test("JSON harvesting is bounded and survives malformed input", () => {
+  assertEquals(jsonStateText(""), "");
+  assertEquals(jsonStateText("<html>no json here</html>"), "");
+  const huge = `<script>${
+    '{"text":"filler value here"},'.repeat(5000)
+  }</script>`;
+  assert(jsonStateText(huge, 5_000).length <= 5_000);
 });
