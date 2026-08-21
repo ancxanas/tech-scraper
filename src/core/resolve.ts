@@ -488,6 +488,16 @@ export interface RefreshResult {
   changed: Array<
     { product: string; from: number; to: number; seller: string | null }
   >;
+  stockChanged: Array<
+    { product: string; inStock: boolean; seller: string | null }
+  >;
+  seen: Array<{
+    product: string;
+    card: number | null;
+    page: number | null;
+    inStock: boolean | null;
+    seller: string | null;
+  }>;
 }
 
 export async function refreshPrices(
@@ -508,6 +518,8 @@ export async function refreshPrices(
     unpriced: 0,
     failed: 0,
     changed: [],
+    stockChanged: [],
+    seen: [],
   };
   const top = candidates.slice(0, opts.limit ?? 15);
   if (!top.length) return out;
@@ -541,7 +553,25 @@ export async function refreshPrices(
       }
       const checkout = parseCheckout(text);
       if (checkout.pagePrice === null) out.unpriced++;
+      out.seen.push({
+        product: c.modelName,
+        card: c.best.price,
+        page: checkout.pagePrice,
+        inStock: checkout.inStock,
+        seller: checkout.seller,
+      });
       if (!hasCheckoutInfo(checkout)) continue;
+
+      // A phone the page says is unbuyable sinks to the bottom of the table,
+      // which reorders everything above it. That is too large an effect to
+      // apply without saying so.
+      if (checkout.inStock === false && c.best.inStock !== false) {
+        out.stockChanged.push({
+          product: c.modelName,
+          inStock: false,
+          seller: checkout.seller,
+        });
+      }
 
       const from = c.best.price;
       for (const l of c.listings) {
@@ -569,6 +599,24 @@ export async function refreshPrices(
   return out;
 }
 
+export function reportRefreshDetail(r: RefreshResult): void {
+  for (const s of r.seen) {
+    console.error(
+      colors.dim(
+        `    ${s.product.padEnd(34).slice(0, 34)} card ${
+          s.card ? `₹${s.card}` : "—"
+        } · page ${s.page ? `₹${s.page}` : "no price"} · ${
+          s.inStock === false
+            ? "OUT OF STOCK"
+            : s.inStock === true
+            ? "in stock"
+            : "stock unknown"
+        }${s.seller ? ` · ${s.seller}` : ""}`,
+      ),
+    );
+  }
+}
+
 export function reportRefresh(r: RefreshResult): void {
   if (!r.fetched && !r.cached) return;
   const parts = [`${r.fetched} refetched`];
@@ -576,6 +624,13 @@ export function reportRefresh(r: RefreshResult): void {
   if (r.unpriced) parts.push(`${r.unpriced} with no price on the page`);
   if (r.failed) parts.push(`${r.failed} unreadable`);
   console.error(colors.dim(`  Prices: ${parts.join(", ")}`));
+  for (const s of r.stockChanged.slice(0, 8)) {
+    console.error(
+      colors.yellow(
+        `    ${s.product}: the page says out of stock — demoted below every buyable phone`,
+      ),
+    );
+  }
   for (const c of r.changed.slice(0, 8)) {
     const dir = c.to > c.from ? "up" : "down";
     console.error(

@@ -14,6 +14,7 @@ import {
   type FetchMode,
   refreshPrices,
   reportRefresh,
+  reportRefreshDetail,
   reportResolution,
   resolveSpecs,
 } from "../core/resolve.ts";
@@ -260,6 +261,7 @@ export const findCommand = new Command()
         },
       );
       reportRefresh(fresh);
+      if (options.verbose) reportRefreshDetail(fresh);
       if (fresh.checkout.size) {
         const merged = new Map(mergedCheckout);
         for (const [k, v] of fresh.checkout) merged.set(k, v);
