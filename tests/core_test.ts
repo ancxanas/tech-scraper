@@ -1824,3 +1824,24 @@ Deno.test("a genuine AMOLED is still read", () => {
   assertEquals(a.specs.panel, "AMOLED");
   assertEquals(a.specs.chargingW, 25);
 });
+
+Deno.test("a price below every published offer is flagged, not celebrated", async () => {
+  const batches = await loadRun([FIXTURE]);
+  const intent = parseIntentRules("best phones under 15000");
+  const base = runPipeline("q", intent, batches);
+  const top = base.ranked[0];
+
+  const floor = new Map(
+    top.listings.map((
+      l,
+    ) => [l.id, { low: top.best.price * 2, high: top.best.price * 3 }]),
+  );
+  const flagged = runPipeline("q", intent, batches, { marketFloor: floor });
+  const same = flagged.ranked.find((r) => r.key === top.key)!;
+
+  assertEquals(same.priceBelowMarket, true);
+  assert(same.badges.includes("PRICE UNVERIFIED"));
+  assert(same.score.dealScore <= 40);
+  assert(!same.badges.includes("BEST VALUE"));
+  assert(same.rank > 1 || flagged.ranked.length === 1);
+});

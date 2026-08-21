@@ -135,6 +135,7 @@ export interface ScoreBreakdown {
 
 export interface RankedCandidate extends Candidate {
   rank: number;
+  priceBelowMarket?: boolean;
   matchesRequestedModel: boolean;
   score: ScoreBreakdown;
   pros: string[];

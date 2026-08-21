@@ -116,6 +116,25 @@ export function nameMatches(
   return got.includes(want) || want.includes(got) || identity(slug) === want;
 }
 
+export interface MarketPrice {
+  low: number;
+  high: number;
+  url: string;
+}
+
+export function parseBeebomPrices(
+  html: string,
+  url: string,
+): MarketPrice | null {
+  const t = html.replace(/&quot;/g, '"');
+  const m = t.match(/"lowPrice":\s*(\d{3,7})\s*,\s*"highPrice":\s*(\d{3,7})/);
+  if (!m) return null;
+  const low = Number(m[1]);
+  const high = Number(m[2]);
+  if (!low || !high || low > high) return null;
+  return { low, high, url };
+}
+
 export function parseBeebomPage(
   html: string,
   url: string,
@@ -179,6 +198,27 @@ export function parseBeebomPage(
     ipRating: ip?.match(/(IP[0-9X]{2})/i)?.[1]?.toUpperCase() ?? null,
     weightG: num(get("weight")?.match(/([\d.]{2,5})\s*g(?:ram)?/i) ?? null),
   };
+}
+
+export async function fetchBeebom(
+  model: string,
+  brand?: string,
+  fetcher: (url: string) => Promise<string> = (u) => fetchDirect(u, 15000),
+): Promise<{ specs: ExternalSpecs | null; market: MarketPrice | null }> {
+  for (const slug of beebomSlugs(model, brand)) {
+    const url = `${BASE}/${slug}`;
+    let html: string;
+    try {
+      html = await fetcher(url);
+    } catch {
+      continue;
+    }
+    const parsed = parseBeebomPage(html, url, slug);
+    if (!parsed?.socName) continue;
+    if (!nameMatches(model, html, slug)) continue;
+    return { specs: parsed, market: parseBeebomPrices(html, url) };
+  }
+  return { specs: null, market: null };
 }
 
 export async function fetchBeebomSpecs(

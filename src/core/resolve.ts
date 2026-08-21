@@ -22,7 +22,7 @@ import {
   RateLimited,
   resolveModel,
 } from "../knowledge/gsmarena.ts";
-import { fetchBeebomSpecs } from "../knowledge/beebom.ts";
+import { fetchBeebom, type MarketPrice } from "../knowledge/beebom.ts";
 import type { ExternalSpecs } from "../knowledge/spec-source.ts";
 import type { Candidate, Specs } from "./types.ts";
 
@@ -58,6 +58,7 @@ export interface ResolveResult {
   gsmMatched: number;
   gsmUnmatched: number;
   beebomMatched: number;
+  marketPrices: Map<string, MarketPrice>;
   gsmRateLimited: boolean;
   fromCache: number;
   fetchedDirect: number;
@@ -205,6 +206,7 @@ export async function resolveSpecs(
     reviewsFetched: 0,
     gsmMatched: 0,
     beebomMatched: 0,
+    marketPrices: new Map(),
     gsmUnmatched: 0,
     gsmRateLimited: false,
     fromCache: 0,
@@ -306,9 +308,25 @@ export async function resolveSpecs(
         const cached = store.get(cacheKey);
         if (cached) {
           b = JSON.parse(cached) as ExternalSpecs;
+          const cm = store.get(`${cacheKey}#market`);
+          if (cm) {
+            const mp = JSON.parse(cm) as MarketPrice;
+            for (const l of c.listings) result.marketPrices.set(l.id, mp);
+          }
         } else {
           if (fetchedThisRun > 0) await sleep(opts.pace ?? 1100);
-          b = await fetchBeebomSpecs(lookupName, c.brand ?? undefined);
+          const got = await fetchBeebom(lookupName, c.brand ?? undefined);
+          b = got.specs;
+          if (got.market) {
+            for (const l of c.listings) {
+              result.marketPrices.set(l.id, got.market);
+            }
+            store.set(
+              `${cacheKey}#market`,
+              JSON.stringify(got.market),
+              "direct",
+            );
+          }
           fetchedThisRun++;
           if (b) store.set(cacheKey, JSON.stringify(b), "direct");
         }
