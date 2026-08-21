@@ -105,12 +105,17 @@ export function groupListings(listings: AnalyzedListing[]): Candidate[] {
     }
 
     for (const [configKey, ls] of byConfig) {
+      // A price you cannot pay is not a price. In-stock offers lead; the
+      // stock-unknown stay mid; sold-out sellers sink below every buyable
+      // one - however cheap their dead listing looks.
+      const stockRank = (o: Offer) =>
+        o.inStock === true ? 0 : o.inStock === false ? 2 : 1;
       const offers = ls
         .map(toOffer)
         .filter((o): o is Offer => o !== null)
         .sort((a, b) =>
-          a.price - b.price ||
-          (b.inStock === true ? 1 : 0) - (a.inStock === true ? 1 : 0)
+          stockRank(a) - stockRank(b) ||
+          a.price - b.price
         );
 
       const seen = new Set<string>();

@@ -27,7 +27,14 @@ import {
   parseBeebomPage,
 } from "../src/knowledge/beebom.ts";
 import { toSpecs } from "../src/core/resolve.ts";
-import { loadRun } from "../src/core/replay.ts";
+import {
+  refreshPrices,
+  reportRefresh,
+  reportRefreshDetail,
+} from "../src/core/resolve.ts";
+import { ageLabel, SpecStore } from "../src/core/spec-cache.ts";
+import { capturedAtFor, loadRun } from "../src/core/replay.ts";
+import { renderFull } from "../src/ui/render.ts";
 import { buildCandidates, runPipeline } from "../src/core/pipeline.ts";
 import {
   matchSoc,
@@ -38,7 +45,6 @@ import {
 import { lookupModel, PHONE_MODELS } from "../src/knowledge/models.ts";
 import { hasCheckoutInfo, parseCheckout } from "../src/core/checkout.ts";
 import { extractSpecSection } from "../src/core/resolve.ts";
-import { SpecStore } from "../src/core/spec-cache.ts";
 import { reviewsUrlFor, summariseReviews } from "../src/core/reviews.ts";
 import { buildUrls, searchTerm } from "../src/core/collect.ts";
 import { canonicalUrl } from "../src/core/normalize.ts";
@@ -2165,4 +2171,324 @@ Deno.test("a listing with nothing to verify is scored down, not hidden", async (
     if (ranked[i - 1].best.inStock === false) break;
     assert(ranked[i - 1].score.total >= ranked[i].score.total);
   }
+});
+
+Deno.test("a replayed run says when its prices were captured", async () => {
+  const ts = await capturedAtFor([FIXTURE]);
+  assertEquals(ts, "2026-08-21T04:36:37Z");
+});
+
+Deno.test("capturedAt falls back to mtime when a run has no manifest", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(`${dir}/amazon.json`, "[]");
+    const stat = await Deno.stat(dir);
+    const ts = await capturedAtFor([dir]);
+    assertExists(ts);
+    assertExists(stat.mtime);
+    assert(
+      Math.abs(Date.parse(ts) - stat.mtime.getTime()) < 60_000,
+      `mtime fallback too far off: ${ts}`,
+    );
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("ages read the way a person reads them", () => {
+  const now = Date.parse("2026-08-22T01:45:00Z");
+  assertEquals(ageLabel("2026-08-22T01:26:00Z", now), "19m");
+  assertEquals(ageLabel("2026-08-20T22:45:00Z", now), "27h 00m");
+  assertEquals(ageLabel("2026-08-19T21:45:00Z", now), "2d 4h");
+  assertEquals(ageLabel("not a date", now), null);
+});
+
+Deno.test("the report warns when replayed prices are old", async () => {
+  const batches = await loadRun([FIXTURE]);
+  const intent = parseIntentRules("best phones under 15000");
+  const result = runPipeline("best phones under 15000", intent, batches);
+  const fresh = renderFull(result, {
+    limit: 5,
+    details: 0,
+    compare: false,
+    diagnostics: false,
+    capturedAt: new Date().toISOString(),
+  });
+  assert(fresh.includes("prices captured"));
+  assert(!fresh.includes("may have moved"));
+
+  const stale = renderFull(result, {
+    limit: 5,
+    details: 0,
+    compare: false,
+    diagnostics: false,
+    capturedAt: "2026-08-20T01:00:00Z",
+  });
+  assert(stale.includes("prices captured"));
+  assert(stale.includes("may have moved"));
+  assert(stale.includes("--refresh-prices"));
+
+  const live = renderFull(result, {
+    limit: 5,
+    details: 0,
+    compare: false,
+    diagnostics: false,
+  });
+  assert(!live.includes("prices captured"));
+});
+
+Deno.test("the cache can say when a sample was taken", () => {
+  const dir = Deno.makeTempDirSync();
+  try {
+    const store = new SpecStore(`${dir}/specs.json`);
+    const url = "https://www.flipkart.com/x/p/itm1?pid=P1";
+    store.setPrice(url, "28% 17,999 ₹12,951", "direct");
+    assertExists(store.priceFetchedAt(url));
+    assertEquals(store.priceFetchedAt("https://www.flipkart.com/y"), null);
+    store.set(url, "spec text", "direct");
+    assertExists(store.fetchedAt(url));
+    assertEquals(store.fetchedAt("https://www.flipkart.com/z"), null);
+  } finally {
+    Deno.removeSync(dir, { recursive: true });
+  }
+});
+
+Deno.test("a refreshed price reports when we sampled it", async () => {
+  // Real pages are big; the transport treats short bodies as blocks.
+  const filler = "x".repeat(3000);
+  const html =
+    `<html><body>${filler} Samsung Galaxy M17 5G (Moonlight Silver, 128 GB) (6 GB RAM) 4.4 | 1,525 28% 17,999 ₹12,951 +₹109 Protect Promise Fee</body></html>`;
+  const origFetch = globalThis.fetch;
+  globalThis.fetch =
+    (() =>
+      Promise.resolve(new Response(html, { status: 200 }))) as typeof fetch;
+  try {
+    const raws = [{
+      product_name:
+        "Samsung Galaxy M17 5G (Moonlight Silver, 128 GB) (6 GB RAM)",
+      selling_price: 12951,
+      product_url:
+        "https://www.flipkart.com/samsung-galaxy-m17-5g-moonlight-silver-128-gb/p/itmc3b8f7b511eca?pid=MOBHTEST1",
+    }];
+    const { listings } = normalizeBatch(raws, "flipkart");
+    const candidates = groupListings(listings.map((l) => analyze(l)));
+    const fresh = await refreshPrices(candidates, {
+      limit: 1,
+      mode: "direct",
+      pace: 0,
+    });
+    assertEquals(fresh.fetched, 1);
+    const seen = fresh.seen[0];
+    assertExists(seen.sampledAt);
+    const co = [...fresh.checkout.values()][0];
+    assertExists(co?.sampledAt);
+
+    const lines: string[] = [];
+    const origErr = console.error;
+    console.error = (...a: unknown[]) => lines.push(a.map(String).join(" "));
+    reportRefreshDetail(fresh);
+    console.error = origErr;
+    assert(
+      lines.join("\n").includes("sampled"),
+      "the verbose report must carry the sample time",
+    );
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+Deno.test("a price fetch drops the seller-specific listing id", () => {
+  // pid identifies the phone and colour; lid identifies ONE SELLER's offer.
+  // The search card links to the cheapest seller, who is often the one that
+  // sells out - fetching with lid returned "₹12,951, AwesomeOnline" while the
+  // buy box on the same product was ₹19,474 from SmartTechMart.
+  const cardUrl =
+    "https://www.flipkart.com/samsung-galaxy-m17-5g-moonlight-silver-128-gb/p/itmc3b8f7b511eca" +
+    "?pid=MOBHGU9DYEBQW6NW&lid=LSTMOBHGU9DYEBQW6NWIWMUZV&marketplace=FLIPKART&q=phones+under+15000";
+  const fetched = canonicalUrl(cardUrl);
+  assert(fetched.includes("pid=MOBHGU9DYEBQW6NW"), fetched);
+  assert(!fetched.includes("lid="), `lid survived: ${fetched}`);
+  assert(!fetched.includes("marketplace="), fetched);
+});
+
+Deno.test("an in-stock offer outranks a cheaper sold-out one", () => {
+  const raws = [
+    {
+      product_name: "POCO M7 5G (Ocean Blue, 128 GB) (6 GB RAM)",
+      selling_price: 12499,
+      product_url:
+        "https://www.flipkart.com/poco-m7-5g-ocean-blue-128-gb/p/itm1?pid=P1",
+      availability: "In stock",
+    },
+    {
+      product_name: "POCO M7 5G (Ocean Blue, 128 GB) (6 GB RAM)",
+      selling_price: 9999,
+      product_url:
+        "https://www.flipkart.com/poco-m7-5g-ocean-blue-128-gb/p/itm2?pid=P2",
+      availability: "Out of stock",
+    },
+  ];
+  const { listings } = normalizeBatch(raws, "flipkart");
+  const [c] = groupListings(listings.map((l) => analyze(l)));
+  assertEquals(c.best.price, 12499);
+  assertEquals(c.best.inStock, true);
+  assertEquals(c.offers[1].price, 9999); // kept, but demoted below buyable
+});
+
+Deno.test("structured data from another variant never becomes our price", () => {
+  // Buy box missing, but the page's ld+json describes a different sku.
+  const text =
+    "Samsung Galaxy M17 5G specs and details | LD_SKU=MOBHOTHER999 | LD_PRICE=10499 | LD_STOCK=InStock";
+  const guarded = parseCheckout(text, "MOBHGU9DYEBQW6NW");
+  assertEquals(guarded.pagePrice, null); // not our variant, not our price
+  assertEquals(guarded.inStock, null);
+
+  // Same sku: the fallback may speak for this listing.
+  const trusted = parseCheckout(
+    text.replace("MOBHOTHER999", "MOBHGU9DYEBQW6NW"),
+    "MOBHGU9DYEBQW6NW",
+  );
+  assertEquals(trusted.pagePrice, 10499);
+  assertEquals(trusted.inStock, true);
+
+  // No pid asked for (e.g. Amazon): behaviour unchanged.
+  assertEquals(parseCheckout(text).pagePrice, 10499);
+});
+
+Deno.test("a price refresh refuses to spend a fetch on an unparseable platform", async () => {
+  const raws = [
+    {
+      product_name: "Motorola G45 5G (Brilliant Green, 64 GB) (4 GB RAM)",
+      selling_price: 10997,
+      product_url: "https://www.amazon.in/dp/B0DGJ7M6XV",
+    },
+    {
+      product_name: "POCO M7 5G (Ocean Blue, 128 GB) (6 GB RAM)",
+      selling_price: 12499,
+      product_url:
+        "https://www.flipkart.com/poco-m7-5g-ocean-blue-128-gb/p/itm1?pid=MOBHTEST2",
+    },
+  ];
+  let billedCalls = 0;
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = ((input: RequestInfo | URL) => {
+    const u = String(input);
+    if (u.includes("flipkart")) {
+      return Promise.resolve(
+        new Response(
+          "x".repeat(3000) + " 28% 17,999 ₹12,499 +₹109 Protect Promise Fee",
+          { status: 200 },
+        ),
+      );
+    }
+    billedCalls++;
+    throw new Error("no paid call may reach Amazon");
+  }) as typeof fetch;
+  try {
+    const { listings } = normalizeBatch(raws, "flipkart" as never);
+    void listings;
+    const flipkartOnly = normalizeBatch([raws[1]], "flipkart").listings;
+    const amazonOnly = normalizeBatch([raws[0]], "amazon").listings;
+    const candidates = groupListings(
+      [...flipkartOnly, ...amazonOnly].map((l) => analyze(l)),
+    );
+    const fresh = await refreshPrices(candidates, {
+      limit: 5,
+      mode: "direct",
+      pace: 0,
+    });
+    assertEquals(fresh.skipped, 1);
+    assertEquals(fresh.fetched, 1);
+    assertEquals(billedCalls, 0);
+    assert(
+      fresh.seen.every((s) => s.product.includes("POCO")),
+      "skipped products must not appear in the report",
+    );
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+Deno.test("a refresh that reached nothing says so instead of going quiet", () => {
+  const lines: string[] = [];
+  const orig = console.error;
+  console.error = (...a: unknown[]) => lines.push(a.map(String).join(" "));
+  reportRefresh({
+    checkout: new Map(),
+    fetched: 0,
+    cached: 0,
+    unpriced: 0,
+    failed: 3,
+    skipped: 0,
+    changed: [],
+    stockChanged: [],
+    seen: [],
+  });
+  console.error = orig;
+  const out = lines.join("\n");
+  assert(
+    out.includes("unreachable") && out.includes("keeps its card prices"),
+    `silent failure: ${out}`,
+  );
+});
+
+Deno.test("a measured page price outranks the card quotes around it", () => {
+  const raws = [
+    {
+      product_name:
+        "Samsung Galaxy M17 5G (Moonlight Silver, 128 GB) (6 GB RAM)",
+      selling_price: 12951,
+      product_url:
+        "https://www.flipkart.com/samsung-galaxy-m17-5g-a/p/itmA?pid=MOBHA",
+    },
+    {
+      product_name:
+        "Samsung Galaxy M17 5G (Moonlight Silver, 128 GB) (6 GB RAM)",
+      selling_price: 13499,
+      product_url:
+        "https://www.flipkart.com/samsung-galaxy-m17-5g-b/p/itmB?pid=MOBHB",
+    },
+  ];
+  const { listings } = normalizeBatch(raws, "flipkart");
+  const { candidates } = buildCandidates(
+    {
+      raw: "test",
+      category: "phone",
+      brands: [],
+      excludeBrands: [],
+      budgetMax: 15000,
+      budgetMin: null,
+      budgetOperator: "under",
+      priorities: [],
+      mustHave: [],
+      modelHint: null,
+    },
+    [{
+      platform: "flipkart",
+      platformName: "Flipkart",
+      items: raws,
+      status: "ok",
+    }],
+    {
+      checkoutInfo: new Map([[
+        listings[0].id,
+        {
+          pagePrice: 19474,
+          pageMrp: null,
+          seller: "SmartTechMart",
+          inStock: true,
+          deliveryBy: null,
+          buyAt: null,
+          bankOffer: null,
+          exchangeUpTo: null,
+          noCostEmi: false,
+          pincodeBlocked: false,
+        },
+      ]]),
+    },
+  );
+  const [c] = candidates;
+  assertEquals(c.best.price, 19474); // measured, not the cheapest card
+  assertEquals(c.offers[0].url, listings[0].url);
+  assertEquals(c.offers.some((o) => o.price === 13499), true); // kept below
 });

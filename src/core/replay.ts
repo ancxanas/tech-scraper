@@ -179,3 +179,28 @@ export async function loadRun(paths: string[]): Promise<RawBatch[]> {
     };
   });
 }
+
+/** When was this run captured? Manifest timestamp, else file mtime. */
+export async function capturedAtFor(paths: string[]): Promise<string | null> {
+  for (const p of paths) {
+    try {
+      const stat = await Deno.stat(p);
+      if (stat.isDirectory) {
+        try {
+          const manifest = JSON.parse(
+            await Deno.readTextFile(`${p}/manifest.json`),
+          ) as { timestamp?: string; capturedAt?: string };
+          // Older manifests said "capturedAt", saveRun says "timestamp".
+          const ts = manifest.timestamp ?? manifest.capturedAt;
+          if (ts) return ts;
+        } catch {
+          // No manifest. The directory mtime is a weaker but honest answer.
+        }
+      }
+      return stat.mtime?.toISOString() ?? null;
+    } catch {
+      // Unreadable path; try the next one.
+    }
+  }
+  return null;
+}

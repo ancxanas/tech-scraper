@@ -1,5 +1,6 @@
 import { colors } from "@cliffy/ansi/colors";
 import { canonicalUrl } from "../core/normalize.ts";
+import { ageLabel } from "../core/spec-cache.ts";
 import { Table } from "@cliffy/table";
 import type {
   PipelineDiagnostics,
@@ -68,7 +69,10 @@ export function rule(title = "", width = termWidth()): string {
     colors.dim("─".repeat(right));
 }
 
-export function header(result: PipelineResult): string {
+export function header(
+  result: PipelineResult,
+  capturedAt?: string | null,
+): string {
   const { stats, intent } = result;
   const lines: string[] = [];
   lines.push("");
@@ -78,6 +82,26 @@ export function header(result: PipelineResult): string {
       colors.dim(`→ ${describeIntent(intent)}`)
     }`,
   );
+  if (capturedAt) {
+    const age = ageLabel(capturedAt);
+    if (age) {
+      const utc = `${capturedAt.slice(0, 10)} ${capturedAt.slice(11, 16)} UTC`;
+      lines.push(colors.dim(`  prices captured ${utc} · ${age} old`));
+      const hours = (Date.now() - Date.parse(capturedAt)) / 3_600_000;
+      if (hours > 24) {
+        lines.push(
+          colors.yellow(
+            "  prices may have moved — verify on the marketplace before you buy",
+          ),
+        );
+        lines.push(
+          colors.dim(
+            "  re-rank with --refresh-prices N to refetch live buy-box prices",
+          ),
+        );
+      }
+    }
+  }
   const priceInfo = stats.priceRange
     ? `${rupees(stats.priceRange[0])}–${rupees(stats.priceRange[1])}, median ${
       rupees(stats.medianPrice)
@@ -227,6 +251,13 @@ export function detailCards(ranked: RankedCandidate[], count: number): string {
       if (co.deliveryBy) bits.push(colors.dim(`delivery by ${co.deliveryBy}`));
       if (co.noCostEmi) bits.push(colors.dim("no-cost EMI"));
       if (bits.length) out.push(`  ${bits.join("  ·  ")}`);
+      if (co.sampledAt) {
+        const age = ageLabel(co.sampledAt);
+        // Under half an hour the sample is as live as the site gets.
+        if (age && Date.now() - Date.parse(co.sampledAt) > 30 * 60_000) {
+          out.push(colors.dim(`  page price sampled ${age} ago`));
+        }
+      }
       if (co.pincodeBlocked) {
         out.push(
           colors.yellow("  offer/delivery unavailable at the default pincode"),
@@ -536,10 +567,11 @@ export function renderFull(
     compare: boolean;
     diagnostics: boolean;
     enriched?: number;
+    capturedAt?: string | null;
   },
 ): string {
   const parts = [
-    header(result),
+    header(result, opts.capturedAt),
     rankTable(result.ranked, opts.limit),
     sortNote(result.ranked),
   ];

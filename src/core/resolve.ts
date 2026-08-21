@@ -5,7 +5,7 @@ import {
   hasCheckoutInfo,
   parseCheckout,
 } from "./checkout.ts";
-import { SpecStore } from "./spec-cache.ts";
+import { ageLabel, SpecStore } from "./spec-cache.ts";
 import { canonicalUrl } from "./normalize.ts";
 import {
   type ReviewSummary,
@@ -68,6 +68,15 @@ export interface ResolveResult {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** The pid that identifies the product a URL was meant to show. */
+export function pidOf(url: string): string | null {
+  try {
+    return new URL(url).searchParams.get("pid");
+  } catch {
+    return null;
+  }
+}
 
 export function extractSpecSection(text: string): string {
   const lower = text.toLowerCase();
@@ -232,8 +241,11 @@ export async function resolveSpecs(
   const apply = (c: Candidate, text: string, sourceUrl: string) => {
     const section = extractSpecSection(text);
     for (const l of c.listings) result.text.set(l.id, section);
-    const checkout = parseCheckout(text);
+    const checkout = parseCheckout(text, pidOf(sourceUrl));
     if (hasCheckoutInfo(checkout)) {
+      // A cached page was fetched some time ago; say when.
+      checkout.sampledAt = store.fetchedAt(sourceUrl) ??
+        new Date().toISOString();
       const want = canonicalUrl(sourceUrl);
       const from = c.listings.find((l) => canonicalUrl(l.url) === want) ??
         c.listings[0];
@@ -353,9 +365,12 @@ export async function resolveSpecs(
 
   const needsFetch: Candidate[] = [];
   for (const c of queue) {
-    const cached = store.get(c.best.url);
+    // Same rule as the price refresh: fetch the product, not one seller's
+    // listing. The card URL carries lid; the canonical URL does not.
+    const url = canonicalUrl(c.best.url);
+    const cached = store.get(url);
     if (cached) {
-      apply(c, cached, c.best.url);
+      apply(c, cached, url);
       result.fromCache++;
     } else {
       needsFetch.push(c);
@@ -374,9 +389,13 @@ export async function resolveSpecs(
       if (!c) return;
       budget--;
       try {
-        const { text, via } = await fetchPage(c.best.url, mode, allowPaid);
-        apply(c, text, c.best.url);
-        store.set(c.best.url, extractSpecSection(text), via);
+        const { text, via } = await fetchPage(
+          canonicalUrl(c.best.url),
+          mode,
+          allowPaid,
+        );
+        apply(c, text, canonicalUrl(c.best.url));
+        store.set(canonicalUrl(c.best.url), extractSpecSection(text), via);
         if (via === "direct") result.fetchedDirect++;
         else result.fetchedPaid++;
         if (opts.verbose) {
@@ -402,7 +421,7 @@ export async function resolveSpecs(
   const reviewMode: FetchMode = opts.mode ?? "auto";
   if (opts.withReviews !== false && reviewMode !== "unlocker") {
     for (const c of candidates) {
-      const url = reviewsUrlFor(c.best.url);
+      const url = reviewsUrlFor(canonicalUrl(c.best.url));
       if (!url) continue;
       try {
         const key = `reviews://${url}`;
@@ -485,6 +504,8 @@ export interface RefreshResult {
   cached: number;
   unpriced: number;
   failed: number;
+  /** Pages we refused to spend a fetch on because we cannot read them. */
+  skipped: number;
   changed: Array<
     { product: string; from: number; to: number; seller: string | null }
   >;
@@ -497,6 +518,7 @@ export interface RefreshResult {
     page: number | null;
     inStock: boolean | null;
     seller: string | null;
+    sampledAt?: string;
   }>;
 }
 
@@ -517,6 +539,7 @@ export async function refreshPrices(
     cached: 0,
     unpriced: 0,
     failed: 0,
+    skipped: 0,
     changed: [],
     stockChanged: [],
     seen: [],
@@ -529,29 +552,56 @@ export async function refreshPrices(
   let n = 0;
 
   for (const c of top) {
-    const url = c.best.url;
+    // Canonical, not the card's URL. A Flipkart card carries `lid`, which
+    // selects one SELLER's listing - the cheapest at scrape time, and often
+    // the one that then sells out. Fetching it returns that seller's dead
+    // offer; dropping it returns the buy box, which is what a buyer sees.
+    // Asking to refresh means asking the network; "cache" as a transport
+    // would make every fetch throw before it starts.
+    const mode: FetchMode = opts.mode === "cache"
+      ? "auto"
+      : opts.mode ?? "auto";
+    const url = canonicalUrl(c.best.url ?? "");
     if (!url) continue;
+    // parseCheckout reads Flipkart's buy box; Amazon pages carry neither its
+    // patterns nor ld+json, so a refetch there buys nothing and bills money.
+    const host = (() => {
+      try {
+        return new URL(url).hostname;
+      } catch {
+        return "";
+      }
+    })();
+    if (!/(^|\.)flipkart\.com$/.test(host)) {
+      out.skipped++;
+      continue;
+    }
     try {
+      let sampledAt: string;
       let text = opts.useCache === true ? store.getPrice(url) : null;
       if (text) {
         out.cached++;
+        sampledAt = store.priceFetchedAt(url) ?? new Date().toISOString();
       } else {
         if (n > 0) await sleep(opts.pace ?? 900);
         const got = await fetchPage(
           url,
-          opts.mode ?? "auto",
+          mode,
           opts.allowPaid ?? false,
         );
-        text = pageToText(got.text);
+        // fetchPage already ran pageToText; converting again only adds noise.
+        text = got.text;
         // Only keep a page we could actually read a price from. Caching an
         // unreadable one hides the failure behind a warm cache for an hour.
-        if (parseCheckout(text).pagePrice !== null) {
+        if (parseCheckout(text, pidOf(url)).pagePrice !== null) {
           store.setPrice(url, text, got.via);
         }
         out.fetched++;
         n++;
+        sampledAt = new Date().toISOString();
       }
-      const checkout = parseCheckout(text);
+      const checkout = parseCheckout(text, pidOf(url));
+      checkout.sampledAt = sampledAt;
       if (checkout.pagePrice === null) out.unpriced++;
       out.seen.push({
         product: c.modelName,
@@ -559,6 +609,7 @@ export async function refreshPrices(
         page: checkout.pagePrice,
         inStock: checkout.inStock,
         seller: checkout.seller,
+        sampledAt,
       });
       if (!hasCheckoutInfo(checkout)) continue;
 
@@ -601,28 +652,43 @@ export async function refreshPrices(
 
 export function reportRefreshDetail(r: RefreshResult): void {
   for (const s of r.seen) {
+    const age = s.sampledAt ? ageLabel(s.sampledAt) : null;
     console.error(
       colors.dim(
         `    ${s.product.padEnd(34).slice(0, 34)} card ${
-          s.card ? `₹${s.card}` : "—"
-        } · page ${s.page ? `₹${s.page}` : "no price"} · ${
+          s.card ? `₹${s.card.toLocaleString("en-IN")}` : "—"
+        } · page ${
+          s.page ? `₹${s.page.toLocaleString("en-IN")}` : "no price"
+        } · ${
           s.inStock === false
             ? "OUT OF STOCK"
             : s.inStock === true
             ? "in stock"
             : "stock unknown"
-        }${s.seller ? ` · ${s.seller}` : ""}`,
+        }${s.seller ? ` · ${s.seller}` : ""}${
+          age ? ` · sampled ${age} ago` : ""
+        }`,
       ),
     );
   }
 }
 
 export function reportRefresh(r: RefreshResult): void {
-  if (!r.fetched && !r.cached) return;
+  // A refresh that read nothing must still say so - silence reads as success.
+  if (!r.fetched && !r.cached && !r.skipped && !r.failed) return;
   const parts = [`${r.fetched} refetched`];
   if (r.cached) parts.push(`${r.cached} still fresh`);
+  if (r.skipped) parts.push(`${r.skipped} skipped (no Flipkart parser)`);
   if (r.unpriced) parts.push(`${r.unpriced} with no price on the page`);
-  if (r.failed) parts.push(`${r.failed} unreadable`);
+  if (r.failed && !r.fetched) {
+    parts.push(`${r.failed} unreachable — the table keeps its card prices`);
+  } else if (r.failed) {
+    parts.push(`${r.failed} unreadable`);
+  }
+  // Prices move between requests; a sample's age is part of the number.
+  const ages = r.seen
+    .map((s) => s.sampledAt ? Date.now() - Date.parse(s.sampledAt) : 0)
+    .filter((ms) => ms > 10 * 60_000);
   console.error(colors.dim(`  Prices: ${parts.join(", ")}`));
   for (const s of r.stockChanged.slice(0, 8)) {
     console.error(
@@ -638,6 +704,16 @@ export function reportRefresh(r: RefreshResult): void {
         `    ${c.product}: listed ₹${c.from.toLocaleString("en-IN")}, now ₹${
           c.to.toLocaleString("en-IN")
         } (${dir}${c.seller ? ` — ${c.seller} holds the buy box` : ""})`,
+      ),
+    );
+  }
+  const oldest = Math.max(0, ...ages);
+  if (oldest >= 10 * 60_000) {
+    console.error(
+      colors.yellow(
+        `    oldest price sample is ${
+          ageLabel(new Date(Date.now() - oldest).toISOString())
+        } old — treat the table as a snapshot, not a live feed`,
       ),
     );
   }
