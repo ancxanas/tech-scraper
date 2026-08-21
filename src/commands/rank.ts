@@ -173,6 +173,20 @@ export const rankCommand = new Command()
       return;
     }
 
+    let historyView;
+    if (options.details > 0) {
+      const { getStatsFor, getSeries } = await import(
+        "../core/price-history.ts"
+      );
+      const keys = result.ranked.slice(0, options.details).map((r) => r.key);
+      const stats = await getStatsFor(keys);
+      if (stats.size) {
+        const series = new Map<string, Awaited<ReturnType<typeof getSeries>>>();
+        for (const k of stats.keys()) series.set(k, await getSeries(k));
+        historyView = { stats, series };
+      }
+    }
+
     console.log(
       renderFull(result, {
         limit: options.top,
@@ -181,6 +195,7 @@ export const rankCommand = new Command()
         diagnostics: options.diagnostics !== false,
         enriched: enrichedCount,
         capturedAt,
+        priceHistory: historyView,
       }),
     );
   });

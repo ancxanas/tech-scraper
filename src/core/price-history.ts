@@ -123,6 +123,26 @@ export async function getStats(key: string): Promise<PriceStats | null> {
   return summarise(key, await readObservations(key));
 }
 
+export interface PricePoint {
+  t: string;
+  p: number;
+}
+
+/** The observation series for one product, oldest first, capped. */
+export async function getSeries(key: string, cap = 24): Promise<PricePoint[]> {
+  const obs = await readObservations(key);
+  const tail = obs.slice(-cap);
+  // One point per run: the cheapest offer seen at that moment.
+  const byRun = new Map<string, number>();
+  for (const o of tail) {
+    const prev = byRun.get(o.timestamp);
+    if (prev === undefined || o.price < prev) byRun.set(o.timestamp, o.price);
+  }
+  return [...byRun.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([t, p]) => ({ t, p }));
+}
+
 export async function getStatsFor(
   keys: string[],
 ): Promise<Map<string, PriceStats>> {

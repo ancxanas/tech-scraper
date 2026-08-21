@@ -210,7 +210,64 @@ export function rankTable(ranked: RankedCandidate[], limit: number): string {
   return table.toString();
 }
 
-export function detailCards(ranked: RankedCandidate[], count: number): string {
+import type { PricePoint, PriceStats } from "../core/price-history.ts";
+
+export interface HistoryView {
+  stats: Map<string, PriceStats>;
+  series: Map<string, PricePoint[]>;
+}
+
+const SPARK = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
+
+/** Eight-level unicode sparkline; flat series renders as a steady mid bar. */
+export function sparkline(prices: number[]): string {
+  if (prices.length === 0) return "";
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  if (max === min) return SPARK[3].repeat(prices.length);
+  return prices.map((p) =>
+    SPARK[Math.min(7, Math.floor(((p - min) / (max - min)) * 8))]
+  ).join("");
+}
+
+/**
+ * One line that says where today's price sits in everything we have ever
+ * recorded for this phone - the memory of every past run, in eight glyphs.
+ */
+function historyLine(
+  r: RankedCandidate,
+  history?: HistoryView,
+): string | null {
+  const stats = history?.stats.get(r.key);
+  if (!stats || stats.runs < 2) return null;
+  const points = history?.series.get(r.key) ?? [];
+  const chart = points.length >= 3
+    ? `${sparkline(points.map((p) => p.p))}  `
+    : "";
+  let verdict: string;
+  if (r.best.price <= stats.min) verdict = colors.green("all-time low");
+  else if (stats.position <= 0.15) verdict = colors.green("near the low");
+  else if (stats.position >= 0.85) verdict = colors.yellow("near its high");
+  else if (stats.trend === "falling") verdict = "falling";
+  else if (stats.trend === "rising") verdict = colors.yellow("rising");
+  else verdict = "steady";
+  return [
+    `${colors.dim("trend")}`,
+    chart,
+    colors.dim(
+      `low ${rupees(stats.min)} · high ${rupees(stats.max)} · ${
+        formatCount(stats.observations)
+      } checks`,
+    ),
+    colors.dim(`— ${verdict}`),
+  ].join(" ");
+}
+
+export function detailCards(
+  ranked: RankedCandidate[],
+  count: number,
+  history?: HistoryView,
+): string {
   const out: string[] = [];
   for (const r of shown(ranked, count)) {
     out.push("");
@@ -233,6 +290,10 @@ export function detailCards(ranked: RankedCandidate[], count: number): string {
           : ""
       }`,
     );
+    const histLine = historyLine(r, history);
+    if (histLine) {
+      out.push(`  ${histLine}`);
+    }
     const co = r.checkout;
     if (co) {
       const bits: string[] = [];
@@ -568,6 +629,7 @@ export function renderFull(
     diagnostics: boolean;
     enriched?: number;
     capturedAt?: string | null;
+    priceHistory?: HistoryView;
   },
 ): string {
   const parts = [
@@ -578,7 +640,9 @@ export function renderFull(
   if (opts.compare) {
     parts.push(comparisonMatrix(result.ranked, Math.min(5, opts.limit)));
   }
-  if (opts.details > 0) parts.push(detailCards(result.ranked, opts.details));
+  if (opts.details > 0) {
+    parts.push(detailCards(result.ranked, opts.details, opts.priceHistory));
+  }
   if (opts.diagnostics) {
     parts.push(diagnosticsTable(result.diagnostics));
     parts.push(rejectionSummary(result));
