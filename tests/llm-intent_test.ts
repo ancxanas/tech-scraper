@@ -1,6 +1,6 @@
 import { assertEquals, assertExists } from "@std/assert";
 import { describeIntent, parseIntent } from "../src/lib/llm-intent.ts";
-import type { ParsedIntent } from "../src/types.ts";
+import type { ParsedIntent } from "../src/lib/llm-intent.ts";
 
 const MOCK_INTENT: ParsedIntent = {
   category: "phone",

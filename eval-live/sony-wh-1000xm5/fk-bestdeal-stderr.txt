@@ -1,4 +1,0 @@
-[0m[32mTask[0m [0m[36mdev[0m deno run --unstable-kv --allow-net=api.brightdata.com --allow-env --allow-read --allow-write main.ts 'best-deal' 'sony wh-1000xm5' '-p' 'flipkart' '--json' '--no-save' '--no-heal'
-  Scraping Flipkart...
-[2m  Enriching top 20 products via PDP...[22m
-[32m  Flipkart: 489 products (ok)[39m

@@ -60,6 +60,7 @@ function badgeChip(b: string): string {
     "FASTEST": (s) => colors.bgYellow(colors.black(` ${s} `)),
     "BATTERY KING": (s) => colors.bgCyan(colors.black(` ${s} `)),
     "BEST RATED": (s) => colors.bgWhite(colors.black(` ${s} `)),
+    "LOWEST YET": (s) => colors.bgBrightGreen(colors.black(` ${s} `)),
   };
   return (styles[b] ?? ((s: string) => colors.inverse(` ${s} `)))(b);
 }

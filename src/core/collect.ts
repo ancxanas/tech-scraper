@@ -14,7 +14,7 @@
 
 import { colors } from "@cliffy/ansi/colors";
 import { type Platform, PLATFORMS } from "../config.ts";
-import { runCollector } from "../tools/scraper.ts";
+import { runCollector } from "../lib/collector.ts";
 import { searchAmazonPreBuilt } from "../lib/prescrapers.ts";
 import type { PlatformId, RankIntent } from "./types.ts";
 import type { RawBatch } from "./pipeline.ts";

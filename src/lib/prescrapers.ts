@@ -1,5 +1,5 @@
 import { bdFetch, pollUntil } from "./brightdata.ts";
-import { extractBrandFromName } from "./catalog.ts";
+import { detectBrand } from "../core/extract.ts";
 
 export interface PreScraperResult {
   title: string;
@@ -138,7 +138,7 @@ function parseAmazonItem(item: Record<string, unknown>): PreScraperResult {
   const name = String(
     item.name || item.title || item.product_name || "Unknown",
   );
-  const brand = String(item.brand || "") || extractBrandFromName(name);
+  const brand = String(item.brand || "") || detectBrand(name) || "";
 
   return {
     title: name,

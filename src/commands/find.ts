@@ -15,6 +15,7 @@ import { describeIntent, parseIntentRules } from "../core/intent.ts";
 import { runDirFor, saveRun } from "../core/replay.ts";
 import { renderFull } from "../ui/render.ts";
 import { enrichTop } from "../core/enrich.ts";
+import { getStatsFor, savePrices } from "../kv.ts";
 import type { RankIntent } from "../core/types.ts";
 
 function parsePlatforms(raw?: string): Platform[] {
@@ -84,6 +85,7 @@ export const findCommand = new Command()
     default: "runs",
   })
   .option("--no-save", "Do not persist raw payloads (not recommended)")
+  .option("--no-history", "Skip reading/writing price history")
   .option("--json", "Emit JSON instead of the terminal report", {
     default: false,
   })
@@ -133,6 +135,19 @@ export const findCommand = new Command()
       inStockOnly: options.inStockOnly,
       budgetTolerance: (options.budgetTolerance ?? 0) / 100,
     });
+
+    // Re-rank with recorded history so the deal score reflects whether this
+    // price is actually good *for this product*, not just good-looking today.
+    if (options.history !== false && result.ranked.length > 0) {
+      const stats = await getStatsFor(result.ranked.map((r) => r.key));
+      if (stats.size > 0) {
+        result = runPipeline(query, intent, batches, {
+          inStockOnly: options.inStockOnly,
+          budgetTolerance: (options.budgetTolerance ?? 0) / 100,
+          priceHistory: stats,
+        });
+      }
+    }
 
     // Second pass: buy real spec sheets for the finalists only, then re-rank.
     if (options.enrich > 0 && result.ranked.length > 0) {
@@ -188,6 +203,19 @@ export const findCommand = new Command()
           ),
         );
       }
+    }
+
+    if (options.history !== false && result.ranked.length > 0) {
+      try {
+        const n = await savePrices(result.ranked, query);
+        if (!options.json && n > 0) {
+          console.error(
+            colors.dim(
+              `  ${n} price observations recorded (deno task dev history)`,
+            ),
+          );
+        }
+      } catch { /* price history is a bonus, never fatal */ }
     }
 
     const allFailed = result.diagnostics.every((d) => d.status !== "ok");

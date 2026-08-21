@@ -17,6 +17,9 @@ and results are ranked on value rather than on price alone:
 deno task find "best phones under 15000"                  # live scrape + rank
 deno task rank "best phones under 15000" --replay runs/…  # re-rank offline, free
 deno task snapshot sd_xxx --platform amazon --out runs/x  # re-download a paid snapshot
+deno task doctor --query "phones under 15000"             # config + the exact URLs we'd call
+deno task heal reliance --dry-run                         # diagnose a broken collector
+deno task history                                         # price history across runs
 ```
 
 - **Hard relevance gating** — a phone query returns phones. Category is decided
@@ -38,12 +41,17 @@ deno task snapshot sd_xxx --platform amazon --out runs/x  # re-download a paid s
   and pros/cons, head-to-head spec matrix, and a coverage funnel showing where
   every scraped card went.
 
+- **Price-aware over time** — `find` records every observation, and the ranker
+  uses it: a price at its recorded low earns a `LOWEST YET` badge, one at its
+  recorded high gets flagged.
+- **Diagnosis-driven self-healing** — `heal <platform>` works out _what_ broke
+  (crawler error, empty payload, missing fields, wrong products) from a real
+  run, writes the repair prompt from that evidence, and verifies the fix.
+
 ### Also included
 
 - Searches across 4 Indian e-commerce platforms: Flipkart, Reliance Digital,
   Tata CLiQ, Amazon India
-- Discovers deals on Google Shopping via SERP API
-- Fetches any page via Web Unlocker (screenshots + markdown)
 - **Smart comparison engine** with spec extraction, benchmark scores, and
   category-specific ranking (phones: RAM/storage/battery/camera, headphones:
   ANC/battery/sound, earbuds: battery/ANC/driver)

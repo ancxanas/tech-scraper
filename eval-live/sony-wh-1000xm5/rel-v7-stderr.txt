@@ -1,4 +1,0 @@
-[0m[32mTask[0m [0m[36mdev[0m deno run --unstable-kv --allow-net=api.brightdata.com --allow-env --allow-read --allow-write main.ts 'search' 'sony wh-1000xm5' '-p' 'reliance' '--json' '--no-save' '--no-heal'
-  Scraping Reliance Digital...
-    Scraper c_msxt4lsv12k5p: waiting... (10)
-[32m  Reliance Digital: 18 products (ok)[39m

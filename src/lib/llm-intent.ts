@@ -1,4 +1,34 @@
-import type { ParsedIntent, ProductCategory } from "../types.ts";
+/**
+ * These types were the v1 intent contract. The deterministic parser in
+ * src/core/intent.ts is the source of truth now; this shape survives only as
+ * the wire format of the optional Gemini call.
+ */
+export type ProductCategory =
+  | "phone"
+  | "headphone"
+  | "earbuds"
+  | "laptop"
+  | "tablet"
+  | "watch"
+  | "camera"
+  | "tv"
+  | "generic";
+
+export interface ParsedIntent {
+  category: ProductCategory;
+  brand: string | null;
+  model: string | null;
+  budget: number | null;
+  budgetOperator: "under" | "around" | "exactly";
+  temporal: { before?: string; urgency?: "asap" | "flexible" } | null;
+  useCase: string[];
+  preferences: string[];
+  comparisonProduct: string | null;
+  excludeBrands: string[];
+  superlative: string | null;
+  searchQueries: string[];
+  rawQuery: string;
+}
 
 const GEMINI_MODEL = "gemini-3.5-flash-lite";
 const GEMINI_ENDPOINT =

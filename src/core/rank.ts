@@ -353,7 +353,20 @@ function matchesModel(hint: string | null, name: string, key: string): boolean {
   return hay.includes(h);
 }
 
+/** Minimal shape the ranker needs from the price-history store. */
+export interface PriceHistoryEntry {
+  min: number;
+  max: number;
+  /** 0 = cheapest ever recorded, 1 = most expensive. */
+  position: number;
+  trend: "falling" | "rising" | "stable";
+  observations: number;
+  daysTracked: number;
+}
+
 export interface RankOptions {
+  /** Candidate key -> recorded price history, when we have any. */
+  priceHistory?: Map<string, PriceHistoryEntry>;
   /** Drop candidates whose only offers are known out-of-stock. */
   inStockOnly?: boolean;
   /** Hide sponsored placements. */
@@ -525,6 +538,17 @@ export function rankCandidates(
       deal += 5; // cross-platform confirmation is itself a signal
     }
     if (medPrice && o.price < medPrice) deal += 5;
+
+    // Recorded history beats a single snapshot's discount claim: a "50% off"
+    // banner means nothing if the phone has sat at this price for six weeks.
+    const hist = options.priceHistory?.get(c.key);
+    if (hist && hist.observations >= 2) {
+      if (o.price <= hist.min) deal += 20;
+      else if (hist.position <= 0.15) deal += 12;
+      else if (hist.position >= 0.85) deal -= 12;
+      if (hist.trend === "falling") deal -= 4; // wait, it is still dropping
+      else if (hist.trend === "rising") deal += 4;
+    }
     const dealScore = clamp(deal);
 
     // ---- confidence
@@ -596,13 +620,17 @@ export function rankCandidates(
   );
   ranked.forEach((r, i) => (r.rank = i + 1));
 
-  annotate(ranked, intent);
+  annotate(ranked, intent, options.priceHistory);
   return { ranked, rejected };
 }
 
 // ------------------------------------------------------------------ narrative
 
-function annotate(ranked: RankedCandidate[], intent: RankIntent): void {
+function annotate(
+  ranked: RankedCandidate[],
+  intent: RankIntent,
+  priceHistory?: Map<string, PriceHistoryEntry>,
+): void {
   if (ranked.length === 0) return;
   const audio = isAudio(intent.category);
   const anyMatch = ranked.some((r) => r.matchesRequestedModel);
@@ -629,6 +657,7 @@ function annotate(ranked: RankedCandidate[], intent: RankIntent): void {
 
   // Superlative badges are only awarded among candidates we actually have data
   // for — "BEST VALUE" on a phone with an unknown chipset is not a recommendation.
+  const badgesFromHistory = new Set<string>();
   const credible = ranked.filter((r) => r.score.confidence >= 0.5);
   const pool = credible.length >= 2 ? credible : ranked;
 
@@ -743,6 +772,26 @@ function annotate(ranked: RankedCandidate[], intent: RankIntent): void {
       cons.push(`weak ${r.rating}★ rating`);
     }
     if ((r.ratingCount ?? 0) < 100) cons.push("very few reviews — unproven");
+    const hist = priceHistory?.get(r.key);
+    if (hist && hist.observations >= 2) {
+      if (r.best.price <= hist.min) {
+        // Prepend: "cheapest we have ever seen it" outranks any spec bullet,
+        // and pros are capped at five.
+        pros.unshift(
+          hist.daysTracked >= 1
+            ? `lowest price in ${hist.daysTracked} day(s) of tracking`
+            : "lowest price we have recorded so far",
+        );
+        badgesFromHistory.add(r.key);
+      } else if (hist.position >= 0.85) {
+        cons.push(
+          `near its recorded high of ₹${hist.max.toLocaleString("en-IN")}`,
+        );
+      }
+      if (hist.trend === "falling") {
+        cons.push("price is still trending down — worth waiting");
+      }
+    }
     if (r.best.discountPct !== null && r.best.discountPct > 55) {
       cons.push(`${r.best.discountPct}% "discount" — inflated MRP likely`);
     }
@@ -770,6 +819,7 @@ function annotate(ranked: RankedCandidate[], intent: RankIntent): void {
       badges.push("BATTERY KING");
     }
     if (bestRated && r === bestRated) badges.push("BEST RATED");
+    if (badgesFromHistory.has(r.key)) badges.push("LOWEST YET");
     if (r.rank === 1) badges.unshift("TOP PICK");
 
     r.pros = pros.slice(0, 5);

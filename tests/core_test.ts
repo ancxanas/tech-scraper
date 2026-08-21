@@ -32,6 +32,7 @@ import { parseIntentRules } from "../src/core/intent.ts";
 import { loadRun } from "../src/core/replay.ts";
 import { runPipeline } from "../src/core/pipeline.ts";
 import { matchSoc } from "../src/knowledge/soc.ts";
+import { buildPrompt, classifyFailure } from "../src/commands/heal.ts";
 
 const FIXTURE = "tests/fixtures/run-phones-15000";
 
@@ -562,8 +563,8 @@ Deno.test("model hints parse for alphanumeric part numbers", () => {
 
 Deno.test("naming a model puts that model first, alternatives after", async () => {
   const batches = await loadRun([
-    "eval-live/sony-wh-1000xm5/amazon2.json",
-    "eval-live/sony-wh-1000xm5/flipkart.json",
+    "tests/fixtures/run-sony-wh1000xm5/amazon.json",
+    "tests/fixtures/run-sony-wh1000xm5/flipkart.json",
   ]);
   const intent = parseIntentRules("sony wh-1000xm5");
   const { ranked } = runPipeline("sony wh-1000xm5", intent, batches);
@@ -578,7 +579,9 @@ Deno.test("naming a model puts that model first, alternatives after", async () =
 });
 
 Deno.test("category is inferred from results when the query omits it", async () => {
-  const batches = await loadRun(["eval-live/sony-wh-1000xm5/amazon2.json"]);
+  const batches = await loadRun([
+    "tests/fixtures/run-sony-wh1000xm5/amazon.json",
+  ]);
   const intent = parseIntentRules("sony wh-1000xm5");
   assertEquals(intent.category, "unknown");
   const result = runPipeline("sony wh-1000xm5", intent, batches);
@@ -586,7 +589,9 @@ Deno.test("category is inferred from results when the query omits it", async () 
 });
 
 Deno.test("headphones are scored on audio dimensions, never on NaN", async () => {
-  const batches = await loadRun(["eval-live/sony-wh-1000xm5/amazon2.json"]);
+  const batches = await loadRun([
+    "tests/fixtures/run-sony-wh1000xm5/amazon.json",
+  ]);
   const intent = parseIntentRules("sony wh-1000xm5 headphones");
   const { ranked } = runPipeline("sony wh-1000xm5 headphones", intent, batches);
 
@@ -611,7 +616,9 @@ Deno.test("headphones are scored on audio dimensions, never on NaN", async () =>
 });
 
 Deno.test("audio specs come from the audio knowledge base", async () => {
-  const batches = await loadRun(["eval-live/sony-wh-1000xm5/amazon2.json"]);
+  const batches = await loadRun([
+    "tests/fixtures/run-sony-wh1000xm5/amazon.json",
+  ]);
   const intent = parseIntentRules("sony wh-1000xm5 headphones");
   const { ranked } = runPipeline("sony wh-1000xm5 headphones", intent, batches);
   const xm5 = ranked.find((r) => /1000xm5/i.test(r.modelName))!;
@@ -619,4 +626,160 @@ Deno.test("audio specs come from the audio knowledge base", async () => {
   assertEquals(xm5.specs.batteryHours, 30);
   assert(xm5.specs.codecs?.includes("LDAC"));
   assertEquals(xm5.specs.formFactor, "over-ear");
+});
+
+// ------------------------------------------------------ price history in rank
+
+Deno.test("recorded history sharpens the deal score", async () => {
+  const batches = await loadRun([FIXTURE]);
+  const intent = parseIntentRules("best phones under 15000");
+  const base = runPipeline("q", intent, batches);
+  const top = base.ranked[0];
+
+  // Same product, previously seen ~18% more expensive.
+  const history = new Map([[top.key, {
+    min: top.best.price,
+    max: Math.round(top.best.price * 1.18),
+    position: 0,
+    trend: "stable" as const,
+    observations: 3,
+    daysTracked: 30,
+  }]]);
+
+  const withHistory = runPipeline("q", intent, batches, {
+    priceHistory: history,
+  });
+  const same = withHistory.ranked.find((r) => r.key === top.key)!;
+
+  assert(
+    same.score.dealScore > top.score.dealScore,
+    `deal ${same.score.dealScore} should beat ${top.score.dealScore}`,
+  );
+  assert(same.badges.includes("LOWEST YET"));
+  assert(
+    same.pros.some((p) => /lowest price in 30 day/.test(p)),
+    same.pros.join(" | "),
+  );
+});
+
+Deno.test("a price sitting at its recorded high is penalised and flagged", async () => {
+  const batches = await loadRun([FIXTURE]);
+  const intent = parseIntentRules("best phones under 15000");
+  const base = runPipeline("q", intent, batches);
+  const top = base.ranked[0];
+
+  const history = new Map([[top.key, {
+    min: Math.round(top.best.price * 0.8),
+    max: top.best.price,
+    position: 1,
+    trend: "rising" as const,
+    observations: 5,
+    daysTracked: 20,
+  }]]);
+
+  const withHistory = runPipeline("q", intent, batches, {
+    priceHistory: history,
+  });
+  const same = withHistory.ranked.find((r) => r.key === top.key)!;
+  assert(same.cons.some((c) => /recorded high/.test(c)), same.cons.join(" | "));
+  assert(!same.badges.includes("LOWEST YET"));
+});
+
+Deno.test("a single observation is not treated as history", async () => {
+  const batches = await loadRun([FIXTURE]);
+  const intent = parseIntentRules("best phones under 15000");
+  const base = runPipeline("q", intent, batches);
+  const top = base.ranked[0];
+
+  const history = new Map([[top.key, {
+    min: top.best.price,
+    max: top.best.price,
+    position: 0,
+    trend: "stable" as const,
+    observations: 1,
+    daysTracked: 0,
+  }]]);
+
+  const withHistory = runPipeline("q", intent, batches, {
+    priceHistory: history,
+  });
+  const same = withHistory.ranked.find((r) => r.key === top.key)!;
+  assertEquals(same.score.dealScore, top.score.dealScore);
+  assert(!same.badges.includes("LOWEST YET"));
+});
+
+// ------------------------------------------------------------ heal diagnosis
+
+Deno.test("heal classifies the failure modes seen in real runs", () => {
+  const base = {
+    platform: "X",
+    rawCards: 100,
+    normalized: 100,
+    titleRecovered: 0,
+    priced: 90,
+    categoryMatched: 90,
+    inBudget: 50,
+    survived: 50,
+    fieldFill: 0.85,
+    status: "ok" as const,
+    rejectionReasons: {},
+  };
+
+  // Tata CLiQ: the crawler never reached the grid.
+  assertEquals(
+    classifyFailure({
+      ...base,
+      status: "error",
+      error: "Crawler error: waiting for selector failed",
+      rawCards: 0,
+    }),
+    "crawler_error",
+  );
+  // Collector runs, returns nothing.
+  assertEquals(classifyFailure({ ...base, rawCards: 0, priced: 0 }), "empty");
+  // Reliance: a phone query that returned earphones.
+  assertEquals(
+    classifyFailure({ ...base, categoryMatched: 0 }),
+    "wrong_products",
+  );
+  // Flipkart: 54 of 120 cards had no title or price.
+  assertEquals(
+    classifyFailure({ ...base, rawCards: 120, priced: 66, fieldFill: 0.5 }),
+    "fields_missing",
+  );
+  assertEquals(classifyFailure(base), "healthy");
+});
+
+Deno.test("heal prompts name the specific fault, not a generic ask", () => {
+  const base = {
+    platform: "Tata CLiQ",
+    rawCards: 0,
+    normalized: 0,
+    titleRecovered: 0,
+    priced: 0,
+    categoryMatched: 0,
+    inBudget: 0,
+    survived: 0,
+    fieldFill: 0,
+    status: "error" as const,
+    error: "Crawler error: wait_element_timeout",
+    rejectionReasons: {},
+  };
+  const prompt = buildPrompt(base, "crawler_error");
+  assert(prompt.includes("wait_element_timeout"));
+  assert(/product_name|selling_price/.test(prompt));
+
+  const missing = buildPrompt(
+    {
+      ...base,
+      status: "ok",
+      error: undefined,
+      rawCards: 120,
+      priced: 66,
+      fieldFill: 0.5,
+    },
+    "fields_missing",
+  );
+  assert(missing.includes("120"));
+  assert(missing.includes("66"));
 });

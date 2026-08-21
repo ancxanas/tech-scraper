@@ -261,16 +261,59 @@ from the records themselves.
 
 ---
 
+## Cleanup: what was removed and why
+
+Once `find`/`rank` worked, the v1 pipeline was dead weight that still had to
+compile, type-check and be reasoned about. It was deleted rather than left to
+rot.
+
+**Deleted outright** (~3,900 LOC): `score.ts` (token-overlap relevance, no
+budget enforcement), `scraper.ts` (v1 orchestration), `lib/specs.ts` (superseded
+by `core/extract.ts` plus the knowledge bases), `lib/compare.ts`,
+`lib/intelligence.ts`, `lib/catalog.ts`, `lib/serp.ts`, `tools/scraper.ts`'s
+product parser, and the v1 `types.ts`. With them went the `search`, `best-deal`,
+`compare`, `verdict`, `discover`, `screenshot`, `fetch` and `scrapers` commands,
+plus five test files that only exercised deleted code.
+
+`eval-live/` — 96 tracked files of scratch debugging output — is gone too. The
+two captures that mattered are preserved as proper fixtures:
+`tests/fixtures/run-phones-15000` and `tests/fixtures/run-sony-wh1000xm5`.
+
+**Kept and rewired, not just kept:**
+
+- `heal` used to take a collector id and a hand-written prompt, so you had to
+  already know what was broken. It now takes a platform name, diagnoses the
+  failure from a real run (live or replayed), and writes the prompt from that
+  evidence. It distinguishes the four failure modes actually observed: crawler
+  error (Tata CLiQ's `wait_element_timeout`), empty payload, missing fields
+  (Flipkart's 54-of-120), and wrong products (Reliance returning earphones).
+  Then it re-runs the pipeline to verify the fix took.
+- `doctor` absorbed `status` and `scrapers`, and gained `--query`, which prints
+  the exact URL each platform would be sent — catching URL-builder bugs for
+  free, without spending a request.
+- `history` was rekeyed from v1 product names to v2 candidate keys, so one phone
+  is one tracked product instead of one per colour. `find` now records
+  observations automatically, and the ranker consumes them: a price at its
+  recorded low earns a deal-score boost and a `LOWEST YET` badge, one at its
+  recorded high is penalised and flagged. A single observation is explicitly not
+  treated as history.
+
+The CLI went from 12 commands and 1,210 lines to 6 commands and 34 lines; the
+codebase from 11,333 LOC to 7,877, with test count reflecting only live code.
+
+---
+
 ## What is still worth doing
 
 1. **Grow the model KBs.** `src/knowledge/models.ts` covers ~30 phones and
    `audio.ts` ~16 audio models. Everything else ranks with `conf < 50%` and says
    so. Highest-leverage improvement available, and it costs nothing but data
    entry.
-2. **Reliance and Tata CLiQ still have no verified payload.** Their URL builders
-   are fixed but unproven; Reliance's captured data is accessories and Tata
-   CLiQ's is a crawler error. One live run each would confirm them.
-3. **Price history.** Deno KV is wired but unused by v2 ranking — "cheapest in
-   30 days" would make the deal score much stronger.
-4. **Reliance/Tata CLiQ collectors.** The URL fixes are in; the collectors
-   themselves still need one live run each to confirm their selectors.
+2. **Reliance and Tata CLiQ have no verified payload.** Their URL builders are
+   fixed but unproven — Reliance's only capture is accessories from the wrong
+   URL, Tata CLiQ's is a crawler error. Start with
+   `deno task doctor --query "best phones under 15000"` to eyeball the URLs for
+   free, then `deno task heal reliance --dry-run` to see the diagnosis without
+   changing anything.
+3. **Amazon pagination.** The prebuilt dataset is driven by keyword only, so
+   `--pages` has less effect there than on the collector platforms.
