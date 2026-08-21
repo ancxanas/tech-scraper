@@ -1,5 +1,22 @@
 const DEFAULT_PATH = ".cache/specs.json";
 
+/** Compact age for one timestamp, e.g. "19m", "27h 00m", "2d 4h". */
+export function ageLabel(iso: string, now = Date.now()): string | null {
+  const then = Date.parse(iso);
+  if (!Number.isFinite(then)) return null;
+  let s = Math.max(0, Math.round((now - then) / 1000));
+  const d = Math.floor(s / 86_400);
+  s -= d * 86_400;
+  const h = Math.floor(s / 3600);
+  s -= h * 3600;
+  const m = Math.floor(s / 60);
+  // Hours until two days out: replay staleness lives on that scale.
+  if (d >= 2) return `${d}d ${h}h`;
+  if (d === 1) return `${24 + h}h ${String(m).padStart(2, "0")}m`;
+  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`;
+  return `${m}m`;
+}
+
 const SPEC_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const PRICE_TTL_MS = 60 * 60 * 1000;
 // Bumped when the parser changes, so entries written by an older, worse

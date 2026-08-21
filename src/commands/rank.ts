@@ -1,6 +1,6 @@
 import { Command } from "@cliffy/command";
 import { colors } from "@cliffy/ansi/colors";
-import { loadRun } from "../core/replay.ts";
+import { capturedAtFor, loadRun } from "../core/replay.ts";
 import { runPipeline } from "../core/pipeline.ts";
 import { parseIntentRules, unsupportedReason } from "../core/intent.ts";
 import { renderFull } from "../ui/render.ts";
@@ -81,6 +81,8 @@ export const rankCommand = new Command()
       console.error(colors.red("\n  No data found in the replay path.\n"));
       Deno.exit(1);
     }
+
+    const capturedAt = await capturedAtFor(paths);
 
     const intent = parseIntentRules(query);
     const unsupported = unsupportedReason(intent);
@@ -178,6 +180,7 @@ export const rankCommand = new Command()
         compare: options.compare !== false,
         diagnostics: options.diagnostics !== false,
         enriched: enrichedCount,
+        capturedAt,
       }),
     );
   });

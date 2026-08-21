@@ -28,6 +28,9 @@ import {
 } from "../src/knowledge/beebom.ts";
 import { toSpecs } from "../src/core/resolve.ts";
 import { loadRun } from "../src/core/replay.ts";
+import { capturedAtFor } from "../src/core/replay.ts";
+import { ageLabel } from "../src/core/spec-cache.ts";
+import { renderFull } from "../src/ui/render.ts";
 import { buildCandidates, runPipeline } from "../src/core/pipeline.ts";
 import {
   matchSoc,
@@ -2165,4 +2168,68 @@ Deno.test("a listing with nothing to verify is scored down, not hidden", async (
     if (ranked[i - 1].best.inStock === false) break;
     assert(ranked[i - 1].score.total >= ranked[i].score.total);
   }
+});
+
+Deno.test("a replayed run says when its prices were captured", async () => {
+  const ts = await capturedAtFor([FIXTURE]);
+  assertEquals(ts, "2026-08-21T04:36:37Z");
+});
+
+Deno.test("capturedAt falls back to mtime when a run has no manifest", async () => {
+  const dir = await Deno.makeTempDir();
+  try {
+    await Deno.writeTextFile(`${dir}/amazon.json`, "[]");
+    const stat = await Deno.stat(dir);
+    const ts = await capturedAtFor([dir]);
+    assertExists(ts);
+    assertExists(stat.mtime);
+    assert(
+      Math.abs(Date.parse(ts) - stat.mtime.getTime()) < 60_000,
+      `mtime fallback too far off: ${ts}`,
+    );
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("ages read the way a person reads them", () => {
+  const now = Date.parse("2026-08-22T01:45:00Z");
+  assertEquals(ageLabel("2026-08-22T01:26:00Z", now), "19m");
+  assertEquals(ageLabel("2026-08-20T22:45:00Z", now), "27h 00m");
+  assertEquals(ageLabel("2026-08-19T21:45:00Z", now), "2d 4h");
+  assertEquals(ageLabel("not a date", now), null);
+});
+
+Deno.test("the report warns when replayed prices are old", async () => {
+  const batches = await loadRun([FIXTURE]);
+  const intent = parseIntentRules("best phones under 15000");
+  const result = runPipeline("best phones under 15000", intent, batches);
+  const fresh = renderFull(result, {
+    limit: 5,
+    details: 0,
+    compare: false,
+    diagnostics: false,
+    capturedAt: new Date().toISOString(),
+  });
+  assert(fresh.includes("prices captured"));
+  assert(!fresh.includes("may have moved"));
+
+  const stale = renderFull(result, {
+    limit: 5,
+    details: 0,
+    compare: false,
+    diagnostics: false,
+    capturedAt: "2026-08-20T01:00:00Z",
+  });
+  assert(stale.includes("prices captured"));
+  assert(stale.includes("may have moved"));
+  assert(stale.includes("--refresh-prices"));
+
+  const live = renderFull(result, {
+    limit: 5,
+    details: 0,
+    compare: false,
+    diagnostics: false,
+  });
+  assert(!live.includes("prices captured"));
 });
