@@ -183,7 +183,7 @@ function detectConflicts(c: Candidate, pageText: string): SpecConflict[] {
 }
 
 /** External record -> the pipeline's spec shape. */
-function toSpecs(g: ExternalSpecs): Partial<Specs> {
+export function toSpecs(g: ExternalSpecs): Partial<Specs> {
   const out: Partial<Specs> = {};
   const set = <K extends keyof Specs>(k: K, v: Specs[K] | null) => {
     if (v !== null && v !== undefined) out[k] = v;
@@ -191,8 +191,21 @@ function toSpecs(g: ExternalSpecs): Partial<Specs> {
   if (g.socName) {
     const soc = matchSocDetailed(g.socName);
     set("socName", soc ? soc.soc.name : g.socName);
-    // Prefer a measured benchmark over the approximation in our own table.
-    set("antutu", g.antutu ?? soc?.soc.antutu ?? null);
+    // Deliberately the per-chip table first, and a measured figure only when
+    // the chip is unknown to us.
+    //
+    // This looks backwards — a measurement should beat an estimate — but the
+    // performance score is RELATIVE, and only some phones get a live figure.
+    // Mixing scales meant two handsets on the same chipset could score
+    // differently purely by whether one fetch succeeded: the audit found the
+    // source rates Dimensity 6300 at 560,000 against our 420,000, so a
+    // resolved D6300 phone would have outscored an identical unresolved one
+    // by 25% for no reason a buyer could see.
+    //
+    // Comparability is what the ranking needs. Measured values are still
+    // collected, and are used to correct the table itself — offline, for
+    // every phone on that chip at once, in soc.ts.
+    set("antutu", soc?.soc.antutu ?? g.antutu ?? null);
   }
   set("batteryMah", g.batteryMah);
   set("chargingW", g.chargingW);
@@ -386,6 +399,20 @@ export async function resolveSpecs(
         if (!b) continue;
 
         const partial = toSpecs(b);
+        // The secondary source is good but not authoritative, and the audit
+        // proved it: it reports the Redmi 14C 5G with the 4G model's
+        // Snapdragon 4 Gen 2, where the phone ships the 4s Gen 2. Where a
+        // high-confidence KB entry disagrees about the chipset, keep ours and
+        // raise it for a human rather than silently overwriting a correct
+        // value with a variant mix-up.
+        const kbDisagrees = c.kbConfidence === "high" &&
+          c.specSources.socName === "kb" && c.specs.socName &&
+          partial.socName &&
+          partial.socName !== c.specs.socName;
+        if (kbDisagrees) {
+          delete partial.socName;
+          delete partial.antutu;
+        }
         for (const l of c.listings) result.external.set(l.id, partial);
         result.beebomMatched++;
         result.conflicts.push(...conflictsAgainstKb(c, b));

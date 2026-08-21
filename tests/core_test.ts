@@ -30,7 +30,12 @@ import {
 import { groupListings } from "../src/core/group.ts";
 import { rankCandidates } from "../src/core/rank.ts";
 import { parseIntentRules, unsupportedReason } from "../src/core/intent.ts";
-import { beebomSlugs, parseBeebomPage } from "../src/knowledge/beebom.ts";
+import {
+  beebomSlugs,
+  nameMatches,
+  parseBeebomPage,
+} from "../src/knowledge/beebom.ts";
+import { toSpecs } from "../src/core/resolve.ts";
 import { loadRun } from "../src/core/replay.ts";
 import { buildCandidates, runPipeline } from "../src/core/pipeline.ts";
 import { matchSoc, matchSocDetailed } from "../src/knowledge/soc.ts";
@@ -784,6 +789,66 @@ Deno.test("slug candidates cope with how brands are actually written", () => {
     beebomSlugs("REDMI A7 Pro 4G (4GB/64GB)", "Xiaomi")[0],
     "redmi-a7-pro-4g",
   );
+});
+
+Deno.test("a near-miss page is rejected rather than mis-attributed", () => {
+  // The audit caught this live: "Redmi Note 13 Pro+ 5G" slugged to
+  // "redmi-note-13-pro-5g", which is a real page for a different phone with a
+  // different chipset. A 200 is not a match.
+  assertEquals(
+    beebomSlugs("Redmi Note 13 Pro+ 5G", "Xiaomi")[0],
+    "redmi-note-13-pro-plus-5g",
+  );
+  const wrongPhone =
+    '<title>Redmi Note 13 Pro - Price in India</title>{"name":"Redmi Note 13 Pro"}';
+  assertEquals(
+    nameMatches("Redmi Note 13 Pro+ 5G", wrongPhone, "redmi-note-13-pro"),
+    false,
+  );
+  const rightPhone = "<title>Redmi Note 13 Pro+ 5G - Price in India</title>";
+  assertEquals(
+    nameMatches(
+      "Redmi Note 13 Pro+ 5G",
+      rightPhone,
+      "redmi-note-13-pro-plus-5g",
+    ),
+    true,
+  );
+});
+
+Deno.test("phones on the same chipset score the same, resolved or not", () => {
+  // The performance score is relative, and only some phones get a live
+  // benchmark. If a measured figure outranked the per-chip table, two
+  // identical handsets would separate purely on fetch luck.
+  const chip = matchSocDetailed("Dimensity 6300")!.soc;
+  const resolved = toSpecs({
+    url: "u",
+    matchedName: "m",
+    socName: "MediaTek Dimensity 6300",
+    antutu: 560000,
+    nm: null,
+    geekbench: null,
+    batteryMah: null,
+    chargingW: null,
+    panel: null,
+    inches: null,
+    refreshHz: null,
+    resolution: null,
+    mainCameraMp: null,
+    ois: false,
+    nfc: null,
+    ipRating: null,
+    weightG: null,
+  });
+  assertEquals(resolved.antutu, chip.antutu);
+});
+
+Deno.test("a page value cannot silently correct a confident KB chipset", () => {
+  // Measured live: the secondary source reports the Redmi 14C 5G with the 4G
+  // model's Snapdragon 4 Gen 2. nanoreview and the KB both say 4s Gen 2.
+  const kb = lookupModel("Redmi 14C 5G");
+  assertEquals(kb?.soc, "Snapdragon 4s Gen 2");
+  assertEquals(kb?.confidence, "high");
 });
 
 Deno.test("a page with no chipset yields nothing rather than a hollow record", () => {

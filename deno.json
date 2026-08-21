@@ -12,7 +12,8 @@
     "test": "deno test --unstable-kv --allow-env --allow-read --allow-write tests/",
     "check": "deno fmt --check && deno lint && deno check main.ts && deno test --unstable-kv --allow-env --allow-read --allow-write tests/",
     "index": "deno run --allow-net --allow-env --allow-read --allow-write main.ts index",
-    "specs": "deno run --allow-net --allow-env --allow-read --allow-write main.ts specs"
+    "specs": "deno run --allow-net --allow-env --allow-read --allow-write main.ts specs",
+    "audit": "deno run --allow-net --allow-env --allow-read --allow-write scripts/audit-knowledge.ts"
   },
   "imports": {
     "@cliffy/command": "jsr:@cliffy/command@^1.2",

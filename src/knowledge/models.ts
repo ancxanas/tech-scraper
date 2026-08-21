@@ -475,20 +475,42 @@ export const PHONE_MODELS: ModelEntry[] = [
 
   // -------------------------------------------------------------- realme
   {
+    // Two different phones share this name. realme's own spec page lists the
+    // Lite 4G as T7250 / 6300mAh / 13MP; the plain Lite is Dimensity 6300 /
+    // 6000mAh / 32MP. One entry could not be right for both, and the run's
+    // repeated "KB says T7250, page says Dimensity 6300" conflicts were this
+    // ambiguity, not a bad page.
+    key: "realme narzo 80 lite 4g",
+    brand: "realme",
+    display: "realme Narzo 80 Lite 4G",
+    soc: "Unisoc T7250",
+    panel: "IPS LCD",
+    inches: 6.74,
+    refreshHz: 90,
+    resolution: "HD+",
+    batteryMah: 6300,
+    chargingW: 15,
+    mainCameraMp: 13,
+    ois: false,
+    ipRating: "IP54",
+    releaseYear: 2025,
+    confidence: "high",
+  },
+  {
     key: "realme narzo 80 lite",
     brand: "realme",
-    display: "realme narzo 80 Lite",
-    soc: "Unisoc T7250",
+    display: "realme Narzo 80 Lite",
+    soc: "Dimensity 6300",
     panel: "IPS LCD",
     inches: 6.67,
     refreshHz: 120,
     resolution: "HD+",
-    batteryMah: 6300,
+    batteryMah: 6000,
     chargingW: 15,
     mainCameraMp: 32,
-    ipRating: "IP64",
+    ois: false,
     releaseYear: 2025,
-    confidence: "low",
+    confidence: "high",
   },
   {
     key: "realme p3 lite 5g",

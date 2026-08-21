@@ -97,7 +97,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Snapdragon 6s Gen 3",
     vendor: "qualcomm",
-    antutu: 420000,
+    antutu: 468541,
     gb6Single: 900,
     gb6Multi: 2050,
     nm: 6,
@@ -275,7 +275,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 7025",
     vendor: "mediatek",
-    antutu: 440000,
+    antutu: 531562,
     gb6Single: 800,
     gb6Multi: 2050,
     nm: 6,
@@ -297,7 +297,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Dimensity 6300",
     vendor: "mediatek",
-    antutu: 420000,
+    antutu: 560000,
     gb6Single: 780,
     gb6Multi: 2000,
     nm: 6,
@@ -363,7 +363,7 @@ export const SOCS: SocEntry[] = [
   {
     name: "Helio G85",
     vendor: "mediatek",
-    antutu: 220000,
+    antutu: 264823,
     gb6Single: 520,
     gb6Multi: 1450,
     nm: 12,
@@ -459,7 +459,7 @@ export const SOCS: SocEntry[] = [
     // number, so without the entry the page read as no chipset at all.
     name: "Unisoc T760",
     vendor: "unisoc",
-    antutu: 395000,
+    antutu: 472470,
     gb6Single: 700,
     gb6Multi: 1900,
     nm: 6,

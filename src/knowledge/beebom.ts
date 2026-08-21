@@ -44,6 +44,10 @@ export function beebomSlugs(model: string, brand?: string): string[] {
   const clean = (s: string) =>
     s
       .toLowerCase()
+      // "Note 13 Pro+" and "Note 13 Pro" are different phones with different
+      // chips. Stripping the plus silently resolved the Pro+ to the Pro page
+      // and attached a Snapdragon 7s Gen 2 to a Dimensity 7200 handset.
+      .replace(/\+/g, " plus ")
       .replace(NOISE, " ")
       // Drop the trailing config the marketplace appended: "(8GB/128GB)".
       .replace(/\((?:[^)]*)\)/g, " ")
@@ -132,6 +136,36 @@ function panelOf(displayType: string | undefined): string | null {
   return null;
 }
 
+/** Comparable form for confirming the page is the phone we asked for. */
+function identity(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/\+/g, "plus")
+    .replace(/\bmotorola\b/g, "moto")
+    .replace(/\b(5g|4g|lte|dual sim|india|smartphone)\b/g, " ")
+    .replace(/\((?:[^)]*)\)/g, " ")
+    .replace(/\b\d+\s*gb\b/g, " ")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+/**
+ * Confirm the page's own title names the model we requested. Guards against
+ * the near-miss match: "Redmi Note 13 Pro+ 5G" served the Note 13 Pro page,
+ * which parses perfectly and is simply the wrong phone.
+ */
+export function nameMatches(
+  model: string,
+  html: string,
+  slug: string,
+): boolean {
+  const want = identity(model);
+  if (!want) return false;
+  const title = html.match(/<title[^>]*>([^<]{3,120})</i)?.[1] ??
+    html.match(/"name":\s*"([^"]{3,80})"/)?.[1] ?? slug;
+  const got = identity(title);
+  return got.includes(want) || want.includes(got) || identity(slug) === want;
+}
+
 export function parseBeebomPage(
   html: string,
   url: string,
@@ -218,7 +252,12 @@ export async function fetchBeebomSpecs(
       continue; // 404s are expected while probing slugs
     }
     const parsed = parseBeebomPage(html, url, slug);
-    if (parsed?.socName) return parsed;
+    if (!parsed?.socName) continue;
+    // A 200 is not a match. This host answers near-miss slugs with a
+    // neighbouring phone, and attaching the wrong handset's chipset is worse
+    // than returning nothing at all.
+    if (!nameMatches(model, html, slug)) continue;
+    return parsed;
   }
   return null;
 }
