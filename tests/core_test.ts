@@ -18,7 +18,7 @@ import {
   specsFromText,
 } from "../src/core/extract.ts";
 import { groupListings } from "../src/core/group.ts";
-import { rankCandidates } from "../src/core/rank.ts";
+import { rankCandidates, specWeights } from "../src/core/rank.ts";
 import { parseIntentRules, unsupportedReason } from "../src/core/intent.ts";
 import { ALL_ENABLED, PLATFORMS } from "../src/config.ts";
 import {
@@ -281,6 +281,24 @@ Deno.test("intent parsing extracts category, budget and priorities", () => {
   assertEquals(i.budgetMax, 15000);
   assertEquals(i.budgetOperator, "under");
   assert(i.priorities.includes("performance"));
+});
+
+Deno.test("camera queries boost camera, OIS phrasing becomes a must-have", () => {
+  const cam = parseIntentRules("best phones under 50000 with good camera");
+  assert(cam.priorities.includes("camera"));
+
+  const plain = parseIntentRules("best phones under 50000");
+  const weighted = specWeights({ ...cam, mustHave: [] });
+  const unweighted = specWeights(plain);
+  assert(weighted.camera > unweighted.camera);
+
+  const ois = parseIntentRules("camera phones under 50000 with OIS");
+  assert(ois.mustHave.includes("ois"));
+
+  const stab = parseIntentRules(
+    "phones under 30000 with stabilized video",
+  );
+  assert(stab.mustHave.includes("ois"));
 });
 
 Deno.test("intent parsing understands k-suffixes, ranges and around", () => {

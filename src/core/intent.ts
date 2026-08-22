@@ -33,6 +33,10 @@ const MUST_HAVE_WORDS: Array<[RegExp, string]> = [
   [/\bamoled\b/i, "amoled"],
   [/\bnfc\b/i, "nfc"],
   [/\bstereo\b/i, "stereo"],
+  // Stabilization is the sharpest camera differentiator at any price.
+  // Pages that name it score +12 on camera; pages that name its absence
+  // are rejected outright in rank.ts.
+  [/\b(ois|eis|optical\s+stabiliz\w*|stabili[sz]ed)\b/i, "ois"],
 ];
 
 function parseAmount(s: string): number | null {

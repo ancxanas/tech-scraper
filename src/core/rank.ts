@@ -311,6 +311,9 @@ export function rankCandidates(
         reasons.push("not AMOLED");
       }
       if (must === "nfc" && c.specs.nfc === false) reasons.push("no NFC");
+      if (must === "ois" && c.specs.ois === false) {
+        reasons.push("no stabilisation on the main camera");
+      }
     }
 
     if (options.inStockOnly && c.offers.every((o) => o.inStock === false)) {
