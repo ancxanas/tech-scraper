@@ -53,6 +53,12 @@ export interface Specs {
   panel: string | null;
   resolution: string | null;
   mainCameraMp: number | null;
+  /** Widest secondary rear camera, in MP. Null when unknown. */
+  ultraWideMp: number | null;
+  /** Telephoto rear camera, in MP. Its presence separates camera phones. */
+  teleMp: number | null;
+  /** Main camera aperture as f-number (1.8 = f/1.8). Lower gathers more light. */
+  aperture: number | null;
   ois: boolean | null;
   has5g: boolean | null;
   ipRating: string | null;

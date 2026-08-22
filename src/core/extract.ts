@@ -13,6 +13,9 @@ const EMPTY_SPECS: Specs = {
   panel: null,
   resolution: null,
   mainCameraMp: null,
+  ultraWideMp: null,
+  teleMp: null,
+  aperture: null,
   ois: null,
   has5g: null,
   ipRating: null,
@@ -308,6 +311,62 @@ export function specsFromText(text: string): {
   set("refreshHz", num(text.match(/(\d{2,3})\s*hz/i)), "title");
   set("mainCameraMp", num(text.match(/(\d{2,3})\s*mp/i)), "title");
 
+  // The camera ARRAY is where camera phones separate from the rest: a
+  // 50MP+OIS main sensor is table stakes, a real telephoto is not. Rear
+  // arrays read like "50 MP + 8 MP + 2 MP" or "108MP main + 8MP ultrawide".
+  const mpValues = [...text.matchAll(/(\d{1,3})\s*mp\b/gi)]
+    .map((m) => Number(m[1]))
+    .filter((n) => n >= 2 && n <= 250);
+  if (mpValues.length > 1) {
+    const extras = mpValues.slice(1);
+    // Lens labels sit within a few words of their MP value; the gap must
+    // not cross another "N MP" token, else "8MP ultrawide + 10MP telephoto"
+    // reads 8 as the telephoto.
+    const noSkip = String.raw`(?:(?!\d{1,2}\s*mp)[^\n]){0,24}`;
+    const uwLabel = text.match(
+      new RegExp(String.raw`(\d{1,2})\s*mp${noSkip}ultra\s*wide`, "i"),
+    ) ?? text.match(
+      new RegExp(String.raw`ultra\s*wide${noSkip}(\d{1,2})\s*mp`, "i"),
+    );
+    let uwValue: number | null = null;
+    if (uwLabel) {
+      uwValue = Number(uwLabel[1]);
+      set("ultraWideMp", uwValue, "title");
+    } else if (extras.length >= 2) {
+      // Unlabelled premium array: the smallest lens is the ultrawide,
+      // the macro/depth lenses are 2-5MP noise.
+      const plausible = extras.filter((n) => n >= 8);
+      if (plausible.length) {
+        uwValue = Math.min(...plausible);
+        set("ultraWideMp", uwValue, "title");
+      }
+    }
+    if (/telephoto|periscope|\d\s*x\s*(optical|tele)/i.test(text)) {
+      const teleLabel = text.match(
+        new RegExp(
+          String
+            .raw`(\d{1,2})\s*mp${noSkip}(?:telephoto|periscope|optical zoom)`,
+          "i",
+        ),
+      ) ?? text.match(
+        new RegExp(
+          String.raw`(?:telephoto|periscope)${noSkip}(\d{1,2})\s*mp`,
+          "i",
+        ),
+      );
+      // Only claim a telephoto MP we actually read; keyword alone stays null.
+      const tele = teleLabel
+        ? Number(teleLabel[1])
+        : extras.findLast((n) => n >= 8 && n <= 64 && n !== uwValue);
+      if (tele) set("teleMp", tele, "title");
+    }
+  }
+  const fStop = text.match(/\bf\/\s*(\d\.\d)\b/i);
+  if (fStop) {
+    const a = Number(fStop[1]);
+    if (a >= 1.0 && a <= 2.9) set("aperture", a, "title");
+  }
+
   if (matchNear(text, /\bsuper\s*amoled\b|\bamoled\b/i, DISPLAY_CONTEXT)) {
     set("panel", "AMOLED", "title");
   } else if (matchNear(text, /\bp-?oled\b/i, DISPLAY_CONTEXT)) {
@@ -391,6 +450,15 @@ function plausible(specs: Partial<Specs>): void {
     (specs.mainCameraMp < 2 || specs.mainCameraMp > 250)
   ) {
     drop("mainCameraMp");
+  }
+  if (
+    specs.ultraWideMp != null &&
+    (specs.ultraWideMp < 8 || specs.ultraWideMp > 64)
+  ) {
+    drop("ultraWideMp");
+  }
+  if (specs.teleMp != null && (specs.teleMp < 8 || specs.teleMp > 64)) {
+    drop("teleMp");
   }
   if (
     specs.refreshHz != null &&

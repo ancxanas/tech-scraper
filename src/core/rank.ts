@@ -112,7 +112,16 @@ function cameraScore(s: Specs): number | null {
       88,
     ], [200, 95]]);
   if (s.ois === true) base = Math.min(100, base + 12);
-  return base;
+  // The main sensor is table stakes at every tier above budget; the ARRAY
+  // is what makes a camera phone. Without these bonuses a "camera priority"
+  // query cannot separate a dozen identical 50MP+OIS handsets.
+  if (s.teleMp !== null) base += 10;
+  if (s.ultraWideMp !== null) base += 6;
+  if (s.aperture !== null) {
+    if (s.aperture <= 1.7) base += 6;
+    else if (s.aperture <= 2.0) base += 3;
+  }
+  return Math.min(100, Math.round(base));
 }
 
 function extrasScore(s: Specs): number | null {

@@ -386,6 +386,9 @@ Deno.test("a ceiling query ranks quality first; a bargain query rewards cheapnes
       panel: null,
       resolution: null,
       mainCameraMp: null,
+      ultraWideMp: null,
+      teleMp: null,
+      aperture: null,
       ois: null,
       has5g: true,
       ipRating: null,
@@ -437,6 +440,101 @@ Deno.test("a ceiling query ranks quality first; a bargain query rewards cheapnes
     parseIntentRules("budget phones under 50000"),
   );
   assertEquals(bargain.ranked[0].key, affordable.key);
+});
+
+Deno.test("the camera array is read: telephoto, ultrawide and aperture", () => {
+  const rich = specsFromText(
+    "MOTOROLA Edge 70 Pro 5G (8 GB RAM) (256 GB) 50 MP + 50MP ultrawide +" +
+      " 10 MP telephoto periscope 3x optical, f/1.5 aperture",
+  ).specs;
+  assertEquals(rich.mainCameraMp, 50);
+  assertEquals(rich.ultraWideMp, 50);
+  assertEquals(rich.teleMp, 10);
+  assertEquals(rich.aperture, 1.5);
+
+  const plain = specsFromText(
+    "Ai+ Nova 2 Ultra 5G (6 GB RAM) (128 GB) 50 MP OIS camera",
+  ).specs;
+  assertEquals(plain.mainCameraMp, 50);
+  // specsFromText only reports what it read; unset lenses are absent.
+  assertEquals(plain.ultraWideMp ?? null, null);
+  assertEquals(plain.teleMp ?? null, null);
+  assertEquals(plain.aperture ?? null, null);
+});
+
+Deno.test("camera priority can separate phones beyond the main sensor", () => {
+  let seq = 0;
+  const withCamera = (
+    camera: Partial<Candidate["specs"]>,
+  ): Candidate =>
+    ({
+      key: `test:${seq}`,
+      modelName: `Test Device ${seq++}`,
+      brand: null,
+      category: "phone",
+      specs: {
+        ramGb: 8,
+        storageGb: 128,
+        batteryMah: null,
+        chargingW: null,
+        displayInches: null,
+        refreshHz: null,
+        panel: null,
+        resolution: null,
+        mainCameraMp: null,
+        ultraWideMp: null,
+        teleMp: null,
+        aperture: null,
+        ois: null,
+        has5g: true,
+        ipRating: null,
+        nfc: null,
+        socName: "Test Chip",
+        antutu: 900_000,
+        perfTier: null,
+        osUpgrades: null,
+        releaseYear: null,
+        colour: null,
+        ...camera,
+      },
+      specSources: { socName: "kb" },
+      specCompleteness: 0.6,
+      kbConfidence: "none",
+      best: {
+        platform: "flipkart",
+        platformName: "Flipkart",
+        price: 29_999,
+        mrp: null,
+        discountPct: null,
+        url: `https://www.flipkart.com/t${seq}/p/itm`,
+        inStock: true,
+        rating: null,
+        ratingCount: null,
+      },
+      offers: [],
+      siblingConfigs: [],
+      rating: 4.3,
+      ratingCount: 50000,
+      imageUrl: null,
+      listings: [],
+    }) as Candidate;
+
+  // Same main sensor, same OIS - the old score called these identical.
+  const bare = withCamera({ mainCameraMp: 50, ois: true });
+  const full = withCamera({
+    mainCameraMp: 50,
+    ois: true,
+    teleMp: 10,
+    ultraWideMp: 50,
+    aperture: 1.5,
+  });
+
+  const ceiling = rankCandidates(
+    [bare, full],
+    parseIntentRules("best camera phones under 50000"),
+  );
+  assert(ceiling.ranked[0].score.camera > ceiling.ranked[1].score.camera);
+  assertEquals(ceiling.ranked[0].key, full.key);
 });
 
 Deno.test("an inflated MRP is flagged rather than rewarded", () => {
