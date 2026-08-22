@@ -62,10 +62,10 @@ deno task history                                         # price history across
 - Diagnosis-driven self-healing — `heal <platform>` works out _what_ broke from
   a real run and verifies the fix
 
-Phones are the only rankable category, on purpose: the scoring curves,
-benchmark table and knowledge base are phone-specific. Everything else
-(headphones, laptops, accessories) is classified and filtered out so it can
-never pollute a ranking.
+Phones are the only rankable category, on purpose: the scoring curves, benchmark
+table and knowledge base are phone-specific. Everything else (headphones,
+laptops, accessories) is classified and filtered out so it can never pollute a
+ranking.
 
 ## Install
 
@@ -303,26 +303,26 @@ One ranker, two modes, decided by the query:
 - **Ceiling queries** ("best phone under 50000") ask for the best phone the
   budget allows. Quality leads: absolute spec curves (chipset via AnTuTu,
   display, battery, camera array incl. telephoto/ultrawide/aperture, memory,
-  extras), weighted by what the query emphasises. Trust breaks ties; deal
-  polish is capped at 15%.
+  extras), weighted by what the query emphasises. Trust breaks ties; deal polish
+  is capped at 15%.
 - **Bargain queries** ("budget phones", "value for money", "cheap") keep the
   value-first formula: spec-points-per-rupee percentile within the result set
   carries half the score.
 
 On top of either mode:
 
-- **Trust** — Bayesian rating shrinkage: 4.9★ from 3 reviews loses to 4.2★
-  from 150,000.
+- **Trust** — Bayesian rating shrinkage: 4.9★ from 3 reviews loses to 4.2★ from
+  150,000.
 - **Corroboration gating** — a spec sheet with no buyer or knowledge-base
   backing scores its specs at a discount and cannot win badges.
 - **Availability sorts before score** — anything you cannot buy ranks below
   everything you can, however attractive its price.
-- **Honest confidence** — each row reports how much of its spec sheet was
-  read vs inferred; low-confidence items are scored down visibly.
+- **Honest confidence** — each row reports how much of its spec sheet was read
+  vs inferred; low-confidence items are scored down visibly.
 - **Inflated MRPs** (>55% off) earn no deal credit and get an asterisk.
-- **Verified prices win** — where a product page was fetched, its buy-box
-  price replaces the search-card quote (which often belongs to one dead
-  seller's listing).
+- **Verified prices win** — where a product page was fetched, its buy-box price
+  replaces the search-card quote (which often belongs to one dead seller's
+  listing).
 
 ## Tech stack
 
