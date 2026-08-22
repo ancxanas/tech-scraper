@@ -1593,6 +1593,24 @@ Deno.test("an unambiguous page value overwrites a KB entry we doubt", () => {
   assertEquals(a.specSources.socName, "enrich");
 });
 
+Deno.test("model numbers inside parens survive the model key", () => {
+  // "(4a)" is a model number, not a config: dropping it collapsed every
+  // Nothing Phone into one phantom key and split real variants apart.
+  assertEquals(
+    deriveModelKey("Nothing Phone (4a) (Blue, 256 GB) (12 GB RAM)"),
+    "nothing 4a",
+  );
+  assertEquals(
+    deriveModelKey("Nothing Phone (4a) Pro (Silver, 128 GB) (8 GB RAM)"),
+    "nothing pro 4a",
+  );
+  // Colour/config parens still strip; ordinary keys are unchanged.
+  assertEquals(
+    deriveModelKey("Samsung Galaxy M17 5G (Sapphire Black, 128 GB) (6 GB RAM)"),
+    "samsung galaxy m17 5g",
+  );
+});
+
 Deno.test("buildCandidates groups without ranking, so specs can resolve first", async () => {
   const batches = await loadRun([FIXTURE]);
   const intent = parseIntentRules("best phones under 15000");

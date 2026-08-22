@@ -190,6 +190,13 @@ export function deriveModelKey(title: string): string {
   if (cutAt !== Infinity) head = head.slice(0, cutAt);
 
   let t = head.toLowerCase();
+  // Model numbers hide inside parens too: "Nothing Phone (4a)" is not the
+  // same phone as plain "Nothing Phone", yet the blanket strip below eats
+  // "(4a)" like it ate colours. Rescue digit+letter tags first - they are
+  // never configs (those carry GB) and never "5G" (the g is excluded).
+  const modelTags = [...head.matchAll(/\((\d{1,2}[a-fh-z])\)/gi)].map((m) =>
+    m[1].toLowerCase()
+  );
   t = t.replace(/\([^)]*\)/g, " ");
   t = t.replace(/\b\d+\s*(gb|tb)\b\s*(ram|rom|storage)?/g, " ");
   t = t.replace(/[^a-z0-9+\s]/g, " ").replace(/\s+/g, " ").trim();
@@ -221,6 +228,15 @@ export function deriveModelKey(title: string): string {
     if (out.length < 2 && stop.has(tok)) continue;
     out.push(tok);
     if (out.length >= 6) break;
+  }
+  // The rescued model number rides ahead of the colour tail: "Nothing
+  // Phone (4a) (Blue...)" must key as "nothing phone 4a", not "nothing
+  // phone", or every variant of the phone becomes a phantom product.
+  for (let i = out.length - 1; i >= 0; i--) {
+    if (!COLOUR_WORDS.has(out[i]) && !stop.has(out[i])) {
+      out.splice(i + 1, 0, ...modelTags);
+      break;
+    }
   }
 
   const base = out.join(" ").trim();
