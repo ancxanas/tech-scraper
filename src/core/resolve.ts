@@ -36,6 +36,7 @@ export interface ResolveOptions {
   /** Cap on paid re-fetches of spec-poor Flipkart pages per run. */
   maxSpecRescues?: number;
   store?: SpecStore;
+  transport?: Transport;
   verbose?: boolean;
 }
 
@@ -70,6 +71,17 @@ export interface ResolveResult {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** The two ways a spec page can be fetched, injectable for tests. */
+export interface Transport {
+  direct(url: string): Promise<string>;
+  unlocker(url: string): Promise<string>;
+}
+
+export const httpTransport: Transport = {
+  direct: async (url) => pageToText(await fetchDirect(url)),
+  unlocker: async (url) => pageToText(await fetchPageHtml(url)),
+};
 
 /** The pid that identifies the product a URL was meant to show. */
 export function pidOf(url: string): string | null {
@@ -126,12 +138,13 @@ async function fetchPage(
   url: string,
   mode: FetchMode,
   allowPaid: boolean,
+  t: Transport = httpTransport,
 ): Promise<{ text: string; via: "direct" | "unlocker" }> {
   const errors: string[] = [];
 
   if (mode === "auto" || mode === "direct") {
     try {
-      const text = pageToText(await fetchDirect(url));
+      const text = await t.direct(url);
       if (text.length > 2000) return { text, via: "direct" };
       errors.push(`direct: ${text.length} chars (likely blocked)`);
     } catch (err) {
@@ -141,7 +154,7 @@ async function fetchPage(
 
   if ((mode === "auto" || mode === "unlocker") && allowPaid) {
     try {
-      return { text: pageToText(await fetchPageHtml(url)), via: "unlocker" };
+      return { text: await t.unlocker(url), via: "unlocker" };
     } catch (err) {
       errors.push(`unlocker: ${err instanceof Error ? err.message : err}`);
     }
@@ -226,6 +239,7 @@ export async function resolveSpecs(
 ): Promise<ResolveResult> {
   const mode = opts.mode ?? "auto";
   const allowPaid = opts.allowPaid ?? false;
+  const t = opts.transport;
   const store = opts.store ?? new SpecStore();
   await store.load();
 
@@ -413,7 +427,7 @@ export async function resolveSpecs(
       budget--;
       const url = canonicalUrl(c.best.url);
       try {
-        let { text, via } = await fetchPage(url, mode, allowPaid);
+        let { text, via } = await fetchPage(url, mode, allowPaid, t);
         // Flipkart serves its spec table through lazy loading, so a plain
         // fetch yields chipset for one phone in ten. When the section came
         // back spec-poor and paid fetching is on, pay once for the rendered
@@ -425,7 +439,7 @@ export async function resolveSpecs(
         ) {
           rescuesLeft--;
           try {
-            const rendered = await fetchPage(url, "unlocker", true);
+            const rendered = await fetchPage(url, "unlocker", true, t);
             if (
               specRichness(extractSpecSection(rendered.text)) >
                 specRichness(extractSpecSection(text))
@@ -581,6 +595,7 @@ export async function refreshPrices(
     pace?: number;
     /** Asking to refresh means refetch; the cache is for the passive path. */
     useCache?: boolean;
+    transport?: Transport;
   } = {},
 ): Promise<RefreshResult> {
   const out: RefreshResult = {
@@ -638,6 +653,7 @@ export async function refreshPrices(
           url,
           mode,
           opts.allowPaid ?? false,
+          opts.transport,
         );
         // fetchPage already ran pageToText; converting again only adds noise.
         text = got.text;
