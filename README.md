@@ -1,7 +1,7 @@
 # tech-scraper
 
-> A deal-finding CLI for Indian tech shoppers that self-heals when sites
-> redesign.
+> Rank phones across Indian e-commerce on measured specs, verified prices and
+> buyer trust — not on price alone.
 
 Built for the
 [ScrapeVerse Hackathon](https://www.wemakedevs.org/hackathons/scrape-verse)
@@ -55,17 +55,17 @@ deno task history                                         # price history across
 
 ### Also included
 
-- Searches across 4 Indian e-commerce platforms: Flipkart, Reliance Digital,
-  Tata CLiQ, Amazon India
-- **Smart comparison engine** with spec extraction, benchmark scores, and
-  category-specific ranking (phones: RAM/storage/battery/camera, headphones:
-  ANC/battery/sound, earbuds: battery/ANC/driver)
-- **Query understanding** — detects intent (specific product vs category+price
-  range) and builds optimal search queries
-- Scores and ranks results using price, discount, rating, and query relevance
-- Tracks price history over time with Deno KV
-- Self-heals broken scrapers when target sites change their layout
+- Searches across 4 Indian e-commerce platforms: Flipkart, Amazon India,
+  Reliance Digital, Tata CLiQ (see the honesty note under Platforms)
+- Price history over time via Deno KV — recorded lows earn a `LOWEST YET` badge
 - Per-platform coverage stats and field fill rates in JSON output
+- Diagnosis-driven self-healing — `heal <platform>` works out _what_ broke from
+  a real run and verifies the fix
+
+Phones are the only rankable category, on purpose: the scoring curves,
+benchmark table and knowledge base are phone-specific. Everything else
+(headphones, laptops, accessories) is classified and filtered out so it can
+never pollute a ranking.
 
 ## Install
 
@@ -127,59 +127,46 @@ To recreate the custom collectors, see [Collector Setup](#collector-setup).
 ## Usage
 
 ```bash
-# Search across all platforms
-deno task dev search "wireless headphones"
+# Live scrape + rank (spends Bright Data credit)
+deno task find "best phones under 15000"
+deno task find "best camera phones under 50000 with OIS" --pages 2 --refresh-prices 8
 
-# Search specific platforms
-deno task dev search "laptop" -p amazon,flipkart
+# Re-rank a saved run offline, free - iterate without re-spending
+deno task rank "best phones under 15000" --replay runs/<run-dir>
+deno task rank "…" --replay runs/<run-dir> --specs-source cache --refresh-prices 5 --use-unlocker
 
-# Search with options
-deno task dev search "iphone 15" --pages 5 --enrich 10 --no-save
+# Price history across runs
+deno task history
 
-# JSON output for piping
-deno task dev search "laptop" --json
+# Config check + the exact URLs a run would call
+deno task doctor --query "phones under 15000"
 
-# Find the best deal
-deno task dev best-deal "iphone 15"
+# Diagnose a broken collector from real evidence
+deno task heal reliance --dry-run
 
-# Compare prices across platforms
-deno task dev compare "headphones" -p amazon,flipkart,reliance,tatacliq
+# Once: build the spec-DB model index / populate the spec cache
+deno task index
+deno task specs "best phones under 15000" --replay runs/<run-dir>
 
-# Smart comparison with specs and benchmarks
-deno task dev compare "best mobile phones under 15000"
-deno task dev compare "best sony headphones under 5000"
-
-# View price history
-deno task dev history "wireless headphones"
-
-# Discover deals on Google Shopping (SERP API)
-deno task dev discover "laptop deals under 50000"
-
-# Check all collectors are healthy
-deno task dev doctor
-
-# Self-heal a broken scraper
-deno task dev heal <collector_id> "Fix the broken selectors"
-
-# Take a screenshot (Web Unlocker)
-deno task dev screenshot "https://example.com/deal"
-
-# Fetch any page as Markdown (Web Unlocker)
-deno task dev fetch "https://example.com/product"
+# Re-download a paid snapshot
+deno task snapshot sd_xxx --platform amazon --out runs/x
 ```
 
-### CLI flags
+Full flag and command reference: [docs/CLI.md](docs/CLI.md) — the source of
+truth. The flags that matter most on `find`:
 
-| Flag               | Description                               |
-| ------------------ | ----------------------------------------- |
-| `--pages <n>`      | Pages per platform (default: 3)           |
-| `--enrich <n>`     | PDP enrich top N products (default: 20)   |
-| `--max <n>`        | Hard cap on total products (default: 500) |
-| `--no-heal`        | Skip auto-heal on empty results           |
-| `--dedup-cheapest` | Keep only cheapest across platforms       |
-| `--in-stock-only`  | Filter out-of-stock products              |
-| `--no-save`        | Skip saving price history                 |
-| `--json`           | Raw JSON output                           |
+| Flag                    | What it does                                             |
+| ----------------------- | -------------------------------------------------------- |
+| `--pages <n>`           | Search depth per platform (default 1; try 2-3)           |
+| `--platforms <list>`    | Comma-separated: flipkart,amazon,reliance,tatacliq       |
+| `--top <n>`             | Rows in the ranking table (default 15)                   |
+| `--details <n>`         | Verdict cards for the top N (default 3)                  |
+| `--refresh-prices <n>`  | Re-fetch top N product pages for buy-box prices (billed) |
+| `--use-unlocker`        | Allow billed Web Unlocker fallback when sites block      |
+| `--max-fetches <n>`     | Cap new spec-page fetches this run                       |
+| `--specs-source <mode>` | auto \| direct \| unlocker \| cache                      |
+| `--in-stock-only`       | Drop known out-of-stock items                            |
+| `--budget-tolerance %`  | Allow N% over the stated budget                          |
 
 ## Platforms
 
@@ -190,6 +177,13 @@ deno task dev fetch "https://example.com/product"
 | Tata CLiQ        | Scraper Studio      | scroll-based | Custom collector     |
 | Amazon India     | Pre-built or Custom | page-based   | Dataset or collector |
 | Google Shopping  | SERP API            | N/A          | Deal discovery       |
+
+**What actually works today, honestly:** Flipkart and Amazon India are solid.
+Reliance Digital's hosted collector returns accessories instead of phones (the
+extraction lives in the BrightData dashboard, not this repo — `find` says so in
+its report when it happens). Tata CLiQ works but its bot-wall defeats free
+fetches, so its spec pages arrive only via `--use-unlocker`. The tool reports
+per-platform coverage so a degraded platform is visible, not silent.
 
 ### URL templates
 
@@ -302,37 +296,33 @@ The `refactor_template` API analyzes broken selectors and proposes code fixes
 using AI. Full flow: trigger → poll → preview → approve → verify. Auto-heal runs
 when a platform returns empty results or field fill rate < 50%.
 
-## Scoring & Comparison
+## Scoring
 
-### Basic scoring (`search` / `best-deal`)
+One ranker, two modes, decided by the query:
 
-Products are scored using a weighted formula with a relevance gate:
+- **Ceiling queries** ("best phone under 50000") ask for the best phone the
+  budget allows. Quality leads: absolute spec curves (chipset via AnTuTu,
+  display, battery, camera array incl. telephoto/ultrawide/aperture, memory,
+  extras), weighted by what the query emphasises. Trust breaks ties; deal
+  polish is capped at 15%.
+- **Bargain queries** ("budget phones", "value for money", "cheap") keep the
+  value-first formula: spec-points-per-rupee percentile within the result set
+  carries half the score.
 
-- **Price** (45%): Lower is better, normalized against the result set
-- **Discount** (25%): Higher discount percentage scores higher
-- **Rating** (20%): Products with 4+ stars get a boost
-- **Availability** (10%): In-stock products get a bonus
-- **Relevance gate**: Products must match search query tokens in their name
+On top of either mode:
 
-### Smart comparison (`compare`)
-
-The comparison engine uses query intent detection + category-specific scoring:
-
-- **Query parsing**: Detects intent (specific product, category+price range, or
-  generic search). Extracts brand, model, max price, and product category.
-- **Spec extraction**: Parses RAM, storage, battery, camera from product names
-  using regex patterns.
-- **Benchmark database**: Local database of benchmark scores for ~30 popular
-  Indian market products (phones: AnTuTu/Geekbench, headphones: ANC/battery).
-- **Category-specific scoring**:
-  - Phones: processor, RAM, storage, battery, camera, display, 5G
-  - Headphones: ANC type, battery life, driver size, weight, form factor
-  - Earbuds: ANC, battery, driver, weight
-- **Brand matching**: +30 points for matching query brand, -20 for mismatch. -30
-  for third-party accessories ("for Sony" products).
-
-Deduplication by product ID preserves cross-platform rows by default. Use
-`--dedup-cheapest` to keep only the cheapest across platforms.
+- **Trust** — Bayesian rating shrinkage: 4.9★ from 3 reviews loses to 4.2★
+  from 150,000.
+- **Corroboration gating** — a spec sheet with no buyer or knowledge-base
+  backing scores its specs at a discount and cannot win badges.
+- **Availability sorts before score** — anything you cannot buy ranks below
+  everything you can, however attractive its price.
+- **Honest confidence** — each row reports how much of its spec sheet was
+  read vs inferred; low-confidence items are scored down visibly.
+- **Inflated MRPs** (>55% off) earn no deal credit and get an asterisk.
+- **Verified prices win** — where a product page was fetched, its buy-box
+  price replaces the search-card quote (which often belongs to one dead
+  seller's listing).
 
 ## Tech stack
 
@@ -410,26 +400,22 @@ export BRIGHTDATA_API_KEY=your_key
 export SERP_ZONE=serp_api1
 export UNLOCKER_ZONE=cli_unlocker
 
-# Search
-deno task dev search "sony wh-1000xm5" --pages 3 --json
+# Rank (offline replay of a saved run, free)
+deno task rank "best phones under 15000" --replay runs/<dir> --json
 
 # Expected JSON shape:
 # {
-#   "query": "sony wh-1000xm5",
-#   "count": 40,
-#   "products": [...],
-#   "platforms": [
+#   "query": "…",
+#   "ranked": [
 #     {
-#       "name": "Flipkart",
-#       "status": "ok",
-#       "count": 40,
-#       "rawCount": 40,
-#       "parsedCount": 40,
-#       "fieldFillRate": 91,
-#       "heal": { "attempted": false, "success": false }
-#     },
-#     ...
-#   ]
+#       "modelName": "Samsung Galaxy M17 5G (6GB/128GB)",
+#       "rank": 1,
+#       "best": { "price": 13499, "platformName": "Flipkart", "inStock": true },
+#       "score": { "total": 78.2, "confidence": 0.9 },
+#       "specs": { "socName": "Exynos 1330", "antutu": 615000 }
+#     }
+#   ],
+#   "diagnostics": [...]
 # }
 ```
 

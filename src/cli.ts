@@ -12,7 +12,7 @@ export const cli = new Command()
   .name("tech-scraper")
   .version("2.0.0")
   .description(
-    "Find genuinely good tech deals across Indian e-commerce, ranked on specs and value.",
+    "Rank phones across Indian e-commerce on measured specs, verified prices and buyer trust - not on price alone.",
   )
   .action(function () {
     this.showHelp();
