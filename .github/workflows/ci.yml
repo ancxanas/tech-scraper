@@ -1,0 +1,28 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+          cache: true
+
+      - name: Fmt, lint, typecheck, tests (offline)
+        run: |
+          deno fmt --check
+          deno lint
+          deno check main.ts
+          deno test --unstable-kv --allow-env --allow-read --allow-write tests/ --frozen=true
