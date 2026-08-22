@@ -45,7 +45,7 @@ import {
 } from "../src/knowledge/soc.ts";
 import { lookupModel, PHONE_MODELS } from "../src/knowledge/models.ts";
 import { hasCheckoutInfo, parseCheckout } from "../src/core/checkout.ts";
-import { extractSpecSection } from "../src/core/resolve.ts";
+import { extractSpecSection, specRichness } from "../src/core/resolve.ts";
 import { reviewsUrlFor, summariseReviews } from "../src/core/reviews.ts";
 import { buildUrls, searchTerm } from "../src/core/collect.ts";
 import { canonicalUrl } from "../src/core/normalize.ts";
@@ -1933,6 +1933,27 @@ Deno.test("the cached page section keeps the price block", async () => {
   const cached = extractSpecSection(page);
   assertEquals(parseCheckout(cached).pagePrice, 11699);
   assertEquals(parseCheckout(cached).pageMrp, 11999);
+});
+
+Deno.test("specRichness tells a spec table from marketing shell", () => {
+  const rich = [
+    "MediaTek Dimensity 6300 octa core processor",
+    "6 GB RAM | 128 GB ROM",
+    "5000 mAh battery",
+    "6.67 inch HD+ AMOLED display",
+    "50 MP + 2 MP | 8 MP front camera",
+    "5G dual sim",
+  ].join("\n");
+  assert(specRichness(rich) >= 4);
+
+  const flipkartShell =
+    "Samsung Galaxy M17 5G (Sapphire Black, 128 GB) (6 GB RAM) " +
+    "4.4 1,525 ratings ₹13,499 Free delivery Bank Offer UPI available " +
+    "Protect Promise Fee Buy at ₹18,500 See Details";
+  assert(specRichness(flipkartShell) < 2);
+
+  assertEquals(specRichness(""), 0);
+  assertEquals(specRichness("no specs here at all"), 0);
 });
 
 Deno.test("the buy box seller is read off the page", () => {

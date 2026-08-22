@@ -33,6 +33,8 @@ export interface ResolveOptions {
   limit?: number;
   concurrency?: number;
   allowPaid?: boolean;
+  /** Cap on paid re-fetches of spec-poor Flipkart pages per run. */
+  maxSpecRescues?: number;
   store?: SpecStore;
   verbose?: boolean;
 }
@@ -96,6 +98,28 @@ export function extractSpecSection(text: string): string {
   if (start === -1) return text.slice(0, 24_000);
   const head = start > 0 ? `${text.slice(0, Math.min(start, 4_000))} ` : "";
   return `${head}${text.slice(start)}`.slice(0, 24_000);
+}
+
+/**
+ * How many ranking-critical spec families the section actually names:
+ * chipset, battery, display panel, camera resolution, RAM/storage. A page
+ * scoring under 2 is a shell - nav and marketing copy with no spec table.
+ */
+export function specRichness(section: string): number {
+  let score = 0;
+  if (matchSocDetailed(section)) score++;
+  if (/([\d,]{3,5})\s*mAh/i.test(section)) score++;
+  if (/\b(P-?OLED|AMOLED|SUPER\s*AMOLED|IPS|PLS|TFT|LCD)\b/i.test(section)) {
+    score++;
+  }
+  if (/(\d{2,3})\s*MP/i.test(section)) score++;
+  if (
+    /(\d+)\s*GB\s*(RAM|\+|\/|\))/i.test(section) ||
+    /RAM[\s:|]*(\d+)/i.test(section)
+  ) {
+    score++;
+  }
+  return score;
 }
 
 async function fetchPage(
@@ -379,6 +403,7 @@ export async function resolveSpecs(
 
   const concurrency = Math.max(1, opts.concurrency ?? 4);
   const pending = mode === "cache" ? [] : [...needsFetch];
+  let rescuesLeft = Math.max(0, opts.maxSpecRescues ?? 12);
 
   const worker = async () => {
     while (pending.length) {
@@ -386,14 +411,34 @@ export async function resolveSpecs(
       const c = pending.shift();
       if (!c) return;
       budget--;
+      const url = canonicalUrl(c.best.url);
       try {
-        const { text, via } = await fetchPage(
-          canonicalUrl(c.best.url),
-          mode,
-          allowPaid,
-        );
-        apply(c, text, canonicalUrl(c.best.url));
-        store.set(canonicalUrl(c.best.url), extractSpecSection(text), via);
+        let { text, via } = await fetchPage(url, mode, allowPaid);
+        // Flipkart serves its spec table through lazy loading, so a plain
+        // fetch yields chipset for one phone in ten. When the section came
+        // back spec-poor and paid fetching is on, pay once for the rendered
+        // DOM and keep whichever read is richer. The winner is cached for
+        // 30 days, so each phone costs at most one extra request ever.
+        if (
+          /flipkart\.com/.test(url) && via === "direct" && allowPaid &&
+          rescuesLeft > 0 && specRichness(extractSpecSection(text)) < 2
+        ) {
+          rescuesLeft--;
+          try {
+            const rendered = await fetchPage(url, "unlocker", true);
+            if (
+              specRichness(extractSpecSection(rendered.text)) >
+                specRichness(extractSpecSection(text))
+            ) {
+              text = rendered.text;
+              via = "unlocker";
+            }
+          } catch {
+            // The direct text stands; nothing to report.
+          }
+        }
+        apply(c, text, url);
+        store.set(url, extractSpecSection(text), via);
         if (via === "direct") result.fetchedDirect++;
         else result.fetchedPaid++;
         if (opts.verbose) {
