@@ -402,9 +402,15 @@ export function rankCandidates(
     const o = c.best;
     if (o.discountPct !== null && o.mrp) {
       const d = o.discountPct;
-      const credible = d <= 40 ? d : Math.max(0, 40 - (d - 40) * 2);
-      deal += credible * 0.6;
-      if (d > 60) deal -= 8;
+      // Above 55% off the deal is a story, not a price - the same threshold
+      // the table stars with an asterisk. Such MRPs add nothing here; a
+      // fabricated discount must not buy ranking points.
+      if (d > 55) {
+        deal -= 6;
+      } else {
+        const credible = d <= 40 ? d : Math.max(0, 40 - (d - 40) * 2);
+        deal += credible * 0.6;
+      }
     }
     if (c.offers.length > 1) {
       const spread = Math.max(...c.offers.map((x) => x.price)) - o.price;
