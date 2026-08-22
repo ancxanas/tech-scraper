@@ -17,9 +17,9 @@ const RULES: Rule[] = [
     ],
     weak: [/\bipx\d\b/i, /playtime/i, /\bearphones?\b/i],
     veto: [
-      /\\b(case|cover|pouch|ear\\s*pads?|ear\\s*cushions?|ear\\s*tips?|hinge|protector|stand|holder|replacement|spare)\\b/i,
-      /\\bcompatible\\s+with\\b/i,
-      /\\bfor\\s+(?:sony|bose|jbl|sennheiser|marshall|boat|noise|apple|samsung)\\b/i,
+      /\b(case|cover|pouch|ear\s*pads?|ear\s*cushions?|ear\s*tips?|hinge|protector|stand|holder|replacement|spare)\b/i,
+      /\bcompatible\s+with\b/i,
+      /\bfor\s+(?:sony|bose|jbl|sennheiser|marshall|boat|noise|apple|samsung)\b/i,
     ],
   },
   {

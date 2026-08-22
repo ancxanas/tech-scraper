@@ -144,6 +144,24 @@ Deno.test("earphones are never classified as phones", () => {
   }
 });
 
+Deno.test("accessory vetoes fire on real titles, not just in theory", () => {
+  // These carry earbud bait words ("airpods", "for boAt") but are
+  // accessories. Their veto regexes were double-escaped and matched
+  // nothing - the one-character class of bug that silently passes tests.
+  const cases = [
+    "Silicone Case Cover for Sony WF-1000XM5 Earbuds",
+    "Ear Tips Replacement Pouch for boAt Airdopes 141",
+    "Charger Stand Holder Compatible with Apple AirPods Pro",
+  ];
+  for (const title of cases) {
+    const c = classify(title);
+    assert(
+      c.category !== "earbuds" && c.category !== "headphone",
+      `${title} -> ${c.category}`,
+    );
+  }
+});
+
 Deno.test("Indian phone listing cards are classified as phones", () => {
   const cases = [
     "POCO M7 5G (Ocean Blue, 128 GB) (8 GB RAM)",
