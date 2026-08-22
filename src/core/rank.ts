@@ -429,10 +429,20 @@ export function rankCandidates(
       100,
     ) / 100;
 
-    const totalRaw = valueScore * 0.35 +
-      spec.total * corroboration(c) * 0.3 +
-      (trust ?? 45) * 0.2 +
-      dealScore * 0.15;
+    // Two products share this ranker. A bargain query ("budget phones",
+    // "value for money") wants the most quality per rupee, so cheapness
+    // carries half the score. A ceiling query ("best under 50000") wants
+    // the best phone the budget allows - there the spec sheet leads,
+    // trust breaks ties between equals, and deal only polishes.
+    const bargain = intent.priorities.includes("value");
+    const totalRaw = bargain
+      ? valueScore * 0.35 +
+        spec.total * corroboration(c) * 0.3 +
+        (trust ?? 45) * 0.2 +
+        dealScore * 0.15
+      : spec.total * corroboration(c) * 0.6 +
+        (trust ?? 45) * 0.25 +
+        dealScore * 0.15;
 
     const total = clamp(totalRaw * (0.7 + 0.3 * confidence));
 
@@ -728,12 +738,15 @@ function buildVerdict(
 ): string {
   const price = `₹${r.best.price.toLocaleString("en-IN")}`;
   const bits: string[] = [];
+  // A ceiling query picked this phone for quality, not price. Calling the
+  // best phone "the cheapest way into the segment" reads like an apology.
+  const bargain = intent.priorities.includes("value");
 
   if (r.rank === 1) {
     bits.push(`Best overall pick at ${price}`);
-  } else if (r.score.valueScore >= 80) {
+  } else if (r.score.valueScore >= 80 && bargain) {
     bits.push(`Strong value at ${price}`);
-  } else if (r.best.price < medPrice * 0.85) {
+  } else if (bargain && r.best.price < medPrice * 0.85) {
     bits.push(`Cheapest way into this segment at ${price}`);
   } else {
     bits.push(`Solid option at ${price}`);

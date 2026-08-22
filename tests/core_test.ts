@@ -32,6 +32,7 @@ import {
   reportRefresh,
   reportRefreshDetail,
 } from "../src/core/resolve.ts";
+import type { Candidate } from "../src/core/types.ts";
 import { ageLabel, SpecStore } from "../src/core/spec-cache.ts";
 import { capturedAtFor, loadRun } from "../src/core/replay.ts";
 import { renderFull, sparkline } from "../src/ui/render.ts";
@@ -360,6 +361,82 @@ Deno.test("a 4.9-star product with 3 reviews cannot outrank 4.2 with 150k", () =
     parseIntentRules("phones under 15000"),
   );
   assertEquals(ranked[0].modelName.includes("POCO"), true);
+});
+
+Deno.test("a ceiling query ranks quality first; a bargain query rewards cheapness", () => {
+  // Synthetic stand-ins on purpose: this asserts a ranking property that
+  // must hold for any product pair, not a verdict about real phones.
+  let seq = 0;
+  const synthetic = (
+    price: number,
+    antutu: number,
+    overrides: Partial<Candidate> = {},
+  ): Candidate => ({
+    key: `test:${seq}`,
+    modelName: `Test Device ${seq++}`,
+    brand: null,
+    category: "phone",
+    specs: {
+      ramGb: 8,
+      storageGb: 128,
+      batteryMah: null,
+      chargingW: null,
+      displayInches: null,
+      refreshHz: null,
+      panel: null,
+      resolution: null,
+      mainCameraMp: null,
+      ois: null,
+      has5g: true,
+      ipRating: null,
+      nfc: null,
+      socName: "Test Chip",
+      antutu,
+      perfTier: null,
+      osUpgrades: null,
+      releaseYear: null,
+      colour: null,
+    },
+    specSources: { socName: "kb", antutu: "kb", ramGb: "title" },
+    specCompleteness: 0.6,
+    kbConfidence: "none",
+    best: {
+      platform: "flipkart",
+      platformName: "Flipkart",
+      price,
+      mrp: null,
+      discountPct: null,
+      url: `https://www.flipkart.com/test-${price}/p/itm${seq}`,
+      inStock: true,
+      rating: null,
+      ratingCount: null,
+    },
+    offers: [],
+    siblingConfigs: [],
+    rating: 4.3,
+    ratingCount: 50000,
+    imageUrl: null,
+    listings: [],
+    ...overrides,
+  });
+  // Same trust, same memory class; only chip tier and price differ.
+  const affordable = synthetic(12999, 470_000);
+  const premium = synthetic(45999, 1_800_000);
+
+  // "best under X" asks for the best phone the budget allows.
+  const ceiling = rankCandidates(
+    [affordable, premium],
+    parseIntentRules("best phones under 50000"),
+  );
+  assertEquals(ceiling.ranked[0].key, premium.key);
+  assert(!ceiling.ranked[0].verdict.includes("Cheapest way"));
+
+  // The same pair asked as a bargain hunt keeps rewarding cheapness.
+  const bargain = rankCandidates(
+    [structuredClone(affordable), structuredClone(premium)],
+    parseIntentRules("budget phones under 50000"),
+  );
+  assertEquals(bargain.ranked[0].key, affordable.key);
 });
 
 Deno.test("an inflated MRP is flagged rather than rewarded", () => {
