@@ -377,10 +377,8 @@ export async function resolveSpecs(
     }
   }
 
-  if (mode === "cache") return result;
-
   const concurrency = Math.max(1, opts.concurrency ?? 4);
-  const pending = [...needsFetch];
+  const pending = mode === "cache" ? [] : [...needsFetch];
 
   const worker = async () => {
     while (pending.length) {
@@ -441,6 +439,13 @@ export async function resolveSpecs(
         // ignored
       }
     }
+  }
+
+  // Cache mode still serves what it already holds - reviews included -
+  // it just never reaches for the network.
+  if (mode === "cache") {
+    await store.save();
+    return result;
   }
 
   await store.save();

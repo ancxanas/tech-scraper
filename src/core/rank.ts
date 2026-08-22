@@ -176,9 +176,37 @@ function trustScore(
 
 function median(values: number[]): number | null {
   if (values.length === 0) return null;
-  const s = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(s.length / 2);
-  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/**
+ * Specs nobody can vouch for are claims, not facts. A listing with real
+ * buyer volume, or one the knowledge base independently confirms, gets
+ * full credit; an anonymous sheet on a no-name card gets a fraction.
+ * Without this, "Dimensity 7400 + pOLED for ₹8,499" from a 1-rating
+ * seller outranks every honest phone in the table.
+ */
+export function corroboration(c: {
+  ratingCount?: number | null;
+  kbConfidence?: Candidate["kbConfidence"];
+}): number {
+  if ((c.ratingCount ?? 0) >= 5) return 1;
+  switch (c.kbConfidence) {
+    case "high":
+      return 0.95;
+    case "medium":
+      return 0.85;
+    case "low":
+      return 0.75;
+    default:
+      return 0.6;
+  }
+}
+
+function specTotalWithCorroboration(c: Candidate, total: number): number {
+  return total * corroboration(c);
 }
 
 function percentileRank(value: number, sorted: number[]): number {
@@ -340,7 +368,8 @@ export function rankCandidates(
   });
 
   const ratios = survivors.map((c, i) =>
-    specScores[i].total / (c.best.price / 1000)
+    specTotalWithCorroboration(c, specScores[i].total) /
+    (c.best.price / 1000)
   );
   const sortedRatios = [...ratios].sort((a, b) => a - b);
 
@@ -398,7 +427,7 @@ export function rankCandidates(
     ) / 100;
 
     const totalRaw = valueScore * 0.35 +
-      spec.total * 0.3 +
+      spec.total * corroboration(c) * 0.3 +
       (trust ?? 45) * 0.2 +
       dealScore * 0.15;
 

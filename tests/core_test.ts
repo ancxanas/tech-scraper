@@ -2542,3 +2542,49 @@ Deno.test("a tracked price shows its history and where it sits", async () => {
   assert(out.includes("checks"), "observation count missing");
   assert(out.includes("█") && out.includes("▁"), "sparkline missing");
 });
+
+Deno.test("a spec sheet with no one behind it cannot outrank a vetted phone", () => {
+  const make = (
+    name: string,
+    url: string,
+    rating: number | null,
+    count: number | null,
+  ) => ({
+    product_name: name,
+    selling_price: 8999,
+    rating,
+    review_count: count,
+    product_url: url,
+  });
+  const raws = [
+    // Identical claimed specs, identical price. Only trust differs.
+    make(
+      "Peace I17 AIR 5G (6GB+64GB) | Dimensity 7400 | pOLED 120Hz | 5000mAh",
+      "https://www.amazon.in/dp/FAKE001",
+      1,
+      1,
+    ),
+    make(
+      "Motorola G45 5G (6GB+128GB) | Dimensity 7300 | IPS 120Hz | 5000mAh",
+      "https://www.amazon.in/dp/REAL01",
+      4.3,
+      217,
+    ),
+  ];
+  const { listings } = normalizeBatch(raws, "amazon");
+  const candidates = groupListings(listings.map((l) => analyze(l)));
+  assertEquals(candidates.length, 2);
+  const { ranked } = rankCandidates(candidates, {
+    raw: "q",
+    category: "phone",
+    brands: [],
+    excludeBrands: [],
+    budgetMax: 15000,
+    budgetMin: null,
+    budgetOperator: "under",
+    priorities: [],
+    mustHave: [],
+    modelHint: null,
+  }, {});
+  assertEquals(ranked[0].brand?.toLowerCase(), "motorola");
+});
