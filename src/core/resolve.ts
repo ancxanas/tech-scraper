@@ -1,4 +1,5 @@
 import { colors } from "@cliffy/ansi/colors";
+import { isoNow, now } from "./clock.ts";
 import { fetchDirect, fetchPageHtml, pageToText } from "../lib/fetch-page.ts";
 import {
   type CheckoutInfo,
@@ -282,8 +283,7 @@ export async function resolveSpecs(
     const checkout = parseCheckout(text, pidOf(sourceUrl));
     if (hasCheckoutInfo(checkout)) {
       // A cached page was fetched some time ago; say when.
-      checkout.sampledAt = store.fetchedAt(sourceUrl) ??
-        new Date().toISOString();
+      checkout.sampledAt = store.fetchedAt(sourceUrl) ?? isoNow();
       const want = canonicalUrl(sourceUrl);
       const from = c.listings.find((l) => canonicalUrl(l.url) === want) ??
         c.listings[0];
@@ -646,7 +646,7 @@ export async function refreshPrices(
       let text = opts.useCache === true ? store.getPrice(url) : null;
       if (text) {
         out.cached++;
-        sampledAt = store.priceFetchedAt(url) ?? new Date().toISOString();
+        sampledAt = store.priceFetchedAt(url) ?? isoNow();
       } else {
         if (n > 0) await sleep(opts.pace ?? 900);
         const got = await fetchPage(
@@ -664,7 +664,7 @@ export async function refreshPrices(
         }
         out.fetched++;
         n++;
-        sampledAt = new Date().toISOString();
+        sampledAt = isoNow();
       }
       const checkout = parseCheckout(text, pidOf(url));
       checkout.sampledAt = sampledAt;
@@ -753,7 +753,7 @@ export function reportRefresh(r: RefreshResult): void {
   }
   // Prices move between requests; a sample's age is part of the number.
   const ages = r.seen
-    .map((s) => s.sampledAt ? Date.now() - Date.parse(s.sampledAt) : 0)
+    .map((s) => s.sampledAt ? now() - Date.parse(s.sampledAt) : 0)
     .filter((ms) => ms > 10 * 60_000);
   console.error(colors.dim(`  Prices: ${parts.join(", ")}`));
   for (const s of r.stockChanged.slice(0, 8)) {
@@ -778,7 +778,7 @@ export function reportRefresh(r: RefreshResult): void {
     console.error(
       colors.yellow(
         `    oldest price sample is ${
-          ageLabel(new Date(Date.now() - oldest).toISOString())
+          ageLabel(new Date(now() - oldest).toISOString())
         } old — treat the table as a snapshot, not a live feed`,
       ),
     );

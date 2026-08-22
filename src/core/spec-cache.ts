@@ -1,5 +1,7 @@
 const DEFAULT_PATH = ".cache/specs.json";
 
+import { isoNow, now } from "./clock.ts";
+
 /** Compact age for one timestamp, e.g. "19m", "27h 00m", "2d 4h". */
 export function ageLabel(iso: string, now = Date.now()): string | null {
   const then = Date.parse(iso);
@@ -74,9 +76,8 @@ export class SpecStore {
         string,
         CacheEntry
       >;
-      const now = Date.now();
       for (const [k, v] of Object.entries(raw)) {
-        if (now - Date.parse(v.fetchedAt) < ttlFor(k)) this.#data.set(k, v);
+        if (now() - Date.parse(v.fetchedAt) < ttlFor(k)) this.#data.set(k, v);
       }
     } catch {
       // ignored
@@ -87,7 +88,7 @@ export class SpecStore {
   getPrice(url: string): string | null {
     const key = SpecStore.priceKey(url);
     const hit = this.#data.get(key);
-    if (hit && Date.now() - Date.parse(hit.fetchedAt) < PRICE_TTL_MS) {
+    if (hit && now() - Date.parse(hit.fetchedAt) < PRICE_TTL_MS) {
       this.stats.hits++;
       return hit.text;
     }
@@ -99,7 +100,7 @@ export class SpecStore {
   /** When the cached price sample was fetched, if it is still fresh. */
   priceFetchedAt(url: string): string | null {
     const hit = this.#data.get(SpecStore.priceKey(url));
-    if (hit && Date.now() - Date.parse(hit.fetchedAt) < PRICE_TTL_MS) {
+    if (hit && now() - Date.parse(hit.fetchedAt) < PRICE_TTL_MS) {
       return hit.fetchedAt;
     }
     return null;
@@ -114,7 +115,7 @@ export class SpecStore {
   setPrice(url: string, text: string, via: "direct" | "unlocker"): void {
     this.#data.set(SpecStore.priceKey(url), {
       text,
-      fetchedAt: new Date().toISOString(),
+      fetchedAt: isoNow(),
       via,
     });
     this.stats.writes++;
@@ -134,7 +135,7 @@ export class SpecStore {
   set(url: string, text: string, via: "direct" | "unlocker"): void {
     this.#data.set(SpecStore.key(url), {
       text,
-      fetchedAt: new Date().toISOString(),
+      fetchedAt: isoNow(),
       via,
     });
     this.stats.writes++;

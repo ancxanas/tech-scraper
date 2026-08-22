@@ -1,4 +1,5 @@
 import type { PlatformId, RankedCandidate } from "./types.ts";
+import { isoNow } from "./clock.ts";
 
 export interface PriceObservation {
   key: string;
@@ -47,7 +48,7 @@ export async function savePrices(
   const kv = await getKv();
   if (!kv) return 0;
 
-  const now = new Date().toISOString();
+  const sampledAt = isoNow();
   let written = 0;
 
   for (const c of ranked) {
@@ -58,10 +59,10 @@ export async function savePrices(
         platform: offer.platform,
         price: offer.price,
         query,
-        timestamp: now,
+        timestamp: sampledAt,
       };
       try {
-        await kv.set(["prices", c.key, offer.platform, now], obs);
+        await kv.set(["prices", c.key, offer.platform, sampledAt], obs);
         written++;
       } catch {
         // ignored
