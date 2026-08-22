@@ -37,7 +37,11 @@ import { ageLabel, SpecStore } from "../src/core/spec-cache.ts";
 import { capturedAtFor, loadRun } from "../src/core/replay.ts";
 import { renderFull, sparkline } from "../src/ui/render.ts";
 import type { PriceStats } from "../src/core/price-history.ts";
-import { buildCandidates, runPipeline } from "../src/core/pipeline.ts";
+import {
+  attachCheckout,
+  buildCandidates,
+  runPipeline,
+} from "../src/core/pipeline.ts";
 import {
   matchSoc,
   matchSocDetailed,
@@ -1596,6 +1600,112 @@ Deno.test("buildCandidates groups without ranking, so specs can resolve first", 
   assert(candidates.length > 40, `only ${candidates.length} candidates`);
   assertEquals(resolved.category, "phone");
   assert(!("score" in candidates[0]));
+});
+
+Deno.test("a same-platform out-of-stock reading demotes; another platform's does not", () => {
+  let seq = 0;
+  const phone = (price: number): Candidate =>
+    ({
+      key: `test:${seq}`,
+      modelName: `Test Device ${seq++}`,
+      brand: null,
+      category: "phone",
+      specs: {
+        ramGb: 8,
+        storageGb: 128,
+        batteryMah: null,
+        chargingW: null,
+        displayInches: null,
+        refreshHz: null,
+        panel: null,
+        resolution: null,
+        mainCameraMp: null,
+        ultraWideMp: null,
+        teleMp: null,
+        aperture: null,
+        ois: null,
+        has5g: true,
+        ipRating: null,
+        nfc: null,
+        socName: "Test Chip",
+        antutu: 900_000,
+        perfTier: null,
+        osUpgrades: null,
+        releaseYear: null,
+        colour: null,
+      },
+      specSources: { socName: "kb" },
+      specCompleteness: 0.6,
+      kbConfidence: "none",
+      best: {
+        platform: "flipkart",
+        platformName: "Flipkart",
+        price,
+        mrp: null,
+        discountPct: null,
+        url: `https://www.flipkart.com/p${price}/p/itm`,
+        inStock: true,
+        rating: null,
+        ratingCount: null,
+      },
+      offers: [],
+      siblingConfigs: [],
+      rating: 4.3,
+      ratingCount: 50000,
+      imageUrl: null,
+      listings: [
+        {
+          id: `f${price}`,
+          platform: "flipkart",
+          url: `https://www.flipkart.com/p${price}/p/itm`,
+          title: `Test Device ${price}`,
+          price,
+          mrp: null,
+          rating: null,
+          ratingCount: null,
+        } as never,
+      ],
+    }) as Candidate;
+
+  const oos = phone(20_000);
+  const buyable = phone(21_000);
+  const dead = {
+    pagePrice: null,
+    pageMrp: null,
+    seller: null,
+    inStock: false as boolean | null,
+    deliveryBy: null,
+    buyAt: null,
+    bankOffer: null,
+    exchangeUpTo: null,
+    noCostEmi: false,
+    pincodeBlocked: false,
+    sampledAt: "2026-08-22T10:00:00Z",
+  };
+
+  // Same platform reads its own page: the sold-out phone must sink.
+  attachCheckout([oos, buyable], new Map([["f20000", dead]]));
+  assertEquals(oos.best.inStock, false);
+  assertEquals(buyable.best.inStock, true);
+  const { ranked } = rankCandidates(
+    [oos, buyable],
+    parseIntentRules("best phones under 50000"),
+  );
+  assert(
+    ranked.find((r) => r.key === oos.key)!.rank >
+      ranked.find((r) => r.key === buyable.key)!.rank,
+    "an out-of-stock phone must not lead a buyable one",
+  );
+
+  // A Flipkart reading says nothing about an Amazon offer.
+  const amazon = phone(22_000);
+  amazon.best = {
+    ...amazon.best,
+    platform: "amazon",
+    platformName: "Amazon India",
+  };
+  attachCheckout([amazon], new Map([["f22000", dead]]));
+  assertEquals(amazon.best.inStock, true);
 });
 
 Deno.test("the spec cache round-trips and reports hits", async () => {

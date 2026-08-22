@@ -41,35 +41,49 @@ export interface PipelineOptions extends RankOptions {
  * listing is not already the headline, it is promoted - price, stock and
  * all - and the remaining offers follow it.
  */
-function attachCheckout(candidates: Candidate[], info?: CheckoutMap): void {
+export function attachCheckout(
+  candidates: Candidate[],
+  info?: CheckoutMap,
+): void {
   if (!info?.size) return;
   for (const c of candidates) {
     const hit = c.listings.find((l) => info.has(l.id));
     if (!hit) continue;
     const co = info.get(hit.id)!;
     c.checkout = co;
+    // A stock reading describes the PLATFORM's warehouse, not one listing.
+    // When the page we read belongs to the same platform as the headline
+    // offer, that reading must reach the offer - else a phone whose own
+    // page says "currently unavailable" keeps ranking as buyable. A
+    // different platform's offer is untouched; their stock is their own.
+    const samePlatform = hit.platform === c.best.platform;
+    const measuredStock = co.inStock !== null && co.inStock !== undefined
+      ? co.inStock
+      : null;
     // Seller, EMI and delivery notes ride along without reordering anything;
     // only a price actually read off the buy box may lead the candidate.
     if (co.pagePrice === null) {
-      if (
-        c.best.url === hit.url && co.inStock !== null &&
-        co.inStock !== undefined
-      ) {
-        c.best.inStock = co.inStock;
+      if (samePlatform && measuredStock !== null) {
+        c.best.inStock = measuredStock;
       }
       continue;
     }
     // Already the headline: just carry the measured stock state.
     if (c.best.url === hit.url) {
-      if (co.inStock !== null && co.inStock !== undefined) {
-        c.best.inStock = co.inStock;
+      if (measuredStock !== null) {
+        c.best.inStock = measuredStock;
       }
       continue;
     }
     const base = c.best.price || 1;
     // Within 2% of the cheapest card the cards are trusted; promotion is
     // for disagreement - a stale or dead seller's quote.
-    if (Math.abs(co.pagePrice - base) / base <= 0.02) continue;
+    if (Math.abs(co.pagePrice - base) / base <= 0.02) {
+      if (samePlatform && measuredStock !== null) {
+        c.best.inStock = measuredStock;
+      }
+      continue;
+    }
 
     const verified: Offer = {
       platform: hit.platform,
