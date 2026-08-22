@@ -1,7 +1,7 @@
 {
   "query": "best phones under 15000",
   "capturedAt": "2026-08-21T04:36:37Z",
-  "capturedWith": "tech-scraper find --pages 1 (v1 pipeline)",
+  "capturedWith": "phonescout find --pages 1 (v1 pipeline)",
   "note": "The original failing run that motivated the v2 rewrite. Ranked four Rs 1,599 earphones above every phone. Kept verbatim: 54 of the 120 Flipkart cards carry no title or price, Reliance returned audio accessories for a phone query, and Tata CLiQ returned a crawler error. Do not 'clean' these files \u2014 the pathologies are the point.",
   "files": {
     "flipkart.json": {

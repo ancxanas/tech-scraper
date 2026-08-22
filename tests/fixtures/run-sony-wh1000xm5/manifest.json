@@ -1,7 +1,7 @@
 {
   "query": "sony wh-1000xm5",
   "capturedAt": "2026-08-19T11:25:24Z",
-  "capturedWith": "tech-scraper (v1 pipeline), preserved from eval-live/",
+  "capturedWith": "phonescout (v1 pipeline), preserved from eval-live/",
   "note": "Audio capture, kept as a negative fixture. Used to prove a phone query returns nothing from it, and that accessories (cases, ear pads) are rejected rather than ranked.",
   "files": {
     "amazon.json": {

@@ -1,4 +1,4 @@
-# tech-scraper
+# phonescout
 
 > Rank phones across Indian e-commerce on measured specs, verified prices and
 > buyer trust — not on price alone.
@@ -82,8 +82,8 @@ brew install deno
 Clone and enter the project:
 
 ```bash
-git clone https://github.com/ancxanas/tech-scraper.git
-cd tech-scraper
+git clone https://github.com/muhammedanasmithadi/phonescout.git
+cd phonescout
 ```
 
 Set your Bright Data API key (required):
@@ -392,8 +392,8 @@ Verify with: `deno task dev doctor`
 
 ```bash
 # Clone
-git clone https://github.com/ancxanas/tech-scraper.git
-cd tech-scraper
+git clone https://github.com/muhammedanasmithadi/phonescout.git
+cd phonescout
 
 # Set API key
 export BRIGHTDATA_API_KEY=your_key
