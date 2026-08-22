@@ -134,7 +134,7 @@ function extrasScore(s: Specs): number | null {
   return (score / known) * 100;
 }
 
-function specWeights(intent: RankIntent): Record<string, number> {
+export function specWeights(intent: RankIntent): Record<string, number> {
   const base: Record<string, number> = {
     performance: 0.3,
     memory: 0.15,
