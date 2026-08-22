@@ -88,14 +88,3 @@ export const ALL_ENABLED: Platform[] = Object.entries(PLATFORMS)
   .map(([k]) => k as Platform);
 
 export const ALL_PLATFORMS: Platform[] = Object.keys(PLATFORMS) as Platform[];
-
-export const SCORE_WEIGHTS = {
-  price: 0.45,
-  discount: 0.25,
-  rating: 0.2,
-  availability: 0.1,
-  reviews: 0.05,
-  modelFamilyBonus: 0.1,
-  modelFamilyPenalty: 0.05,
-  brandMatchBonus: 0.08,
-} as const;
